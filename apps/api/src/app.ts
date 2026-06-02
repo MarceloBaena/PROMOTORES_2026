@@ -20,13 +20,15 @@ import { loadConfig } from "./config/env";
 
 function corsOrigin() {
   const { config } = loadConfig();
-  const origin = config?.CORS_ORIGIN ?? "*";
+  const origin = config?.CORS_ORIGIN?.trim() || "*";
 
   if (origin === "*") {
     return true;
   }
 
-  return origin.split(",").map((item) => item.trim());
+  const allowedOrigins = origin.split(",").map((item) => item.trim()).filter(Boolean);
+
+  return allowedOrigins.length > 0 ? allowedOrigins : true;
 }
 
 const authLimiter = rateLimit({
