@@ -28,11 +28,11 @@ export function AuditPage() {
   return (
     <section>
       <PageHeader title="Auditoria" />
-      {message ? <div className="mb-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</div> : null}
-      <div className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
+      {message ? <div className="notice notice-warning">{message}</div> : null}
+      <div className="table-wrap">
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-field text-xs uppercase text-stone-500">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Promotor</th>
@@ -43,7 +43,7 @@ export function AuditPage() {
             </thead>
             <tbody>
               {flags.map((flag) => (
-                <tr key={flag.id} className="border-t border-line">
+                <tr key={flag.id}>
                   <td className="px-4 py-3 font-medium">{flag.visit.client.name}</td>
                   <td className="px-4 py-3">{flag.visit.promoter?.user?.name ?? "-"}</td>
                   <td className="px-4 py-3">{flag.type}</td>

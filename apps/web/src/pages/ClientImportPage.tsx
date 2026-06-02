@@ -48,56 +48,60 @@ export function ClientImportPage() {
   return (
     <section>
       <PageHeader title="Importacao CSV" />
-      <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <form onSubmit={onSubmit} className="rounded-lg border border-line bg-white p-4 shadow-sm">
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold">Arquivo CSV</span>
-            <input
-              className="focus-ring w-full rounded-md border border-line bg-white px-3 py-2"
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            />
-          </label>
-          {message ? <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</div> : null}
-          <button
-            type="submit"
-            title="Importar"
-            disabled={loading}
-            className="focus-ring mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-moss px-4 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            <FileUp className="h-4 w-4" />
-            {loading ? "Importando..." : "Importar"}
-          </button>
+      <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <form onSubmit={onSubmit} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
+          <div className="panel-header">
+            <div>
+              <h2 className="panel-title">Arquivo</h2>
+            </div>
+          </div>
+          <div className="p-4">
+            <label className="block">
+              <span className="field-label">Arquivo CSV</span>
+              <input
+                className="file-control"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            {message ? <div className="notice notice-warning mt-4">{message}</div> : null}
+            <button type="submit" title="Importar" disabled={loading} className="primary-button mt-4 w-full">
+              <FileUp className="h-4 w-4" />
+              {loading ? "Importando..." : "Importar"}
+            </button>
+          </div>
         </form>
 
-        <div className="rounded-lg border border-line bg-white p-4 shadow-sm">
-          <h2 className="mb-4 text-base font-bold">Resultado</h2>
+        <div className="panel overflow-hidden">
+          <div className="panel-header">
+            <h2 className="panel-title">Resultado</h2>
+          </div>
           {log ? (
-            <dl className="grid gap-3 sm:grid-cols-2">
+            <dl className="grid gap-3 p-4 sm:grid-cols-2">
               <div>
-                <dt className="text-sm font-semibold text-stone-500">Arquivo</dt>
+                <dt className="field-label">Arquivo</dt>
                 <dd className="mt-1 font-medium">{log.fileName}</dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-stone-500">Status</dt>
+                <dt className="field-label">Status</dt>
                 <dd className="mt-1"><StatusPill value={log.status} /></dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-stone-500">Linhas</dt>
+                <dt className="field-label">Linhas</dt>
                 <dd className="mt-1 font-medium">{log.totalRows}</dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-stone-500">Importadas</dt>
+                <dt className="field-label">Importadas</dt>
                 <dd className="mt-1 font-medium">{log.importedRows}</dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-stone-500">Falhas</dt>
+                <dt className="field-label">Falhas</dt>
                 <dd className="mt-1 font-medium">{log.failedRows}</dd>
               </div>
             </dl>
           ) : (
-            <div className="text-sm text-stone-500">Nenhuma importacao executada nesta sessao.</div>
+            <div className="p-4 text-sm text-stone-500">Nenhuma importacao executada nesta sessao.</div>
           )}
         </div>
       </div>

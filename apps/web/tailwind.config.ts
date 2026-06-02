@@ -9,9 +9,13 @@ export default {
       },
       colors: {
         ink: "#17201c",
-        field: "#f5f7f6",
-        line: "#d9dfda",
+        graphite: "#2f3935",
+        field: "#f3f5f2",
+        panel: "#ffffff",
+        muted: "#edf0ec",
+        line: "#d7ddd8",
         moss: "#2f6f52",
+        steel: "#3f5c70",
         saffron: "#b7791f",
         berry: "#9f315c"
       }

@@ -46,30 +46,34 @@ export function Dashboard() {
   return (
     <section>
       <PageHeader title="Dashboard operacional" />
-      {error ? <div className="mb-5 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</div> : null}
+      {error ? <div className="notice notice-error">{error}</div> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {metrics.map(([label, value], index) => {
           const Icon = metricIcons[index];
           return (
-            <div key={label} className="rounded-lg border border-line bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-stone-500">{label}</span>
-                <Icon className="h-5 w-5 text-moss" />
+            <div key={label} className="metric-card">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-xs font-bold uppercase text-stone-500">{label}</span>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-line bg-field text-steel">
+                  <Icon className="h-4 w-4" />
+                </span>
               </div>
-              <div className="mt-4 text-3xl font-bold">{value}</div>
+              <div className="mt-3 text-2xl font-bold tabular-nums">{value}</div>
             </div>
           );
         })}
       </div>
 
-      <div className="mt-6 rounded-lg border border-line bg-white shadow-sm">
-        <div className="border-b border-line px-4 py-3">
-          <h2 className="text-base font-bold">Importacoes recentes</h2>
+      <div className="table-wrap mt-5">
+        <div className="panel-header">
+          <div>
+            <h2 className="panel-title">Importacoes recentes</h2>
+          </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-field text-xs uppercase text-stone-500">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="px-4 py-3">Arquivo</th>
                 <th className="px-4 py-3">Status</th>
@@ -80,7 +84,7 @@ export function Dashboard() {
             </thead>
             <tbody>
               {(summary?.imports ?? []).map((item) => (
-                <tr key={item.id} className="border-t border-line">
+                <tr key={item.id}>
                   <td className="px-4 py-3 font-medium">{item.fileName}</td>
                   <td className="px-4 py-3"><StatusPill value={item.status} /></td>
                   <td className="px-4 py-3">{item.totalRows}</td>
@@ -88,9 +92,11 @@ export function Dashboard() {
                   <td className="px-4 py-3">{item.failedRows}</td>
                 </tr>
               ))}
-              {summary?.imports?.length === 0 ? (
+              {(summary?.imports?.length ?? 0) === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-stone-500">Sem importacoes registradas.</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-stone-500">
+                    {summary ? "Sem importacoes registradas." : "Carregando..."}
+                  </td>
                 </tr>
               ) : null}
             </tbody>

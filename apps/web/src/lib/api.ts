@@ -8,7 +8,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL)
 
 export class ApiConnectionError extends Error {
   constructor() {
-    super("API inacessivel. Verifique VITE_API_BASE_URL e o status do backend.");
+    super("Servidor indisponivel. Verifique a conexao com a API.");
   }
 }
 

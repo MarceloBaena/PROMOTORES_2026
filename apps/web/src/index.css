@@ -4,7 +4,7 @@
 
 :root {
   color: #17201c;
-  background: #f5f7f6;
+  background: #f3f5f2;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -19,6 +19,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background: #f3f5f2;
 }
 
 button,
@@ -29,5 +30,99 @@ textarea {
 }
 
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-moss focus:ring-offset-2 focus:ring-offset-field;
+  @apply focus:outline-none focus:ring-2 focus:ring-steel/40 focus:ring-offset-2 focus:ring-offset-field;
+}
+
+@layer components {
+  .app-page {
+    @apply min-h-screen bg-field text-ink;
+  }
+
+  .page-shell {
+    @apply mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-5 lg:px-6;
+  }
+
+  .panel {
+    @apply rounded-md border border-line bg-panel shadow-[0_1px_2px_rgba(24,33,29,0.05)];
+  }
+
+  .panel-header {
+    @apply flex min-h-12 items-center justify-between gap-3 border-b border-line px-4 py-3;
+  }
+
+  .panel-title {
+    @apply text-sm font-bold text-ink;
+  }
+
+  .panel-subtitle {
+    @apply mt-0.5 text-xs font-medium text-stone-500;
+  }
+
+  .table-wrap {
+    @apply overflow-hidden rounded-md border border-line bg-panel shadow-[0_1px_2px_rgba(24,33,29,0.05)];
+  }
+
+  .data-table {
+    @apply min-w-full text-left text-sm text-ink;
+  }
+
+  .data-table thead {
+    @apply bg-muted text-[11px] font-bold uppercase text-stone-500;
+  }
+
+  .data-table th {
+    @apply whitespace-nowrap px-4 py-2.5;
+  }
+
+  .data-table td {
+    @apply px-4 py-2.5 align-middle;
+  }
+
+  .data-table tbody tr {
+    @apply border-t border-line transition hover:bg-field/70;
+  }
+
+  .field-label {
+    @apply mb-1 block text-xs font-bold uppercase text-stone-500;
+  }
+
+  .input-control {
+    @apply focus-ring h-10 w-full rounded-md border border-line bg-white px-3 text-sm text-ink shadow-inner shadow-stone-100 placeholder:text-stone-400;
+  }
+
+  .file-control {
+    @apply focus-ring w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-ink file:mr-3 file:rounded file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-graphite;
+  }
+
+  .primary-button {
+    @apply focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-md bg-moss px-4 text-sm font-bold text-white shadow-sm transition hover:bg-moss/95 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .secondary-button {
+    @apply focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-bold text-graphite shadow-sm transition hover:bg-muted;
+  }
+
+  .icon-button {
+    @apply focus-ring grid h-9 w-9 place-items-center rounded-md border border-line bg-white text-graphite shadow-sm transition hover:bg-muted;
+  }
+
+  .danger-button {
+    @apply focus-ring grid h-9 w-9 place-items-center rounded-md border border-rose-200 bg-white text-berry shadow-sm transition hover:bg-rose-50;
+  }
+
+  .notice {
+    @apply mb-4 rounded-md border px-3 py-2 text-sm font-medium;
+  }
+
+  .notice-warning {
+    @apply border-amber-200 bg-amber-50 text-amber-900;
+  }
+
+  .notice-error {
+    @apply border-rose-200 bg-rose-50 text-rose-800;
+  }
+
+  .metric-card {
+    @apply rounded-md border border-line bg-panel p-4 shadow-[0_1px_2px_rgba(24,33,29,0.05)];
+  }
 }

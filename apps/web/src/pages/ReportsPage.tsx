@@ -17,21 +17,29 @@ export function ReportsPage() {
   return (
     <section>
       <PageHeader title="Relatorios" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {reports.map((report) => (
-          <div key={report.path} className="rounded-lg border border-line bg-white p-4 shadow-sm">
-            <div className="mb-4 text-base font-bold">{report.label}</div>
-            <button
-              type="button"
-              title="Baixar"
-              onClick={() => void download(report.path, report.fileName)}
-              className="focus-ring inline-flex h-10 items-center gap-2 rounded-md bg-moss px-4 text-sm font-semibold text-white"
-            >
-              <Download className="h-4 w-4" />
-              Baixar
-            </button>
-          </div>
-        ))}
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Relatorio</th>
+              <th>Arquivo</th>
+              <th className="w-28">Acao</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reports.map((report) => (
+              <tr key={report.path}>
+                <td className="font-medium">{report.label}</td>
+                <td>{report.fileName}</td>
+                <td>
+                  <button type="button" title="Baixar" onClick={() => void download(report.path, report.fileName)} className="icon-button text-moss">
+                    <Download className="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );

@@ -95,7 +95,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
             type="button"
             title="Atualizar"
             onClick={() => void load()}
-            className="focus-ring inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+            className="secondary-button"
           >
             <RefreshCcw className="h-4 w-4" />
             Atualizar
@@ -103,13 +103,13 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
         }
       />
 
-      {message ? <div className="mb-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</div> : null}
+      {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="table-wrap">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-field text-xs uppercase text-stone-500">
+            <table className="data-table">
+              <thead>
                 <tr>
                   {columns.map((column) => (
                     <th key={column.label} className="px-4 py-3">{column.label}</th>
@@ -119,7 +119,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={String(item.id)} className="border-t border-line align-top">
+                  <tr key={String(item.id)} className="align-top">
                     {columns.map((column) => (
                       <td key={column.label} className="px-4 py-3">{column.value(item)}</td>
                     ))}
@@ -128,7 +128,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                         <button
                           type="button"
                           title="Editar"
-                          className="focus-ring grid h-9 w-9 place-items-center rounded-md border border-line text-stone-700"
+                          className="icon-button"
                           onClick={() => {
                             setEditingId(String(item.id));
                             setForm(fields.reduce<Record<string, string>>((acc, field) => {
@@ -148,7 +148,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                         <button
                           type="button"
                           title="Inativar"
-                          className="focus-ring grid h-9 w-9 place-items-center rounded-md border border-line text-berry"
+                          className="danger-button"
                           onClick={() => void remove(String(item.id))}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -169,14 +169,16 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
           </div>
         </div>
 
-        <form onSubmit={onSubmit} className="rounded-lg border border-line bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-bold">{editingId ? "Editar registro" : "Novo registro"}</h2>
+        <form onSubmit={onSubmit} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
+          <div className="panel-header">
+            <div>
+              <h2 className="panel-title">{editingId ? "Editar registro" : "Novo registro"}</h2>
+            </div>
             {editingId ? (
               <button
                 type="button"
                 title="Cancelar"
-                className="focus-ring grid h-9 w-9 place-items-center rounded-md border border-line"
+                className="icon-button"
                 onClick={() => {
                   setEditingId(null);
                   setForm(initialValues);
@@ -187,42 +189,39 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
             ) : null}
           </div>
 
-          <div className="space-y-3">
-            {fields.map((field) => (
-              <label key={field.name} className="block">
-                <span className="mb-1 block text-sm font-semibold">{field.label}</span>
-                {field.type === "select" ? (
-                  <select
-                    className="focus-ring h-10 w-full rounded-md border border-line bg-white px-3"
-                    value={form[field.name] ?? ""}
-                    onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
-                  >
-                    <option value="">-</option>
-                    {field.options?.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    className="focus-ring h-10 w-full rounded-md border border-line bg-white px-3"
-                    type={field.type ?? "text"}
-                    value={form[field.name] ?? ""}
-                    onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
-                  />
-                )}
-              </label>
-            ))}
-          </div>
+          <div className="p-4">
+            <div className="space-y-3">
+              {fields.map((field) => (
+                <label key={field.name} className="block">
+                  <span className="field-label">{field.label}</span>
+                  {field.type === "select" ? (
+                    <select
+                      className="input-control"
+                      value={form[field.name] ?? ""}
+                      onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
+                    >
+                      <option value="">-</option>
+                      {field.options?.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className="input-control"
+                      type={field.type ?? "text"}
+                      value={form[field.name] ?? ""}
+                      onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
+                    />
+                  )}
+                </label>
+              ))}
+            </div>
 
-          <button
-            type="submit"
-            title={actionLabel}
-            disabled={loading}
-            className="focus-ring mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-moss px-4 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {actionLabel}
-          </button>
+            <button type="submit" title={actionLabel} disabled={loading} className="primary-button mt-4 w-full">
+              {editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {actionLabel}
+            </button>
+          </div>
         </form>
       </div>
     </section>
