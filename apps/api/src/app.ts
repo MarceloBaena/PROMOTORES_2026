@@ -69,6 +69,13 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use("/uploads", express.static("uploads"));
 
+  app.get("/", (_req, res) => {
+    res.json({
+      name: "Sales Promoters API",
+      health: "/health"
+    });
+  });
+
   app.get("/health", (_req, res) => {
     const bootState = getBootState();
 
