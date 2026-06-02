@@ -4,9 +4,15 @@
   "buildCommand": "cd ../.. && npm run api:build",
   "outputDirectory": "public",
   "functions": {
-    "index.js": {
+    "api/index.js": {
       "includeFiles": "{dist/**,prisma/**}",
       "maxDuration": 300
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.js"
+    }
+  ]
 }
