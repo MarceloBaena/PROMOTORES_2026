@@ -1,5 +1,12 @@
 import { CrudPage, userEmail, userName, userStatus } from "./CrudPage";
 
+function recordCode(item: Record<string, unknown>) {
+  const id = String(item.id ?? "");
+  const code = id ? id.slice(0, 8).toUpperCase() : "-";
+
+  return <span className="font-mono text-xs font-bold text-graphite">{code}</span>;
+}
+
 export function PromotersPage() {
   return (
     <CrudPage
@@ -41,6 +48,7 @@ export function SupervisorsPage() {
         { name: "region", label: "Regiao" }
       ]}
       columns={[
+        { label: "Codigo", value: recordCode },
         { label: "Nome", value: userName },
         { label: "E-mail", value: userEmail },
         { label: "Status", value: userStatus },
