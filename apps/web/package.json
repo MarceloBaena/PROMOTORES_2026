@@ -1,0 +1,31 @@
+{
+  "name": "@sales-promoters/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:shared": "cd ../../packages/shared && npm run build",
+    "dev": "npm run build:shared && vite --host 0.0.0.0",
+    "build": "npm run build:shared && tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@sales-promoters/shared": "file:../../packages/shared",
+    "@vitejs/plugin-react": "^6.0.2",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3",
+    "@rolldown/plugin-babel": "^0.2.1",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "vite": "^8.0.16"
+  }
+}

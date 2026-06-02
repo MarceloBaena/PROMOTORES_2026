@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "installCommand": "cd ../.. && npm install",
+  "buildCommand": "cd ../.. && npm run api:build",
+  "functions": {
+    "api/index.js": {
+      "includeFiles": [
+        "dist/**",
+        "prisma/**"
+      ],
+      "maxDuration": 300
+    }
+  },
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.js"
+    }
+  ]
+}

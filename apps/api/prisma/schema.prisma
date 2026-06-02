@@ -1,0 +1,347 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleCode {
+  ADMIN
+  SUPERVISOR
+  PROMOTOR
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum ProfileStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum RouteStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum RouteItemStatus {
+  PLANNED
+  COMPLETED
+  SKIPPED
+  CANCELLED
+}
+
+enum VisitStatus {
+  pending
+  in_progress
+  completed
+  not_completed
+}
+
+enum PhotoType {
+  checkin
+  before
+  after
+  occurrence_extra
+}
+
+enum SyncStatus {
+  pending
+  syncing
+  synced
+  failed
+}
+
+enum SyncType {
+  INITIAL_DOWNLOAD
+  CLIENTS_DOWNLOAD
+  ROUTES_DOWNLOAD
+  VISIT_UPLOAD
+  PHOTO_UPLOAD
+  OCCURRENCE_UPLOAD
+  STATUS_CHECK
+  REPROCESS
+  CSV_IMPORT
+}
+
+enum SyncEntityType {
+  VISIT
+  PHOTO
+  OCCURRENCE
+}
+
+enum AuditFlagType {
+  GPS_MISSING
+  OUTSIDE_GEOFENCE
+  MISSING_REQUIRED_PHOTO
+  TOO_FAST_VISIT
+  TOO_LONG_VISIT
+  INCONSISTENT_FINISH
+  SYNC_FAILURE
+}
+
+enum AuditSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ImportStatus {
+  PREVIEW
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+model Role {
+  id        String   @id @default(uuid())
+  code      RoleCode @unique
+  name      String
+  users     User[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("roles")
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  name             String
+  passwordHash     String            @map("password_hash")
+  status           UserStatus        @default(ACTIVE)
+  roleId           String            @map("role_id")
+  role             Role              @relation(fields: [roleId], references: [id])
+  supervisor       Supervisor?
+  promoter         Promoter?
+  refreshTokens    RefreshToken[]
+  syncLogs         SyncLog[]
+  clientImportLogs ClientImportLog[]
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Supervisor {
+  id        String        @id @default(uuid())
+  userId    String        @unique @map("user_id")
+  user      User          @relation(fields: [userId], references: [id])
+  status    ProfileStatus @default(ACTIVE)
+  region    String?
+  promoters Promoter[]
+  routes    Route[]
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@map("supervisors")
+}
+
+model Promoter {
+  id           String        @id @default(uuid())
+  userId       String        @unique @map("user_id")
+  user         User          @relation(fields: [userId], references: [id])
+  supervisorId String?       @map("supervisor_id")
+  supervisor   Supervisor?   @relation(fields: [supervisorId], references: [id])
+  status       ProfileStatus @default(ACTIVE)
+  routes       Route[]
+  visits       Visit[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("promoters")
+}
+
+model Client {
+  id             String            @id @default(uuid())
+  code           String?           @unique
+  name           String
+  document       String?
+  status         ClientStatus      @default(ACTIVE)
+  address        String?
+  city           String?
+  state          String?
+  latitude       Decimal?          @db.Decimal(10, 7)
+  longitude      Decimal?          @db.Decimal(10, 7)
+  routeItems     RouteItem[]
+  visits         Visit[]
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@map("clients")
+}
+
+model Route {
+  id           String      @id @default(uuid())
+  name         String
+  status       RouteStatus @default(DRAFT)
+  scheduledDate DateTime?  @map("scheduled_date")
+  supervisorId String?     @map("supervisor_id")
+  supervisor   Supervisor? @relation(fields: [supervisorId], references: [id])
+  promoterId   String?     @map("promoter_id")
+  promoter     Promoter?   @relation(fields: [promoterId], references: [id])
+  items        RouteItem[]
+  visits       Visit[]
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@map("routes")
+}
+
+model RouteItem {
+  id           String          @id @default(uuid())
+  routeId      String          @map("route_id")
+  route        Route           @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  clientId     String          @map("client_id")
+  client       Client          @relation(fields: [clientId], references: [id])
+  sequence     Int
+  status       RouteItemStatus @default(PLANNED)
+  plannedStart DateTime?       @map("planned_start")
+  plannedEnd   DateTime?       @map("planned_end")
+  visits       Visit[]
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  @@unique([routeId, sequence])
+  @@map("route_items")
+}
+
+model Visit {
+  id           String            @id @default(uuid())
+  routeId      String?           @map("route_id")
+  route        Route?            @relation(fields: [routeId], references: [id])
+  routeItemId  String?           @map("route_item_id")
+  routeItem    RouteItem?        @relation(fields: [routeItemId], references: [id])
+  clientId     String            @map("client_id")
+  client       Client            @relation(fields: [clientId], references: [id])
+  promoterId   String?           @map("promoter_id")
+  promoter     Promoter?         @relation(fields: [promoterId], references: [id])
+  status       VisitStatus       @default(pending)
+  startedAt    DateTime?         @map("started_at")
+  finishedAt   DateTime?         @map("finished_at")
+  gpsLatitude  Decimal?          @map("gps_latitude") @db.Decimal(10, 7)
+  gpsLongitude Decimal?          @map("gps_longitude") @db.Decimal(10, 7)
+  notes        String?
+  photos       VisitPhoto[]
+  occurrences  VisitOccurrence[]
+  auditFlags   AuditFlag[]
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  @@map("visits")
+}
+
+model VisitPhoto {
+  id         String    @id @default(uuid())
+  visitId    String    @map("visit_id")
+  visit      Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  type       PhotoType
+  url        String
+  storageKey String?   @map("storage_key")
+  metadata   Json?
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@map("visit_photos")
+}
+
+model VisitOccurrence {
+  id          String   @id @default(uuid())
+  visitId     String   @map("visit_id")
+  visit       Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("visit_occurrences")
+}
+
+model SyncLog {
+  id         String     @id @default(uuid())
+  type       SyncType
+  status     SyncStatus @default(pending)
+  userId     String?    @map("user_id")
+  user       User?      @relation(fields: [userId], references: [id])
+  entityType SyncEntityType? @map("entity_type")
+  entityId   String?    @map("entity_id")
+  summary    Json?
+  error      String?
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  @@map("sync_logs")
+}
+
+model SyncTracking {
+  id            String         @id @default(uuid())
+  entityType    SyncEntityType @map("entity_type")
+  entityId      String         @map("entity_id")
+  status        SyncStatus     @default(pending)
+  attempts      Int            @default(0)
+  lastAttemptAt DateTime?      @map("last_attempt_at")
+  syncedAt      DateTime?      @map("synced_at")
+  payload       Json?
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@unique([entityType, entityId])
+  @@map("sync_trackings")
+}
+
+model AuditFlag {
+  id        String        @id @default(uuid())
+  visitId   String        @map("visit_id")
+  visit     Visit         @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  type      AuditFlagType
+  severity  AuditSeverity @default(MEDIUM)
+  details   Json?
+  resolved  Boolean       @default(false)
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@map("audit_flags")
+}
+
+model RefreshToken {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String    @unique @map("token_hash")
+  expiresAt         DateTime  @map("expires_at")
+  revokedAt         DateTime? @map("revoked_at")
+  replacedByTokenId String?   @map("replaced_by_token_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model ClientImportLog {
+  id           String       @id @default(uuid())
+  fileName     String       @map("file_name")
+  status       ImportStatus @default(PREVIEW)
+  totalRows    Int          @default(0) @map("total_rows")
+  importedRows Int          @default(0) @map("imported_rows")
+  failedRows   Int          @default(0) @map("failed_rows")
+  preview      Json?
+  errors       Json?
+  createdById  String?      @map("created_by_id")
+  createdBy    User?        @relation(fields: [createdById], references: [id])
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@map("client_import_logs")
+}

@@ -1,0 +1,26 @@
+{
+  "name": "sales-promoters",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sales Promoters monorepo with API, web panel, shared package and mobile base.",
+  "engines": {
+    "node": "22.x",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "api:build": "npm run build -w @sales-promoters/api",
+    "api:migrate": "npm run prisma:migrate -w @sales-promoters/api",
+    "api:seed:access": "npm run seed:access -w @sales-promoters/api",
+    "supabase:check": "npm run supabase:check -w @sales-promoters/api",
+    "supabase:setup": "npm run supabase:setup -w @sales-promoters/api",
+    "build:web": "npm run build -w @sales-promoters/web",
+    "build:shared": "npm run build -w @sales-promoters/shared",
+    "build": "npm run build:shared && npm run api:build && npm run build:web",
+    "dev:api": "npm run dev -w @sales-promoters/api",
+    "dev:web": "npm run dev -w @sales-promoters/web"
+  }
+}
