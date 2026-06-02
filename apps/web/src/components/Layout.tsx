@@ -103,7 +103,7 @@ export function Layout() {
       <div className="lg:pl-64">
         <header className="sticky top-0 z-10 border-b border-line bg-white/90 backdrop-blur">
           <div className="flex min-h-14 items-center justify-between gap-4 px-4 sm:px-5 lg:px-6">
-            <div className="min-w-0">
+            <div className="hidden min-w-0 sm:block">
               <div className="text-xs font-bold uppercase text-stone-500">Ambiente</div>
               <div className="truncate text-sm font-bold">Painel operacional</div>
             </div>
