@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build:shared": "cd ../../packages/shared && npm run build",
-    "build": "npm run build:shared && prisma generate && tsc -p tsconfig.json",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && npm run build:shared && prisma generate && tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "prisma:migrate": "prisma migrate deploy",
@@ -32,7 +32,6 @@
     "pdfkit": "^0.15.0",
     "pino": "^9.5.0",
     "pino-http": "^10.3.0",
-    "write-excel-file": "^4.0.7",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -43,8 +42,8 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^22.9.0",
     "@types/pdfkit": "^0.13.5",
-    "prisma": "^5.22.0",
     "pino-pretty": "^11.3.0",
+    "prisma": "^5.22.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   },

@@ -4,7 +4,7 @@ import { apiDownload, triggerDownload } from "../lib/api";
 
 const reports = [
   { label: "Visitas CSV", path: "/reports/visits.csv", fileName: "visits.csv" },
-  { label: "Clientes Excel", path: "/reports/clients.xlsx", fileName: "clients.xlsx" },
+  { label: "Clientes Excel", path: "/reports/clients.xls", fileName: "clients.xls" },
   { label: "Auditoria PDF", path: "/reports/audit.pdf", fileName: "audit.pdf" }
 ];
 

@@ -1,10 +1,40 @@
 import { Router } from "express";
 import PDFDocument from "pdfkit";
-import writeXlsxFile from "write-excel-file/node";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
 
 export const reportsRouter = Router();
+
+function escapeXml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function excelXml(rows: unknown[][]) {
+  const tableRows = rows
+    .map(
+      (row) =>
+        `<Row>${row
+          .map((cell) => `<Cell><Data ss:Type="String">${escapeXml(cell)}</Data></Cell>`)
+          .join("")}</Row>`
+    )
+    .join("");
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Worksheet ss:Name="clients">
+    <Table>${tableRows}</Table>
+  </Worksheet>
+</Workbook>`;
+}
 
 reportsRouter.get(
   "/summary",
@@ -64,31 +94,53 @@ reportsRouter.get(
 );
 
 reportsRouter.get(
+  "/clients.xls",
+  asyncHandler(async (_req, res) => {
+    const clients = await prisma.client.findMany({ orderBy: { createdAt: "desc" }, take: 1000 });
+    const workbook = excelXml([
+      ["code", "name", "document", "status", "city", "state"],
+      ...clients.map((client) => [
+        client.code ?? "",
+        client.name,
+        client.document ?? "",
+        client.status,
+        client.city ?? "",
+        client.state ?? ""
+      ])
+    ]);
+
+    res.header("content-type", "application/vnd.ms-excel; charset=utf-8");
+    res.attachment("clients.xls");
+    res.send(workbook);
+  })
+);
+
+reportsRouter.get(
   "/clients.xlsx",
   asyncHandler(async (_req, res) => {
     const clients = await prisma.client.findMany({ orderBy: { createdAt: "desc" }, take: 1000 });
-    const buffer = await writeXlsxFile([
+    const workbook = excelXml([
       [
-        { value: "code", fontWeight: "bold" },
-        { value: "name", fontWeight: "bold" },
-        { value: "document", fontWeight: "bold" },
-        { value: "status", fontWeight: "bold" },
-        { value: "city", fontWeight: "bold" },
-        { value: "state", fontWeight: "bold" }
+        "code",
+        "name",
+        "document",
+        "status",
+        "city",
+        "state"
       ],
       ...clients.map((client) => [
-        { value: client.code ?? "" },
-        { value: client.name },
-        { value: client.document ?? "" },
-        { value: client.status },
-        { value: client.city ?? "" },
-        { value: client.state ?? "" }
+        client.code ?? "",
+        client.name,
+        client.document ?? "",
+        client.status,
+        client.city ?? "",
+        client.state ?? ""
       ])
-    ]).toBuffer();
+    ]);
 
-    res.header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.attachment("clients.xlsx");
-    res.send(Buffer.from(buffer));
+    res.header("content-type", "application/vnd.ms-excel; charset=utf-8");
+    res.attachment("clients.xls");
+    res.send(workbook);
   })
 );
 
