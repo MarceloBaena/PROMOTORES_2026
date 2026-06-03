@@ -111,7 +111,7 @@ describe('CollaboratorsController (e2e)', () => {
       teamPromoters: [],
     });
     createCollaboratorMock.mockImplementation(
-      async (actorUserId: string, payload: { role?: UserRole }) => {
+      (actorUserId: string, payload: { role?: UserRole }) => {
         if (
           actorUserId === 'supervisor-1' &&
           payload.role === UserRole.SUPERVISOR
