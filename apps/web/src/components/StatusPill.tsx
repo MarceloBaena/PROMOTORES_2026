@@ -20,7 +20,7 @@ export function StatusPill({ value }: { value?: string | null }) {
   }
 
   return (
-    <span className={`inline-flex h-6 items-center rounded px-2 text-[11px] font-bold uppercase ring-1 ${styles[value] ?? styles.INACTIVE}`}>
+    <span className={`inline-flex h-7 items-center rounded-full px-3 text-[10px] font-black uppercase tracking-[0.12em] ring-1 ${styles[value] ?? styles.INACTIVE}`}>
       {value}
     </span>
   );
