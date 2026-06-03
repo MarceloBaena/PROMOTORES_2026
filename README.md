@@ -153,6 +153,9 @@ Para deploy do painel no Netlify, troque para a URL publica real da API, por exe
 
 - `NEXT_PUBLIC_API_BASE_URL=https://api.seudominio.com/api`
 
+Para deploy do painel no Vercel, o mesmo valor deve apontar para a API publica real. O app web em `apps/web` tambem fixa o preset `nextjs` em `apps/web/vercel.json` para evitar deploy estatico incorreto quando o projeto for publicado por CLI/prebuilt.
+O proxy do portal aceita tanto uma base com `/api` quanto uma base raiz; em Vercel, por exemplo, `NEXT_PUBLIC_API_BASE_URL=https://sales-promoters-api.vercel.app` funciona mesmo que os endpoints publicados estejam em `/auth/login`, `/customers`, etc.
+
 ### Mobile
 
 - `EXPO_PUBLIC_API_BASE_URL=http://localhost:3333/api`
@@ -422,6 +425,7 @@ npm run dev:mobile
 Observacao para Windows/OneDrive:
 
 - `npm run dev:web` usa o modo webpack do Next para evitar falhas de arquivo bloqueado em `.next/dev` durante hot reload
+- o build de `apps/web` tambem usa `next build --webpack` para manter o deploy do monorepo estavel no Vercel enquanto o builder Turbopack nao resolve corretamente as rotas server-side deste workspace
 
 Endpoints esperados:
 

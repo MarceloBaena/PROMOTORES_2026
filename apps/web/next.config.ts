@@ -1,13 +1,19 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const configuredApiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || 'http://localhost:3333/api';
-const normalizedApiBaseUrl = configuredApiBaseUrl.replace(/\/+$/, '');
-const apiOrigin = normalizedApiBaseUrl.endsWith('/api')
-  ? normalizedApiBaseUrl.slice(0, -4)
-  : normalizedApiBaseUrl;
+const apiBaseUrl = configuredApiBaseUrl.replace(/\/+$/, '');
+const apiOrigin = apiBaseUrl.endsWith('/api')
+  ? apiBaseUrl.slice(0, -4)
+  : apiBaseUrl;
+const workspaceRoot = path.join(__dirname, '../..');
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: workspaceRoot,
+  turbopack: {
+    root: workspaceRoot,
+  },
   images: {
     remotePatterns: [
       {
@@ -26,7 +32,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/backend-api/:path*',
-        destination: `${apiOrigin}/api/:path*`,
+        destination: `${apiBaseUrl}/:path*`,
       },
       {
         source: '/backend-uploads/:path*',

@@ -21,3 +21,5 @@ apps/mobile/.env
 packages/*/dist
 apps/*/package-lock.json
 packages/*/package-lock.json
+
+.vercel
