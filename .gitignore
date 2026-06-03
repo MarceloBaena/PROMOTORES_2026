@@ -3,6 +3,9 @@ node_modules
 dist
 coverage
 uploads
+.run-logs
+.tmp
+.vscode
 expo-env.d.ts
 web-build
 .expo/
