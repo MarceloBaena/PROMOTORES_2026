@@ -20,8 +20,14 @@ const updateSchema = createSchema.partial().extend({
 
 supervisorsRouter.get(
   "/",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const promoterId = req.query.promoterId ? String(req.query.promoterId) : undefined;
+    const where = promoterId
+      ? { promoters: { some: { id: promoterId } } }
+      : undefined;
+
     const supervisors = await prisma.supervisor.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       include: { user: { include: { role: true } } }
     });

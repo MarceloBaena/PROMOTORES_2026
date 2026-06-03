@@ -8,8 +8,13 @@ import { apiJson } from "../lib/api";
 interface Field {
   name: string;
   label: string;
-  type?: "text" | "email" | "password" | "select";
-  options?: string[];
+  type?: "text" | "email" | "password" | "select" | "search";
+  options?: Array<string | { value: string; label: string }>;
+  placeholder?: string;
+  description?: string;
+  noSubmit?: boolean;
+  fullWidth?: boolean;
+  searchable?: boolean;
 }
 
 interface CrudPageProps {
@@ -29,6 +34,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
 
   const actionLabel = useMemo(() => (editingId ? "Salvar" : "Criar"), [editingId]);
 
@@ -55,7 +61,12 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
     setLoading(true);
     setMessage(null);
 
-    const payload = Object.fromEntries(Object.entries(form).filter(([, value]) => value !== ""));
+    const payload = Object.fromEntries(
+      Object.entries(form).filter(([key, value]) => {
+        const field = fields.find((field) => field.name === key);
+        return value !== "" && !field?.noSubmit;
+      })
+    );
 
     try {
       await apiJson(editingId ? `${endpoint}/${editingId}` : endpoint, {
@@ -189,35 +200,69 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
             ) : null}
           </div>
 
-          <div className="p-4">
-            <div className="space-y-3">
-              {fields.map((field) => (
-                <label key={field.name} className="block">
-                  <span className="field-label">{field.label}</span>
-                  {field.type === "select" ? (
-                    <select
-                      className="input-control"
-                      value={form[field.name] ?? ""}
-                      onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
-                    >
-                      <option value="">-</option>
-                      {field.options?.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      className="input-control"
-                      type={field.type ?? "text"}
-                      value={form[field.name] ?? ""}
-                      onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
-                    />
-                  )}
-                </label>
-              ))}
+          <div className="p-6">
+            <div className="grid gap-5 sm:grid-cols-2">
+              {fields.map((field) => {
+                const wrapperClass = field.fullWidth ? "sm:col-span-2" : "";
+                const labelClass = `block ${wrapperClass}`.trim();
+                const selectOptions = field.options ?? [];
+                const filteredOptions = field.searchable && searchFilters[field.name]
+                  ? selectOptions.filter((option) => {
+                      const label = typeof option === "string" ? option : option.label;
+                      return label.toLowerCase().includes(searchFilters[field.name].toLowerCase());
+                    })
+                  : selectOptions;
+
+                return (
+                  <label key={field.name} className={labelClass}>
+                    <span className="field-label">{field.label}</span>
+                    {field.searchable ? (
+                      <input
+                        className="input-control mb-3"
+                        type="search"
+                        placeholder={`Buscar ${field.label.toLowerCase()}`}
+                        value={searchFilters[field.name] ?? ""}
+                        onChange={(event) =>
+                          setSearchFilters((current) => ({
+                            ...current,
+                            [field.name]: event.target.value
+                          }))
+                        }
+                      />
+                    ) : null}
+                    {field.type === "select" ? (
+                      <select
+                        className="input-control"
+                        value={form[field.name] ?? ""}
+                        onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
+                      >
+                        <option value="">{field.placeholder ?? "-"}</option>
+                        {filteredOptions.map((option) => {
+                          const value = typeof option === "string" ? option : option.value;
+                          const label = typeof option === "string" ? option : option.label;
+                          return (
+                            <option key={value} value={value}>{label}</option>
+                          );
+                        })}
+                      </select>
+                    ) : (
+                      <input
+                        className="input-control"
+                        type={field.type ?? "text"}
+                        placeholder={field.placeholder}
+                        value={form[field.name] ?? ""}
+                        onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
+                      />
+                    )}
+                    {field.description ? (
+                      <p className="mt-2 text-sm text-stone-500">{field.description}</p>
+                    ) : null}
+                  </label>
+                );
+              })}
             </div>
 
-            <button type="submit" title={actionLabel} disabled={loading} className="primary-button mt-4 w-full">
+            <button type="submit" title={actionLabel} disabled={loading} className="primary-button mt-5 w-full">
               {editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {actionLabel}
             </button>
