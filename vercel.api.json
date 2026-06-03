@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "installCommand": "npm install --include=dev",
+  "buildCommand": "npm run api:build",
+  "outputDirectory": "public",
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "{apps/api/dist/**,apps/api/prisma/**}",
+      "maxDuration": 300
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.js"
+    }
+  ]
+}

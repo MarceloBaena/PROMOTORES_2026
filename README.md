@@ -24,3 +24,39 @@ npm run build:web
 ```
 
 Configure `DATABASE_URL` com o Session Pooler do Supabase na porta `5432`. Nunca use `localhost`, `https://...supabase.co` ou o host direto `db.PROJECT_REF.supabase.co` como `DATABASE_URL`.
+
+## Deploy Vercel
+
+O projeto usa dois projetos no Vercel:
+
+- Web/painel: `promotores-2026`, usando `vercel.json`.
+- API: `promotores-2026-api`, usando `vercel.api.json`.
+
+Antes do deploy, valide:
+
+```bash
+npm run supabase:check
+npm run api:migrate
+npm run build
+```
+
+Deploy da API:
+
+```bash
+vercel link --yes --project promotores-2026-api --scope marcelobaenas-projects
+vercel --prod --yes --local-config vercel.api.json
+```
+
+Deploy do painel web:
+
+```bash
+vercel link --yes --project promotores-2026 --scope marcelobaenas-projects
+vercel env add VITE_API_BASE_URL production --force --yes --value "https://promotores-2026-api.vercel.app"
+vercel --prod --yes
+```
+
+URLs de produção:
+
+- Web: `https://promotores-2026.vercel.app`
+- API: `https://promotores-2026-api.vercel.app`
+- Health da API: `https://promotores-2026-api.vercel.app/health`

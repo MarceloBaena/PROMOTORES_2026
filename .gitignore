@@ -13,3 +13,5 @@ uploads/
 apps/api/uploads/
 apps/web/.vite/
 *.tsbuildinfo
+
+.vercel

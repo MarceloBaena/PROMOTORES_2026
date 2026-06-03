@@ -48,6 +48,8 @@ export function createApp() {
   const app = express();
   const bootIssues = collectBootIssues();
 
+  app.set("trust proxy", 1);
+
   if (bootIssues.length > 0) {
     logger.error({ bootIssues }, "API boot configuration has issues");
   }
