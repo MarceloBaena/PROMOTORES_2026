@@ -22,6 +22,8 @@ Monorepo em TypeScript estrito para acompanhamento operacional de promotores de 
 
 Guia direto de deploy:
 
+- [Deploy Vercel + Supabase do Zero](docs/deploy-vercel-supabase.md)
+
 - [Deploy Passo a Passo](C:/Users/Marcelo%20Baena/OneDrive%20-%20浮光浅夏/Área%20de%20Trabalho/Projeto-Promotor/docs/deploy-passo-a-passo.md)
 - [Deploy do Painel no Netlify](C:/Users/Marcelo%20Baena/OneDrive%20-%20浮光浅夏/Área%20de%20Trabalho/Projeto-Promotor/docs/deploy-netlify.md)
 
