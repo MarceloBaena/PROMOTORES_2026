@@ -1,0 +1,47 @@
+{
+  "name": "@promotor/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build",
+    "start": "next start",
+    "validate:login": "node ./scripts/validate-login.mjs",
+    "validate:panel": "node ./scripts/validate-panel.mjs",
+    "lint": "eslint .",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run --pool=threads --maxWorkers=1",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@promotor/config": "file:../../packages/config",
+    "@promotor/types": "file:../../packages/types",
+    "@promotor/ui": "file:../../packages/ui",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.577.0",
+    "next": "16.2.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-hook-form": "^7.71.2",
+    "react-leaflet": "^5.0.0",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "jsdom": "^29.0.1",
+    "prettier": "^3.8.1",
+    "typescript": "^5",
+    "vitest": "^4.1.0"
+  }
+}

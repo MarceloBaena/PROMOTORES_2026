@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "Projeto Promotor",
+    "slug": "promotor-mobile",
+    "scheme": "promotormobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "O app usa a camera para registrar fotos de antes e depois da execucao em loja.",
+        "NSLocationWhenInUseUsageDescription": "O app usa sua localizacao para check-in, check-out e rastreamento operacional durante a jornada ativa."
+      }
+    },
+    "android": {
+      "package": "com.projetopromotor.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O app usa a camera para registrar check-in, foto do antes e foto do depois durante a visita."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O app usa a localizacao para validar presenca no cliente, check-in, check-out e jornada ativa."
+        }
+      ],
+      "./plugins/with-android-cleartext.js",
+      "expo-sqlite"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a07fa596-42c4-437e-9819-c2f319942920"
+      }
+    },
+    "owner": "baena.formula"
+  }
+}

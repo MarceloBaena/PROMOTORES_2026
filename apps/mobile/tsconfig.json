@@ -1,0 +1,31 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@promotor/config": [
+        "../../packages/config/src/index.ts"
+      ],
+      "@promotor/config/*": [
+        "../../packages/config/src/*"
+      ],
+      "@promotor/types": [
+        "../../packages/types/src/index.ts"
+      ],
+      "@promotor/types/*": [
+        "../../packages/types/src/*"
+      ],
+      "@promotor/ui": [
+        "../../packages/ui/src/index.ts"
+      ],
+      "@promotor/ui/*": [
+        "../../packages/ui/src/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
+}

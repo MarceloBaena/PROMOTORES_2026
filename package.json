@@ -1,0 +1,58 @@
+{
+  "name": "projeto-promotor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema completo de acompanhamento operacional de promotores de vendas",
+  "scripts": {
+    "postinstall": "npm run build:packages",
+    "build:packages": "npm run build -w @promotor/config && npm run build -w @promotor/types && npm run build -w @promotor/ui",
+    "dev:api": "npm run build:packages && npm run start:dev -w @promotor/api",
+    "dev:web": "npm run build:packages && npm run dev -w @promotor/web",
+    "build:web": "npm run build:packages && npm run build -w @promotor/web",
+    "web:start:stable": "node ./scripts/start-web-stable.mjs",
+    "dev:mobile": "npm run build:packages && npm run start -w @promotor/mobile",
+    "api:tunnel": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-api-tunnel.ps1",
+    "mobile:tunnel": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-mobile-tunnel.ps1",
+    "mobile:build:apk": "npm run build:apk -w @promotor/mobile",
+    "mobile:build:aab": "npm run build:aab -w @promotor/mobile",
+    "mobile:config:check": "npm run config:check -w @promotor/mobile",
+    "web:validate:login": "npm run validate:login -w @promotor/web",
+    "web:validate:panel": "npm run validate:panel -w @promotor/web",
+    "mobile:validate:login": "npm run validate:login -w @promotor/mobile",
+    "auth:validate:runtime": "npm run validate:auth:runtime -w @promotor/api",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f",
+    "db:generate": "npm run prisma:generate -w @promotor/api",
+    "db:migrate": "npm run prisma:migrate -w @promotor/api",
+    "db:deploy": "npm run prisma:deploy -w @promotor/api",
+    "db:reset": "npm run prisma:reset -w @promotor/api",
+    "db:seed": "npm run prisma:seed -w @promotor/api",
+    "db:validate:runtime": "npm run validate:runtime -w @promotor/api",
+    "lint": "npm run lint -w @promotor/config && npm run lint -w @promotor/types && npm run lint -w @promotor/ui && npm run lint -w @promotor/api && npm run lint -w @promotor/web && npm run lint -w @promotor/mobile",
+    "typecheck": "npm run typecheck -w @promotor/config && npm run typecheck -w @promotor/types && npm run typecheck -w @promotor/ui && npm run typecheck -w @promotor/api && npm run typecheck -w @promotor/web && npm run typecheck -w @promotor/mobile",
+    "test": "npm run test -w @promotor/config && npm run test -w @promotor/types && npm run test -w @promotor/ui && npm run test -w @promotor/api && npm run test -w @promotor/web && npm run test -w @promotor/mobile",
+    "build": "npm run build:packages && npm run build -w @promotor/api && npm run build -w @promotor/web && npm run build -w @promotor/mobile",
+    "format": "npm run format -w @promotor/config && npm run format -w @promotor/types && npm run format -w @promotor/ui && npm run format -w @promotor/api && npm run format -w @promotor/web && npm run format -w @promotor/mobile"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "keywords": [
+    "monorepo",
+    "promotor",
+    "nestjs",
+    "nextjs",
+    "expo",
+    "postgresql",
+    "prisma",
+    "minio",
+    "docker"
+  ],
+  "author": "",
+  "license": "MIT"
+}

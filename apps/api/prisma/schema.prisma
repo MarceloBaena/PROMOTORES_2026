@@ -1,0 +1,976 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  PROMOTER
+  SUPERVISOR
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+}
+
+enum RoutePlanStatus {
+  DRAFT
+  PUBLISHED
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum RoutePlanningViewMode {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum RouteRecurrencePattern {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum RouteItemPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum RouteChangeType {
+  PLAN_CREATED
+  PLAN_UPDATED
+  PLAN_PUBLISHED
+  TEMPLATE_APPLIED
+  ITEM_ADDED
+  ITEM_UPDATED
+  ITEM_CANCELLED
+  ITEM_REORDERED
+  ITEM_RESCHEDULED
+  ITEM_PRIORITY_CHANGED
+  ITEM_NOTE_CHANGED
+}
+
+enum NotificationType {
+  ROUTE_PUBLISHED
+  ROUTE_UPDATED
+  ROUTE_ITEM_ADDED
+  ROUTE_ITEM_CANCELLED
+  ROUTE_RESEQUENCED
+  SUPERVISOR_INSTRUCTION
+}
+
+enum RouteStopStatus {
+  PLANNED
+  IN_PROGRESS
+  CHECKED_OUT
+  SYNC_PENDING
+  COMPLETED
+  PARTIAL
+  NOT_DONE
+}
+
+enum VisitCompletionStatus {
+  COMPLETED
+  PARTIAL
+  NOT_DONE
+}
+
+enum PhotoType {
+  BEFORE
+  AFTER
+}
+
+enum PhotoCategory {
+  CHECKIN_ESTABLISHMENT
+  BEFORE_1
+  BEFORE_2
+  AFTER_1
+  AFTER_2
+  GENERAL
+  SHELF
+  DISPLAY
+  PRICE_TAG
+  STOCK
+  OTHER
+}
+
+enum VisitPhotoStage {
+  CHECKIN
+  BEFORE
+  AFTER
+  OCCURRENCE_EXTRA
+}
+
+enum PhotoGpsStatus {
+  CAPTURED
+  UNAVAILABLE
+  PERMISSION_DENIED
+}
+
+enum ChecklistItemType {
+  BOOLEAN
+  TEXT
+}
+
+enum ScheduleDayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum GpsLogSource {
+  JOURNEY_START
+  CUSTOMER_ARRIVAL
+  CHECK_IN
+  TRACKING
+  CHECK_OUT
+  JOURNEY_END
+  SYNC
+}
+
+enum AlertType {
+  GPS_MISSING
+  OUTSIDE_GEOFENCE
+  MISSING_REQUIRED_PHOTO
+  TOO_FAST_VISIT
+  TOO_LONG_VISIT
+  INCONSISTENT_FINISH
+  SYNC_FAILURE
+  PENDING_SYNC
+  PARTIAL_VISIT
+  MISSED_VISIT
+  NO_ACTIVE_JOURNEY
+  MISSING_BEFORE_PHOTO
+  MISSING_AFTER_PHOTO
+  MISSING_CHECKLIST
+  SKIPPED_CUSTOMER
+  RELEVANT_DELAY
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CustomerSourceType {
+  MANUAL
+  CSV
+  WINTHOR
+}
+
+enum CustomerImportSourceType {
+  CSV
+  WINTHOR
+}
+
+enum CustomerImportBatchStatus {
+  QUEUED
+  PROCESSING
+  RETRY_SCHEDULED
+  PREVIEWED
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+}
+
+enum CustomerImportItemStatus {
+  STAGED
+  CREATE
+  UPDATE
+  IGNORE
+  ERROR
+}
+
+enum TeamStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AuditEntityType {
+  AUTH
+  COMPANY
+  USER
+  PROMOTER
+  TEAM
+  TEAM_MEMBER
+  CUSTOMER
+  CUSTOMER_IMPORT_BATCH
+  CUSTOMER_IMPORT_ITEM
+  CUSTOMER_SCHEDULE
+  ROUTE_PLAN
+  ROUTE_PLAN_ITEM
+  JOURNEY
+  GPS_LOG
+  VISIT
+  VISIT_CHECKLIST
+  VISIT_CHECKLIST_ANSWER
+  CHECKLIST_TEMPLATE
+  CHECKLIST_QUESTION
+  PHOTO
+  ALERT
+  REFRESH_TOKEN
+}
+
+enum SyncOperationStatus {
+  RECEIVED
+  SYNCING
+  SYNCED
+  FAILED
+}
+
+model Company {
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  legalName          String
+  tradeName          String
+  documentNumber     String?
+  timeZone           String              @default("America/Cuiaba")
+  active             Boolean             @default(true)
+  deletedAt          DateTime?
+  users              User[]
+  promoters          Promoter[]
+  teams              Team[]
+  customers          Customer[]
+  customerImportBatches CustomerImportBatch[]
+  routePlans         RoutePlan[]
+  routeTemplates     RouteTemplate[]
+  routeChangeLogs    RouteChangeLog[]
+  notifications      Notification[]
+  checklistTemplates ChecklistTemplate[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([active, deletedAt])
+}
+
+model User {
+  id                    String                @id @default(cuid())
+  companyId             String
+  company               Company               @relation(fields: [companyId], references: [id])
+  role                  UserRole
+  name                  String
+  email                 String                @unique
+  passwordHash          String
+  phone                 String?
+  cpf                   String?
+  employeeCode          String?
+  employmentStatus      EmploymentStatus      @default(ACTIVE)
+  hireDate              DateTime?
+  region                String?
+  notes                 String?
+  active                Boolean               @default(true)
+  deletedAt             DateTime?
+  promoterProfile       Promoter?
+  plannedRoutePlans     RoutePlan[]           @relation("RoutePlanSupervisor")
+  publishedRoutePlans   RoutePlan[]           @relation("RoutePlanPublisher")
+  routeTemplatesOwned   RouteTemplate[]       @relation("RouteTemplateSupervisor")
+  routePlanChanges      RouteChangeLog[]      @relation("RouteChangeActor")
+  receivedNotifications Notification[]        @relation("NotificationRecipient")
+  cancelledRouteStops   RoutePlanItem[]       @relation("RoutePlanItemCancelledBy")
+  supervisedByMe        Promoter[]            @relation("PromoterSupervisor")
+  supervisedCustomers   Customer[]            @relation("CustomerSupervisor")
+  defaultPromoterCustomers Customer[]         @relation("CustomerDefaultPromoter")
+  supervisedTeams     Team[]                  @relation("TeamSupervisor")
+  customerImportBatches CustomerImportBatch[] @relation("CustomerImportActor")
+  refreshTokens         RefreshToken[]
+  auditEvents           AuditLog[]            @relation("AuditActor")
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@index([companyId, role, active])
+  @@index([companyId, role, employmentStatus])
+  @@index([companyId, region, employmentStatus])
+  @@index([companyId, deletedAt])
+  @@unique([companyId, cpf])
+  @@unique([companyId, employeeCode])
+}
+
+model Promoter {
+  id             String      @id
+  user           User        @relation(fields: [id], references: [id])
+  companyId      String
+  company        Company     @relation(fields: [companyId], references: [id])
+  employeeCode   String
+  supervisorId   String?
+  supervisorUser User?       @relation("PromoterSupervisor", fields: [supervisorId], references: [id])
+  hireDate       DateTime?
+  defaultJourneyStartTime String?
+  defaultJourneyEndTime   String?
+  active         Boolean     @default(true)
+  deletedAt      DateTime?
+  routePlans     RoutePlan[]
+  routeTemplates RouteTemplate[]
+  journeys       Journey[]
+  visits         Visit[]
+  gpsLogs        GpsLog[]
+  alerts         Alert[]
+  uploadedPhotos VisitPhoto[]
+  syncOperations SyncOperation[]
+  teamMembership  TeamMember?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([companyId, employeeCode])
+  @@index([companyId, active])
+  @@index([supervisorId, active])
+}
+
+model Team {
+  id               String       @id @default(cuid())
+  companyId        String
+  company          Company      @relation(fields: [companyId], references: [id])
+  name             String
+  code             String
+  description      String?
+  region           String?
+  supervisorUserId String?
+  supervisorUser   User?        @relation("TeamSupervisor", fields: [supervisorUserId], references: [id])
+  status           TeamStatus   @default(ACTIVE)
+  active           Boolean      @default(true)
+  members          TeamMember[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([companyId, code])
+  @@index([companyId, name])
+  @@index([companyId, region, status])
+  @@index([companyId, supervisorUserId, status])
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  teamId     String
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  promoterId String   @unique
+  promoter   Promoter @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([teamId, promoterId])
+  @@index([teamId, createdAt])
+}
+
+model Customer {
+  id                    String                @id @default(cuid())
+  companyId             String
+  company               Company               @relation(fields: [companyId], references: [id])
+  code                  String
+  winthorCustomerCode   String?
+  tradeName             String
+  legalName             String
+  cnpj                  String?
+  documentNumber        String?
+  stateRegistration     String?
+  contactName           String?
+  phone                 String?
+  email                 String?
+  zipCode               String?
+  address               String
+  addressNumber         String?
+  complement            String?
+  district              String?
+  city                  String
+  state                 String
+  latitude              Float
+  longitude             Float
+  geofenceRadiusM       Int                   @default(150)
+  routeName             String?
+  region                String?
+  supervisorUserId      String?
+  supervisorUser        User?                 @relation("CustomerSupervisor", fields: [supervisorUserId], references: [id])
+  defaultPromoterUserId String?
+  defaultPromoterUser   User?                 @relation("CustomerDefaultPromoter", fields: [defaultPromoterUserId], references: [id])
+  visitFrequency        String?
+  preferredVisitDays    String[]
+  preferredVisitTimeStart String?
+  preferredVisitTimeEnd String?
+  notes                 String?
+  sourceType            CustomerSourceType    @default(MANUAL)
+  importBatchId         String?
+  importBatch           CustomerImportBatch?  @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  lastSyncedAt          DateTime?
+  status                CustomerStatus        @default(ACTIVE)
+  active                Boolean               @default(true)
+  deletedAt             DateTime?
+  schedules             CustomerSchedule[]
+  routeStops            RoutePlanItem[]
+  routeTemplateItems    RouteTemplateItem[]
+  visits                Visit[]
+  alerts                Alert[]
+  uploadedPhotos        VisitPhoto[]
+  importItems           CustomerImportItem[]
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@unique([companyId, code])
+  @@unique([companyId, winthorCustomerCode])
+  @@unique([companyId, cnpj])
+  @@index([companyId, tradeName, active])
+  @@index([companyId, city, state])
+  @@index([companyId, routeName, region])
+  @@index([companyId, supervisorUserId, active])
+  @@index([companyId, status, sourceType])
+  @@index([active, deletedAt])
+}
+
+model CustomerImportBatch {
+  id          String                    @id @default(cuid())
+  companyId   String
+  company     Company                   @relation(fields: [companyId], references: [id])
+  actorUserId String?
+  actorUser   User?                     @relation("CustomerImportActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  sourceType  CustomerImportSourceType
+  status      CustomerImportBatchStatus
+  applyChanges Boolean                  @default(false)
+  sourceReference String?
+  requestPayload Json?
+  readCount   Int                       @default(0)
+  createdCount Int                      @default(0)
+  updatedCount Int                      @default(0)
+  ignoredCount Int                      @default(0)
+  errorCount  Int                       @default(0)
+  logSummary  String?
+  requestedAt DateTime                  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  durationMs  Int?
+  attemptCount Int                      @default(0)
+  nextRetryAt DateTime?
+  lastError   String?
+  customers   Customer[]
+  items       CustomerImportItem[]
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  @@index([companyId, sourceType, createdAt])
+  @@index([companyId, status, requestedAt])
+  @@index([actorUserId, createdAt])
+  @@index([status, createdAt])
+  @@index([status, nextRetryAt, requestedAt])
+}
+
+model CustomerImportItem {
+  id                  String                   @id @default(cuid())
+  batchId             String
+  batch               CustomerImportBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  customerId          String?
+  customer            Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  rowNumber           Int
+  status              CustomerImportItemStatus
+  customerCode        String?
+  winthorCustomerCode String?
+  cnpj                String?
+  legalName           String?
+  tradeName           String?
+  message             String?
+  conflictKeys        String[]
+  rawPayload          Json
+  processedAt         DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId, status, rowNumber])
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+}
+
+model CustomerSchedule {
+  id               String            @id @default(cuid())
+  customerId       String
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  dayOfWeek        ScheduleDayOfWeek
+  visitWindowStart String?
+  visitWindowEnd   String?
+  sequenceHint     Int?
+  active           Boolean           @default(true)
+  deletedAt        DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([customerId, dayOfWeek])
+  @@index([dayOfWeek, active])
+}
+
+model RoutePlan {
+  id               String          @id @default(cuid())
+  companyId        String
+  company          Company         @relation(fields: [companyId], references: [id])
+  routeDate        DateTime
+  planningView     RoutePlanningViewMode @default(DAILY)
+  promoterId       String
+  promoter         Promoter        @relation(fields: [promoterId], references: [id])
+  supervisorUserId String?
+  supervisorUser   User?           @relation("RoutePlanSupervisor", fields: [supervisorUserId], references: [id])
+  templateId       String?
+  template         RouteTemplate?  @relation(fields: [templateId], references: [id])
+  status           RoutePlanStatus @default(PUBLISHED)
+  version          Int             @default(1)
+  publishedAt      DateTime?
+  lastPublishedByUserId String?
+  lastPublishedByUser   User?      @relation("RoutePlanPublisher", fields: [lastPublishedByUserId], references: [id])
+  notes            String?
+  active           Boolean         @default(true)
+  stops            RoutePlanItem[]
+  changeLogs       RouteChangeLog[]
+  notifications    Notification[]
+  journeys         Journey[]
+  visits           Visit[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([routeDate, promoterId])
+  @@index([companyId, routeDate])
+  @@index([companyId, promoterId, routeDate])
+  @@index([promoterId, routeDate])
+  @@index([templateId, routeDate])
+  @@index([status, routeDate])
+  @@index([publishedAt, routeDate])
+  @@index([active, routeDate])
+}
+
+model RoutePlanItem {
+  id             String          @id @default(cuid())
+  routePlanId    String
+  routePlan      RoutePlan       @relation(fields: [routePlanId], references: [id])
+  clientId       String
+  client         Customer        @relation(fields: [clientId], references: [id])
+  sequence       Int
+  priority       RouteItemPriority @default(NORMAL)
+  status         RouteStopStatus @default(PLANNED)
+  plannedStartAt DateTime?
+  plannedEndAt   DateTime?
+  notes          String?
+  cancelledAt    DateTime?
+  cancelledByUserId String?
+  cancelledByUser   User?         @relation("RoutePlanItemCancelledBy", fields: [cancelledByUserId], references: [id])
+  cancellationReason String?
+  templateItemId String?
+  templateItem   RouteTemplateItem? @relation(fields: [templateItemId], references: [id])
+  active         Boolean         @default(true)
+  visit          Visit?
+  changeLogs     RouteChangeLog[]
+  notifications  Notification[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([routePlanId, active, sequence])
+  @@index([routePlanId, status])
+  @@index([routePlanId, cancelledAt])
+  @@index([clientId, status])
+  @@index([status, plannedStartAt])
+  @@index([priority, plannedStartAt])
+}
+
+model RouteTemplate {
+  id               String                 @id @default(cuid())
+  companyId        String
+  company          Company                @relation(fields: [companyId], references: [id])
+  promoterId       String
+  promoter         Promoter               @relation(fields: [promoterId], references: [id])
+  supervisorUserId String
+  supervisorUser   User                   @relation("RouteTemplateSupervisor", fields: [supervisorUserId], references: [id])
+  name             String
+  description      String?
+  recurrence       RouteRecurrencePattern
+  weekdays         ScheduleDayOfWeek[]
+  monthDays        Int[]
+  effectiveFrom    DateTime?
+  effectiveUntil   DateTime?
+  active           Boolean                @default(true)
+  items            RouteTemplateItem[]
+  plans            RoutePlan[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([companyId, promoterId, active])
+  @@index([supervisorUserId, active])
+  @@index([recurrence, active])
+}
+
+model RouteTemplateItem {
+  id               String             @id @default(cuid())
+  routeTemplateId  String
+  routeTemplate    RouteTemplate      @relation(fields: [routeTemplateId], references: [id], onDelete: Cascade)
+  customerId       String
+  customer         Customer           @relation(fields: [customerId], references: [id])
+  sequence         Int
+  priority         RouteItemPriority  @default(NORMAL)
+  plannedStartTime String?
+  plannedEndTime   String?
+  dayOfWeek        ScheduleDayOfWeek?
+  dayOfMonth       Int?
+  notes            String?
+  active           Boolean            @default(true)
+  routePlanItems   RoutePlanItem[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([routeTemplateId, active, sequence])
+  @@index([customerId, active])
+  @@index([dayOfWeek, active])
+  @@index([dayOfMonth, active])
+}
+
+model RouteChangeLog {
+  id               String          @id @default(cuid())
+  companyId        String
+  company          Company         @relation(fields: [companyId], references: [id])
+  routePlanId      String
+  routePlan        RoutePlan       @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
+  routePlanItemId  String?
+  routePlanItem    RoutePlanItem?  @relation(fields: [routePlanItemId], references: [id], onDelete: SetNull)
+  actorUserId      String?
+  actorUser        User?           @relation("RouteChangeActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  changeType       RouteChangeType
+  summary          String
+  previousSnapshot Json?
+  nextSnapshot     Json?
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([routePlanId, createdAt])
+  @@index([routePlanItemId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([changeType, createdAt])
+}
+
+model Notification {
+  id              String           @id @default(cuid())
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id])
+  recipientUserId String
+  recipientUser   User             @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  routePlanId     String?
+  routePlan       RoutePlan?       @relation(fields: [routePlanId], references: [id], onDelete: SetNull)
+  routePlanItemId String?
+  routePlanItem   RoutePlanItem?   @relation(fields: [routePlanItemId], references: [id], onDelete: SetNull)
+  type            NotificationType
+  title           String
+  message         String
+  payload         Json?
+  readAt          DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([recipientUserId, readAt, createdAt])
+  @@index([routePlanId, createdAt])
+  @@index([routePlanItemId, createdAt])
+  @@index([type, createdAt])
+}
+
+model Journey {
+  id             String     @id @default(cuid())
+  routePlanId    String?
+  routePlan      RoutePlan? @relation(fields: [routePlanId], references: [id])
+  promoterId     String
+  promoter       Promoter   @relation(fields: [promoterId], references: [id])
+  startedAt      DateTime
+  endedAt        DateTime?
+  startLatitude  Float
+  startLongitude Float
+  endLatitude    Float?
+  endLongitude   Float?
+  startEventId   String?    @unique
+  endEventId     String?    @unique
+  active         Boolean    @default(true)
+  trackPoints    GpsLog[]
+  visits         Visit[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([promoterId, active])
+  @@index([startedAt])
+  @@index([routePlanId, startedAt])
+}
+
+model Visit {
+  id                           String                 @id @default(cuid())
+  routePlanId                  String
+  routePlan                    RoutePlan              @relation(fields: [routePlanId], references: [id])
+  routeStopId                  String                 @unique
+  routeStop                    RoutePlanItem          @relation(fields: [routeStopId], references: [id])
+  journeyId                    String
+  journey                      Journey                @relation(fields: [journeyId], references: [id])
+  promoterId                   String
+  promoter                     Promoter               @relation(fields: [promoterId], references: [id])
+  clientId                     String
+  client                       Customer               @relation(fields: [clientId], references: [id])
+  checkInAt                    DateTime
+  serviceStartedAt             DateTime?
+  checkOutAt                   DateTime?
+  checkInLatitude              Float
+  checkInLongitude             Float
+  checkOutLatitude             Float?
+  checkOutLongitude            Float?
+  checkInEventId               String?                @unique
+  serviceStartEventId          String?                @unique
+  checkOutEventId              String?                @unique
+  outsideGeofence              Boolean                @default(false)
+  geofenceDistanceM            Float?
+  outsideGeofenceJustification String?
+  notes                        String?
+  completionStatus             VisitCompletionStatus?
+  status                       RouteStopStatus        @default(IN_PROGRESS)
+  checklist                    VisitChecklist?
+  checklistResponses           VisitChecklistAnswer[] @relation("VisitChecklistAnswers")
+  photos                       VisitPhoto[]
+  statusHistory                VisitStatusHistory[]
+  alerts                       Alert[]
+  createdAt                    DateTime               @default(now())
+  updatedAt                    DateTime               @updatedAt
+
+  @@index([promoterId, status])
+  @@index([journeyId, status])
+  @@index([clientId, status])
+  @@index([routePlanId, checkInAt])
+  @@index([checkOutAt, completionStatus])
+}
+
+model ChecklistTemplate {
+  id          String              @id @default(cuid())
+  companyId   String
+  company     Company             @relation(fields: [companyId], references: [id])
+  code        String
+  name        String
+  description String?
+  version     Int                 @default(1)
+  active      Boolean             @default(true)
+  deletedAt   DateTime?
+  questions   ChecklistQuestion[]
+  visits      VisitChecklist[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([companyId, code, version])
+  @@index([companyId, active])
+  @@index([active, deletedAt])
+}
+
+model ChecklistQuestion {
+  id                  String                 @id @default(cuid())
+  checklistTemplateId String
+  checklistTemplate   ChecklistTemplate      @relation(fields: [checklistTemplateId], references: [id])
+  code                String
+  label               String
+  helpText            String?
+  type                ChecklistItemType
+  required            Boolean                @default(true)
+  sortOrder           Int
+  active              Boolean                @default(true)
+  answers             VisitChecklistAnswer[] @relation("ChecklistQuestionAnswers")
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@unique([checklistTemplateId, code])
+  @@index([checklistTemplateId, active, sortOrder])
+}
+
+model VisitChecklist {
+  id                  String                 @id @default(cuid())
+  visitId             String                 @unique
+  visit               Visit                  @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  checklistTemplateId String
+  checklistTemplate   ChecklistTemplate      @relation(fields: [checklistTemplateId], references: [id])
+  submissionEventId   String?                @unique
+  notes               String?
+  submittedAt         DateTime?
+  answers             VisitChecklistAnswer[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@index([checklistTemplateId, submittedAt])
+}
+
+model VisitChecklistAnswer {
+  id               String           @id @default(cuid())
+  visitChecklistId String
+  visitChecklist   VisitChecklist   @relation(fields: [visitChecklistId], references: [id], onDelete: Cascade)
+  visitId          String
+  visit            Visit            @relation("VisitChecklistAnswers", fields: [visitId], references: [id], onDelete: Cascade)
+  templateId       String
+  template         ChecklistQuestion @relation("ChecklistQuestionAnswers", fields: [templateId], references: [id])
+  valueBoolean     Boolean?
+  valueText        String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([visitChecklistId, templateId])
+  @@index([visitId])
+  @@index([templateId])
+}
+
+model GpsLog {
+  id         String       @id @default(cuid())
+  journeyId  String
+  journey    Journey      @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  promoterId String
+  promoter   Promoter     @relation(fields: [promoterId], references: [id])
+  eventId    String?      @unique
+  latitude   Float
+  longitude  Float
+  accuracyM  Float?
+  source     GpsLogSource @default(TRACKING)
+  capturedAt DateTime
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([journeyId, capturedAt])
+  @@index([promoterId, capturedAt])
+  @@index([capturedAt])
+}
+
+model VisitPhoto {
+  id             String        @id @default(cuid())
+  visitId         String
+  visit           Visit         @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  promoterId      String
+  promoter        Promoter      @relation(fields: [promoterId], references: [id])
+  clientId        String
+  client          Customer      @relation(fields: [clientId], references: [id])
+  uploadEventId   String?       @unique
+  type            PhotoType
+  category        PhotoCategory @default(GENERAL)
+  stage           VisitPhotoStage
+  storageBucket   String?
+  storageKey      String
+  publicUrl       String
+  originalName    String
+  mimeType        String
+  sizeInBytes     Int
+  capturedAt      DateTime
+  capturedLatitude Float?
+  capturedLongitude Float?
+  gpsStatus       PhotoGpsStatus?
+  gpsErrorCode    String?
+  gpsErrorMessage String?
+  uploadedAt      DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([visitId, type])
+  @@index([visitId, category])
+  @@index([visitId, stage])
+  @@index([promoterId, capturedAt])
+  @@index([clientId, capturedAt])
+}
+
+model Alert {
+  id             String        @id @default(cuid())
+  type           AlertType
+  severity       AlertSeverity
+  message        String
+  promoterId     String
+  promoter       Promoter      @relation(fields: [promoterId], references: [id])
+  clientId       String?
+  client         Customer?     @relation(fields: [clientId], references: [id])
+  visitId        String?
+  visit          Visit?        @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  active         Boolean       @default(true)
+  resolvedAt     DateTime?
+  resolutionNote String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([severity, resolvedAt])
+  @@index([promoterId, createdAt])
+  @@index([clientId, createdAt])
+  @@index([type, createdAt])
+  @@index([type, promoterId, clientId, visitId, active, resolvedAt])
+}
+
+model VisitStatusHistory {
+  id                       String                 @id @default(cuid())
+  visitId                  String
+  visit                    Visit                  @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  previousStatus           RouteStopStatus?
+  nextStatus               RouteStopStatus
+  previousCompletionStatus VisitCompletionStatus?
+  nextCompletionStatus     VisitCompletionStatus?
+  note                     String?
+  changedAt                DateTime               @default(now())
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+
+  @@index([visitId, changedAt])
+  @@index([nextStatus, changedAt])
+}
+
+model AuditLog {
+  id          String          @id @default(cuid())
+  actorUserId String?
+  actorUser   User?           @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  entityType  AuditEntityType
+  entityId    String
+  action      String
+  payload     Json
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt])
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  userAgent  String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, expiresAt])
+  @@index([revokedAt, expiresAt])
+}
+
+model SyncOperation {
+  id                String              @id @default(cuid())
+  promoterId        String
+  promoter          Promoter            @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+  deviceId          String?             @map("device_id")
+  actionId          String?             @map("action_id")
+  clientGeneratedId String              @map("client_generated_id")
+  actionType        String              @map("action_type")
+  routeStopId       String?             @map("route_stop_id")
+  visitId           String?             @map("visit_id")
+  payloadHash       String              @map("payload_hash")
+  requestPayload    Json                @map("request_payload")
+  responsePayload   Json?               @map("response_payload")
+  serverEntityId    String?             @map("server_entity_id")
+  status            SyncOperationStatus @default(RECEIVED)
+  lastError         String?             @map("last_error")
+  processedAt       DateTime?           @map("processed_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  @@unique([promoterId, clientGeneratedId])
+  @@index([promoterId, status, updatedAt])
+  @@index([promoterId, createdAt])
+  @@index([deviceId, createdAt])
+  @@map("sync_operations")
+}
