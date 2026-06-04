@@ -22,7 +22,7 @@ promotersRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
     const promoters = await prisma.promoter.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { code: "asc" },
       include: {
         user: { include: { role: true } },
         supervisor: { include: { user: true } }

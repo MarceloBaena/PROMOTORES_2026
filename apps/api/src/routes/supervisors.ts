@@ -28,7 +28,7 @@ supervisorsRouter.get(
 
     const supervisors = await prisma.supervisor.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { code: "asc" },
       include: { user: { include: { role: true } } }
     });
 

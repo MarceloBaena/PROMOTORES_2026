@@ -11,8 +11,20 @@ interface AuditFlag {
   createdAt: string;
   visit: {
     client: { name: string };
-    promoter?: { user?: { name?: string } };
+    promoter?: { code?: number; user?: { name?: string } };
   };
+}
+
+function promoterLabel(promoter?: AuditFlag["visit"]["promoter"]) {
+  if (!promoter) {
+    return "-";
+  }
+
+  const code = Number(promoter.code);
+  const formattedCode = Number.isFinite(code) && code > 0 ? `PRO-${String(code).padStart(4, "0")}` : null;
+  const name = promoter.user?.name ?? "Sem nome";
+
+  return formattedCode ? `${formattedCode} - ${name}` : name;
 }
 
 export function AuditPage() {
@@ -45,7 +57,7 @@ export function AuditPage() {
               {flags.map((flag) => (
                 <tr key={flag.id}>
                   <td className="px-4 py-3 font-medium">{flag.visit.client.name}</td>
-                  <td className="px-4 py-3">{flag.visit.promoter?.user?.name ?? "-"}</td>
+                  <td className="px-4 py-3">{promoterLabel(flag.visit.promoter)}</td>
                   <td className="px-4 py-3">{flag.type}</td>
                   <td className="px-4 py-3"><StatusPill value={flag.severity} /></td>
                   <td className="px-4 py-3">{flag.resolved ? "Resolvida" : "Aberta"}</td>

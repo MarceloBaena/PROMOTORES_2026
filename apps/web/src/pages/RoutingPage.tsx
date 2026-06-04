@@ -8,9 +8,21 @@ interface RoutePlan {
   id: string;
   name: string;
   status: string;
-  promoter?: { user?: { name?: string } };
-  supervisor?: { user?: { name?: string } };
+  promoter?: { code?: number; user?: { name?: string } };
+  supervisor?: { code?: number; user?: { name?: string } };
   items: Array<{ id: string; sequence: number; client: { name: string } }>;
+}
+
+function personLabel(profile?: { code?: number; user?: { name?: string } }, prefix: "PRO" | "SUP" = "PRO") {
+  if (!profile) {
+    return "-";
+  }
+
+  const code = Number(profile.code);
+  const formattedCode = Number.isFinite(code) && code > 0 ? `${prefix}-${String(code).padStart(4, "0")}` : null;
+  const name = profile.user?.name ?? "Sem nome";
+
+  return formattedCode ? `${formattedCode} - ${name}` : name;
 }
 
 export function RoutingPage() {
@@ -108,7 +120,7 @@ export function RoutingPage() {
                   <tr key={route.id}>
                     <td className="px-4 py-3 font-medium">{route.name}</td>
                     <td className="px-4 py-3"><StatusPill value={route.status} /></td>
-                    <td className="px-4 py-3">{route.promoter?.user?.name ?? "-"}</td>
+                    <td className="px-4 py-3">{personLabel(route.promoter, "PRO")}</td>
                     <td className="px-4 py-3">{route.items.length}</td>
                     <td className="px-4 py-3">
                       <button className="icon-button text-moss" type="button" title="Publicar" onClick={() => void publish(route.id)}>

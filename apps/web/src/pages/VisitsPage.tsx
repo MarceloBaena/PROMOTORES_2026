@@ -9,8 +9,20 @@ interface Visit {
   status: string;
   notes?: string;
   client: { name: string };
-  promoter?: { user?: { name?: string } };
+  promoter?: { code?: number; user?: { name?: string } };
   createdAt: string;
+}
+
+function promoterLabel(promoter?: Visit["promoter"]) {
+  if (!promoter) {
+    return "-";
+  }
+
+  const code = Number(promoter.code);
+  const formattedCode = Number.isFinite(code) && code > 0 ? `PRO-${String(code).padStart(4, "0")}` : null;
+  const name = promoter.user?.name ?? "Sem nome";
+
+  return formattedCode ? `${formattedCode} - ${name}` : name;
 }
 
 export function VisitsPage() {
@@ -104,7 +116,7 @@ export function VisitsPage() {
                 {visits.map((visit) => (
                   <tr key={visit.id}>
                     <td className="px-4 py-3 font-medium">{visit.client.name}</td>
-                    <td className="px-4 py-3">{visit.promoter?.user?.name ?? "-"}</td>
+                    <td className="px-4 py-3">{promoterLabel(visit.promoter)}</td>
                     <td className="px-4 py-3"><StatusPill value={visit.status} /></td>
                     <td className="px-4 py-3">{new Date(visit.createdAt).toLocaleDateString("pt-BR")}</td>
                     <td className="px-4 py-3">

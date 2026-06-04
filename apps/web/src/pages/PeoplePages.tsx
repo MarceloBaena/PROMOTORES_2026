@@ -1,12 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { CrudPage, userEmail, userName, userStatus } from "./CrudPage";
 import { apiJson } from "../lib/api";
 
-function recordCode(item: Record<string, unknown>) {
-  const id = String(item.id ?? "");
-  const code = id ? id.slice(0, 8).toUpperCase() : "-";
+function numericCode(item: Record<string, unknown>, prefix: "PRO" | "SUP") {
+  const code = Number(item.code);
 
-  return <span className="font-mono text-xs font-bold text-graphite">{code}</span>;
+  if (!Number.isFinite(code) || code <= 0) {
+    return <span className="font-mono text-xs font-bold text-stone-400">-</span>;
+  }
+
+  return (
+    <span className="inline-flex h-8 items-center rounded-full border border-line bg-field px-3 font-mono text-xs font-black tracking-[0.12em] text-graphite">
+      {prefix}-{String(code).padStart(4, "0")}
+    </span>
+  );
 }
 
 export function PromotersPage() {
@@ -21,9 +28,11 @@ export function PromotersPage() {
             .map((supervisor) => {
               const user = supervisor.user as { name?: string } | undefined;
               const id = String(supervisor.id ?? "");
+              const code = Number(supervisor.code);
+              const displayCode = Number.isFinite(code) && code > 0 ? `SUP-${String(code).padStart(4, "0")}` : id;
               return {
                 value: id,
-                label: user?.name ? `${user.name}` : id
+                label: user?.name ? `${displayCode} - ${user.name}` : displayCode
               };
             })
             .filter((option) => option.value !== "")
@@ -55,6 +64,7 @@ export function PromotersPage() {
         }
       ]}
       columns={[
+        { label: "Codigo", value: (item) => numericCode(item, "PRO") },
         { label: "Nome", value: userName },
         { label: "E-mail", value: userEmail },
         { label: "Status", value: userStatus },
@@ -83,7 +93,7 @@ export function SupervisorsPage() {
         { name: "region", label: "Regiao" }
       ]}
       columns={[
-        { label: "Codigo", value: recordCode },
+        { label: "Codigo", value: (item) => numericCode(item, "SUP") },
         { label: "Nome", value: userName },
         { label: "E-mail", value: userEmail },
         { label: "Status", value: userStatus },
