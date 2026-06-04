@@ -142,7 +142,7 @@ export function LiveMapPage() {
 
   useEffect(() => {
     void load();
-    const intervalId = window.setInterval(() => void load(), 15000);
+    const intervalId = window.setInterval(() => void load(), 10000);
 
     return () => window.clearInterval(intervalId);
   }, []);
@@ -156,7 +156,7 @@ export function LiveMapPage() {
     <section>
       <PageHeader
         title="Mapa ao vivo"
-        subtitle="Visualize a ultima posicao enviada por promotores durante visitas em andamento."
+        subtitle="Visualize a ultima posicao enviada por promotores durante jornada ativa, roteiro publicado ou visita em andamento."
         action={
           <button type="button" className="secondary-button" onClick={() => void load()} disabled={loading}>
             <RefreshCcw className="h-4 w-4" />
@@ -187,7 +187,7 @@ export function LiveMapPage() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Mapa operacional</h2>
-              <p className="panel-subtitle">Atualizacao automatica a cada 15 segundos.</p>
+              <p className="panel-subtitle">Atualizacao automatica a cada 10 segundos.</p>
             </div>
             <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200">
               <RadioTower className="h-4 w-4" />
@@ -242,7 +242,7 @@ export function LiveMapPage() {
                     <LocateFixed className="mx-auto h-10 w-10 text-stone-400" />
                     <h3 className="mt-4 font-display text-2xl font-bold text-ink">Nenhuma posicao recebida</h3>
                     <p className="mt-2 text-sm font-semibold leading-6 text-stone-500">
-                      O mapa sera preenchido quando um promotor iniciar uma visita e o app enviar a localizacao autorizada.
+                      O mapa sera preenchido quando um promotor abrir o app durante a jornada autorizada e enviar a localizacao.
                     </p>
                   </div>
                 </div>

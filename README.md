@@ -68,8 +68,9 @@ O painel web possui a rota `/mapa` para visualizar a última posição operacion
 Regras de segurança:
 
 - O promotor só envia localização pelo endpoint `POST /locations/heartbeat`.
-- O backend aceita heartbeat somente se o usuário for `PROMOTOR` e tiver visita `in_progress`.
+- O backend aceita heartbeat somente se o usuário for `PROMOTOR` e tiver visita `in_progress` ou roteiro `PUBLISHED` agendado para o dia.
 - Admin e supervisor visualizam o mapa pelo endpoint `GET /locations/live`.
 - Não existe rastreamento fora da jornada ativa.
 
 O app mobile base inclui `apps/mobile/src/locationHeartbeat.ts`, que prepara o envio da posição quando o app Expo/React Native estiver integrado ao GPS do aparelho.
+O envio automático esperado é em primeiro plano: app aberto, promotor logado, GPS permitido e jornada operacional autorizada.

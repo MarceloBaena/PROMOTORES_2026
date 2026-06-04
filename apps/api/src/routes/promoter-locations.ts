@@ -41,6 +41,16 @@ function locationStatus(capturedAt?: Date | null) {
   return "offline";
 }
 
+function dayBounds(referenceDate: Date) {
+  const start = new Date(referenceDate);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(referenceDate);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+}
+
 promoterLocationsRouter.get(
   "/live",
   asyncHandler(async (req, res) => {
@@ -116,6 +126,8 @@ promoterLocationsRouter.post(
     }
 
     const input = locationSchema.parse(req.body);
+    const capturedAt = input.capturedAt ? new Date(input.capturedAt) : new Date();
+    const { start, end } = dayBounds(capturedAt);
     const promoter = await prisma.promoter.findUnique({
       where: { userId: req.user.id },
       include: {
@@ -126,6 +138,17 @@ promoterLocationsRouter.post(
           },
           orderBy: { updatedAt: "desc" },
           take: 1
+        },
+        routes: {
+          where: {
+            status: "PUBLISHED",
+            scheduledDate: {
+              gte: start,
+              lte: end
+            }
+          },
+          orderBy: { scheduledDate: "asc" },
+          take: 1
         }
       }
     });
@@ -135,12 +158,13 @@ promoterLocationsRouter.post(
     }
 
     const activeVisit = promoter.visits[0];
+    const activeRoute = promoter.routes[0];
 
-    if (!activeVisit) {
+    if (!activeVisit && !activeRoute) {
       throw new AppError(
         409,
-        "ACTIVE_VISIT_REQUIRED",
-        "Location heartbeat is allowed only during an active visit."
+        "ACTIVE_JOURNEY_REQUIRED",
+        "Location heartbeat is allowed only during an active visit or a published route scheduled for today."
       );
     }
 
@@ -151,7 +175,7 @@ promoterLocationsRouter.post(
         latitude: input.latitude,
         longitude: input.longitude,
         accuracyMeters: input.accuracyMeters,
-        capturedAt: input.capturedAt ? new Date(input.capturedAt) : new Date(),
+        capturedAt,
         source: "mobile"
       }
     });
