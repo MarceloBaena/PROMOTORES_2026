@@ -3,11 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "description": "Mobile base for Sales Promoters.",
+  "main": "index.js",
   "scripts": {
-    "dev": "echo \"Mobile base ready for Expo or React Native setup\"",
+    "start": "expo start",
+    "android": "expo run:android",
+    "prebuild:android": "expo prebuild --platform android",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
-  "devDependencies": {
-    "typescript": "^5.6.3"
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "expo": "^56.0.8",
+    "expo-crypto": "^56.0.4",
+    "expo-file-system": "^56.0.7",
+    "expo-font": "~56.0.5",
+    "expo-image-picker": "^56.0.15",
+    "expo-location": "^56.0.15",
+    "expo-sqlite": "^56.0.4",
+    "react": "19.2.3",
+    "react-native": "^0.85.3"
   }
 }

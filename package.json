@@ -20,6 +20,10 @@
     "build:web": "npm run build -w @sales-promoters/web",
     "build:shared": "npm run build -w @sales-promoters/shared",
     "build": "npm run build:shared && npm run api:build && npm run build:web",
+    "mobile:start": "npm run start -w @sales-promoters/mobile",
+    "mobile:typecheck": "npm run typecheck -w @sales-promoters/mobile",
+    "mobile:prebuild:android": "npm run prebuild:android -w @sales-promoters/mobile",
+    "mobile:android": "npm run android -w @sales-promoters/mobile",
     "dev:api": "npm run dev -w @sales-promoters/api",
     "dev:web": "npm run dev -w @sales-promoters/web"
   }

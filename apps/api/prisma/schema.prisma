@@ -227,6 +227,7 @@ model RouteItem {
 
 model Visit {
   id           String            @id @default(uuid())
+  clientGeneratedId String?      @unique @map("client_generated_id")
   routeId      String?           @map("route_id")
   route        Route?            @relation(fields: [routeId], references: [id])
   routeItemId  String?           @map("route_item_id")
@@ -271,6 +272,7 @@ model PromoterLocation {
 
 model VisitPhoto {
   id         String    @id @default(uuid())
+  clientGeneratedId String? @unique @map("client_generated_id")
   visitId    String    @map("visit_id")
   visit      Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade)
   type       PhotoType

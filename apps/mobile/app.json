@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Promotores 2026",
+    "slug": "promotores-2026-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "promotores2026",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.promotores2026.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O app usa a camera para registrar check-in, foto before e foto after da visita."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O app usa a localizacao durante a jornada ativa para auditoria da visita."
+        }
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "apiBaseUrl": "https://promotores-2026-api.vercel.app",
+      "eas": {
+        "projectId": "34133731-1dc5-4707-ad60-d05310ac791a"
+      }
+    },
+    "owner": "baena.formula"
+  }
+}
