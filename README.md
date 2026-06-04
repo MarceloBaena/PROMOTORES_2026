@@ -60,3 +60,16 @@ URLs de produção:
 - Web: `https://promotores-2026.vercel.app`
 - API: `https://promotores-2026-api.vercel.app`
 - Health da API: `https://promotores-2026-api.vercel.app/health`
+
+## Mapa ao vivo
+
+O painel web possui a rota `/mapa` para visualizar a última posição operacional dos promotores.
+
+Regras de segurança:
+
+- O promotor só envia localização pelo endpoint `POST /locations/heartbeat`.
+- O backend aceita heartbeat somente se o usuário for `PROMOTOR` e tiver visita `in_progress`.
+- Admin e supervisor visualizam o mapa pelo endpoint `GET /locations/live`.
+- Não existe rastreamento fora da jornada ativa.
+
+O app mobile base inclui `apps/mobile/src/locationHeartbeat.ts`, que prepara o envio da posição quando o app Expo/React Native estiver integrado ao GPS do aparelho.

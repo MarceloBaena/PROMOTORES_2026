@@ -7,6 +7,7 @@ import {
   Flag,
   LogOut,
   Map,
+  MapPinned,
   Route,
   ShieldCheck,
   Store,
@@ -23,6 +24,7 @@ const navSections = [
       { to: "/", label: "Dashboard", icon: BarChart3 },
       { to: "/roteirizacao", label: "Roteirizacao", icon: Route },
       { to: "/visitas", label: "Visitas", icon: Map },
+      { to: "/mapa", label: "Mapa ao vivo", icon: MapPinned },
       { to: "/auditoria", label: "Auditoria", icon: Flag },
       { to: "/relatorios", label: "Relatorios", icon: ClipboardList }
     ]

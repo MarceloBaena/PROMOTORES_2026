@@ -8,6 +8,7 @@ import { ClientsPage } from "./pages/ClientsPage";
 import { ClientImportPage } from "./pages/ClientImportPage";
 import { RoutingPage } from "./pages/RoutingPage";
 import { VisitsPage } from "./pages/VisitsPage";
+import { LiveMapPage } from "./pages/LiveMapPage";
 import { AuditPage } from "./pages/AuditPage";
 import { ReportsPage } from "./pages/ReportsPage";
 
@@ -32,6 +33,7 @@ function ProtectedApp() {
         <Route path="/importacao" element={<ClientImportPage />} />
         <Route path="/roteirizacao" element={<RoutingPage />} />
         <Route path="/visitas" element={<VisitsPage />} />
+        <Route path="/mapa" element={<LiveMapPage />} />
         <Route path="/auditoria" element={<AuditPage />} />
         <Route path="/relatorios" element={<ReportsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

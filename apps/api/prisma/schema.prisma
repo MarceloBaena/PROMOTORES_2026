@@ -163,6 +163,7 @@ model Promoter {
   status       ProfileStatus @default(ACTIVE)
   routes       Route[]
   visits       Visit[]
+  locations    PromoterLocation[]
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
@@ -243,10 +244,29 @@ model Visit {
   photos       VisitPhoto[]
   occurrences  VisitOccurrence[]
   auditFlags   AuditFlag[]
+  locations    PromoterLocation[]
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
 
   @@map("visits")
+}
+
+model PromoterLocation {
+  id             String   @id @default(uuid())
+  promoterId     String   @map("promoter_id")
+  promoter       Promoter @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+  visitId        String?  @map("visit_id")
+  visit          Visit?   @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  latitude       Decimal  @db.Decimal(10, 7)
+  longitude      Decimal  @db.Decimal(10, 7)
+  accuracyMeters Decimal? @map("accuracy_meters") @db.Decimal(10, 2)
+  capturedAt     DateTime @map("captured_at")
+  receivedAt     DateTime @default(now()) @map("received_at")
+  source         String   @default("mobile")
+
+  @@index([promoterId, capturedAt])
+  @@index([visitId])
+  @@map("promoter_locations")
 }
 
 model VisitPhoto {

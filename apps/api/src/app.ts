@@ -9,6 +9,7 @@ import { promotersRouter } from "./routes/promoters";
 import { clientsRouter } from "./routes/clients";
 import { routePlansRouter } from "./routes/route-plans";
 import { visitsRouter } from "./routes/visits";
+import { promoterLocationsRouter } from "./routes/promoter-locations";
 import { auditRouter } from "./routes/audit";
 import { reportsRouter } from "./routes/reports";
 import { authenticate, authorizeRoles } from "./middleware/auth";
@@ -127,6 +128,7 @@ export function createApp() {
   app.use("/clients", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), clientsRouter);
   app.use("/routes", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), routePlansRouter);
   app.use("/visits", authenticate, authorizeRoles("ADMIN", "SUPERVISOR", "PROMOTOR"), visitsRouter);
+  app.use("/locations", authenticate, authorizeRoles("ADMIN", "SUPERVISOR", "PROMOTOR"), promoterLocationsRouter);
   app.use("/audit", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), auditRouter);
   app.use("/reports", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), reportsRouter);
 
