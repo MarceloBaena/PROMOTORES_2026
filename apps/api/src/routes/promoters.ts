@@ -7,11 +7,25 @@ import { hashPassword } from "../services/auth-service";
 
 export const promotersRouter = Router();
 
+const emptyStringToUndefined = (value: unknown) => {
+  if (typeof value === "string" && value.trim() === "") {
+    return undefined;
+  }
+
+  return value;
+};
+
 const createSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  password: z.string().min(8).optional(),
-  supervisorId: z.string().uuid().optional()
+  name: z.string().trim().min(2, "Informe o nome do promotor."),
+  email: z.string().trim().email("Informe um e-mail valido."),
+  password: z.preprocess(
+    emptyStringToUndefined,
+    z.string().min(8, "A senha precisa ter pelo menos 8 caracteres.").optional()
+  ),
+  supervisorId: z.preprocess(
+    emptyStringToUndefined,
+    z.string().uuid("Selecione um supervisor valido.").optional()
+  )
 });
 
 const updateSchema = createSchema.partial().extend({
@@ -43,11 +57,18 @@ promotersRouter.post(
       throw new AppError(500, "ROLE_NOT_FOUND", "Role PROMOTOR was not found. Run the bootstrap script.");
     }
 
+    const email = input.email.toLowerCase();
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+
+    if (existingUser) {
+      throw new AppError(409, "EMAIL_ALREADY_EXISTS", "Ja existe usuario cadastrado com este e-mail.");
+    }
+
     const promoter = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           name: input.name,
-          email: input.email.toLowerCase(),
+          email,
           passwordHash: await hashPassword(input.password ?? "Promotor@123"),
           status: "ACTIVE",
           roleId: role.id

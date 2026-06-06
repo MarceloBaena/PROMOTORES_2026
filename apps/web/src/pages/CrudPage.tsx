@@ -16,6 +16,8 @@ interface Field {
   fullWidth?: boolean;
   searchable?: boolean;
   readOnly?: boolean;
+  required?: boolean;
+  minLength?: number;
 }
 
 interface CrudPageProps {
@@ -64,10 +66,38 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
     void load();
   }, [endpoint]);
 
+  function validateForm() {
+    for (const field of fields) {
+      const value = form[field.name]?.trim() ?? "";
+
+      if (field.required && value === "") {
+        return `Preencha o campo ${field.label}.`;
+      }
+
+      if (field.minLength && value !== "" && value.length < field.minLength) {
+        return `${field.label} precisa ter pelo menos ${field.minLength} caracteres.`;
+      }
+
+      if (field.type === "email" && value !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return `Informe um e-mail valido em ${field.label}.`;
+      }
+    }
+
+    return null;
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    setLoading(true);
     setMessage(null);
+
+    const validationMessage = validateForm();
+
+    if (validationMessage) {
+      setMessage(validationMessage);
+      return;
+    }
+
+    setLoading(true);
 
     const payload = Object.fromEntries(
       Object.entries(form).filter(([key, value]) => {

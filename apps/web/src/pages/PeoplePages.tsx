@@ -49,9 +49,17 @@ export function PromotersPage() {
       endpoint="/promoters"
       initialValues={{ name: "", email: "", password: "", supervisorId: "" }}
       fields={[
-        { name: "name", label: "Nome", placeholder: "Nome do promotor", fullWidth: true },
-        { name: "email", label: "E-mail", type: "email", placeholder: "email@exemplo.com", fullWidth: true },
-        { name: "password", label: "Senha", type: "password", placeholder: "Senha segura", fullWidth: true },
+        { name: "name", label: "Nome", placeholder: "Nome do promotor", required: true, fullWidth: true },
+        { name: "email", label: "E-mail", type: "email", placeholder: "email@exemplo.com", required: true, fullWidth: true },
+        {
+          name: "password",
+          label: "Senha",
+          type: "password",
+          placeholder: "Minimo de 8 caracteres",
+          description: "Se deixar em branco, o sistema usa a senha padrao Promotor@123.",
+          minLength: 8,
+          fullWidth: true
+        },
         {
           name: "supervisorId",
           label: "Supervisor",
@@ -87,9 +95,9 @@ export function SupervisorsPage() {
       endpoint="/supervisors"
       initialValues={{ name: "", email: "", password: "", region: "" }}
       fields={[
-        { name: "name", label: "Nome" },
-        { name: "email", label: "E-mail", type: "email" },
-        { name: "password", label: "Senha", type: "password" },
+        { name: "name", label: "Nome", required: true },
+        { name: "email", label: "E-mail", type: "email", required: true },
+        { name: "password", label: "Senha", type: "password", minLength: 8 },
         { name: "region", label: "Regiao" }
       ]}
       columns={[

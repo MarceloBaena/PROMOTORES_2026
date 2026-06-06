@@ -8,10 +8,17 @@ export function notFound(req: Request, _res: Response, next: NextFunction) {
 }
 
 export function errorHandler(error: unknown, req: Request, res: Response, _next: NextFunction) {
-  const normalized =
-    error instanceof ZodError
-      ? new AppError(400, "VALIDATION_ERROR", "Invalid request payload.", error.flatten())
-      : asAppError(error);
+  const normalized = error instanceof ZodError
+    ? (() => {
+        const firstIssue = error.issues[0];
+        const field = firstIssue?.path.join(".");
+        const message = firstIssue
+          ? `${field ? `${field}: ` : ""}${firstIssue.message}`
+          : "Invalid request payload.";
+
+        return new AppError(400, "VALIDATION_ERROR", message, error.flatten());
+      })()
+    : asAppError(error);
 
   if (normalized.statusCode >= 500) {
     logger.error({ err: normalized, path: req.path }, "request failed");
