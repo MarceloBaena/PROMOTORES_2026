@@ -164,6 +164,7 @@ model Promoter {
   routes       Route[]
   visits       Visit[]
   locations    PromoterLocation[]
+  clients      Client[]
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
@@ -177,10 +178,14 @@ model Client {
   document       String?
   status         ClientStatus      @default(ACTIVE)
   address        String?
+  addressNumber  String?           @map("address_number")
+  district       String?
   city           String?
   state          String?
   latitude       Decimal?          @db.Decimal(10, 7)
   longitude      Decimal?          @db.Decimal(10, 7)
+  defaultPromoterId String?         @map("default_promoter_id")
+  defaultPromoter   Promoter?       @relation(fields: [defaultPromoterId], references: [id], onDelete: SetNull)
   routeItems     RouteItem[]
   visits         Visit[]
   createdAt      DateTime          @default(now()) @map("created_at")

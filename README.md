@@ -2,6 +2,14 @@
 
 Monorepo npm workspaces para painel web, API Express serverless no Vercel, app mobile Expo/React Native offline-first e pacote compartilhado TypeScript.
 
+## Fonte unica oficial
+
+Use `C:\Promotor` como repositorio local oficial do projeto.
+
+Existe uma copia antiga em `Projeto-Promotor`; ela nao deve ser usada para novas correcoes, deploy ou APK. Manter duas pastas ativas apontando para o mesmo GitHub faz web, API e mobile ficarem fora de sincronia.
+
+Guia detalhado: `docs/fonte-unica.md`.
+
 ## Workspaces
 
 - `apps/api` - Express, Prisma ORM, PostgreSQL/Supabase, JWT e rotas protegidas.
@@ -25,6 +33,13 @@ npm run mobile:typecheck
 ```
 
 Configure `DATABASE_URL` com o Session Pooler do Supabase na porta `5432`. Nunca use `localhost`, `https://...supabase.co` ou o host direto `db.PROJECT_REF.supabase.co` como `DATABASE_URL`.
+
+Web e mobile devem apontar para a mesma API:
+
+```bash
+VITE_API_BASE_URL=https://promotores-2026-api.vercel.app
+EXPO_PUBLIC_API_BASE_URL=https://promotores-2026-api.vercel.app
+```
 
 ## Deploy Vercel
 

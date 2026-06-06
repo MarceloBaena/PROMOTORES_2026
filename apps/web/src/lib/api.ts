@@ -1,10 +1,20 @@
 import type { AuthSession } from "@sales-promoters/shared";
 
 const SESSION_KEY = "sales-promoters-session";
-const DEFAULT_API_BASE_URL = import.meta.env.PROD
-  ? "https://sales-promoters-api.vercel.app"
-  : "http://localhost:3000";
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
+const PRODUCTION_API_BASE_URL = "https://promotores-2026-api.vercel.app";
+const LOCAL_API_BASE_URL = "http://localhost:3000";
+
+function resolveApiBaseUrl() {
+  const configuredUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+
+  if (configuredUrl && !configuredUrl.includes("URL-DA-API")) {
+    return configuredUrl.replace(/\/$/, "");
+  }
+
+  return (import.meta.env.PROD ? PRODUCTION_API_BASE_URL : LOCAL_API_BASE_URL).replace(/\/$/, "");
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export class ApiConnectionError extends Error {
   constructor() {

@@ -1,4 +1,22 @@
-export const API_BASE_URL = "https://promotores-2026-api.vercel.app";
+declare const process: {
+  env?: {
+    EXPO_PUBLIC_API_BASE_URL?: string;
+  };
+};
+
+const PRODUCTION_API_BASE_URL = "https://promotores-2026-api.vercel.app";
+
+function resolveApiBaseUrl() {
+  const configuredUrl = process.env?.EXPO_PUBLIC_API_BASE_URL?.trim();
+
+  if (configuredUrl && !configuredUrl.includes("URL-DA-API")) {
+    return configuredUrl.replace(/\/$/, "");
+  }
+
+  return PRODUCTION_API_BASE_URL;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export interface SessionUser {
   id: string;

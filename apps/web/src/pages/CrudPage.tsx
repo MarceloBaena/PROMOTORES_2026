@@ -15,6 +15,7 @@ interface Field {
   noSubmit?: boolean;
   fullWidth?: boolean;
   searchable?: boolean;
+  readOnly?: boolean;
 }
 
 interface CrudPageProps {
@@ -37,6 +38,13 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
 
   const actionLabel = useMemo(() => (editingId ? "Salvar" : "Criar"), [editingId]);
+  const formTitle = useMemo(() => {
+    if (title === "Clientes") {
+      return editingId ? "Editar ficha do cliente" : "Novo cliente operacional";
+    }
+
+    return editingId ? "Editar registro" : "Novo registro";
+  }, [editingId, title]);
 
   async function load() {
     setLoading(true);
@@ -183,7 +191,10 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
         <form onSubmit={onSubmit} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
           <div className="panel-header">
             <div>
-              <h2 className="panel-title">{editingId ? "Editar registro" : "Novo registro"}</h2>
+              <h2 className="panel-title">{formTitle}</h2>
+              {title === "Clientes" ? (
+                <p className="panel-subtitle">Cadastro completo para roteiro e atendimento em campo.</p>
+              ) : null}
             </div>
             {editingId ? (
               <button
@@ -250,6 +261,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                         className="input-control"
                         type={field.type ?? "text"}
                         placeholder={field.placeholder}
+                        readOnly={field.readOnly}
                         value={form[field.name] ?? ""}
                         onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
                       />

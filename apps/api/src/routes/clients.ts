@@ -15,11 +15,30 @@ const clientSchema = z.object({
   document: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).optional(),
   address: z.string().optional(),
+  addressNumber: z.string().optional(),
+  district: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   latitude: z.coerce.number().optional(),
-  longitude: z.coerce.number().optional()
+  longitude: z.coerce.number().optional(),
+  defaultPromoterId: z.string().uuid().optional()
 });
+
+async function generateNextClientCode() {
+  const clients = await prisma.client.findMany({
+    select: { code: true }
+  });
+
+  const lastCode = clients.reduce((highest, client) => {
+    if (!client.code || !/^\d+$/.test(client.code)) {
+      return highest;
+    }
+
+    return Math.max(highest, Number(client.code));
+  }, 0);
+
+  return String(lastCode + 1).padStart(4, "0");
+}
 
 clientsRouter.get(
   "/",
@@ -36,7 +55,10 @@ clientsRouter.get(
           }
         : undefined,
       orderBy: { createdAt: "desc" },
-      take: 200
+      take: 200,
+      include: {
+        defaultPromoter: { include: { user: true } }
+      }
     });
 
     res.json({ data: clients });
@@ -50,9 +72,13 @@ clientsRouter.post(
     const client = await prisma.client.create({
       data: {
         ...input,
+        code: input.code?.trim() || await generateNextClientCode(),
         status: input.status ?? "ACTIVE",
         latitude: input.latitude,
         longitude: input.longitude
+      },
+      include: {
+        defaultPromoter: { include: { user: true } }
       }
     });
 
@@ -66,7 +92,10 @@ clientsRouter.put(
     const input = clientSchema.partial().parse(req.body);
     const client = await prisma.client.update({
       where: { id: req.params.id },
-      data: input
+      data: input,
+      include: {
+        defaultPromoter: { include: { user: true } }
+      }
     });
 
     res.json({ data: client });
@@ -120,6 +149,8 @@ clientsRouter.post(
             name,
             document: row.document || row.documento || undefined,
             address: row.address || row.endereco || undefined,
+            addressNumber: row.addressNumber || row.numero || undefined,
+            district: row.district || row.bairro || undefined,
             city: row.city || row.cidade || undefined,
             state: row.state || row.uf || undefined,
             status: "ACTIVE"
@@ -128,6 +159,8 @@ clientsRouter.post(
             name,
             document: row.document || row.documento || undefined,
             address: row.address || row.endereco || undefined,
+            addressNumber: row.addressNumber || row.numero || undefined,
+            district: row.district || row.bairro || undefined,
             city: row.city || row.cidade || undefined,
             state: row.state || row.uf || undefined,
             status: "ACTIVE"
