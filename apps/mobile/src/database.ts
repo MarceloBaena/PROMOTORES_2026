@@ -75,12 +75,17 @@ export interface SyncLog {
 }
 
 const db = SQLite.openDatabaseSync("promotores_offline.db");
+let databaseInitialized = false;
 
 function nowIso() {
   return new Date().toISOString();
 }
 
 export function initDatabase() {
+  if (databaseInitialized) {
+    return;
+  }
+
   db.execSync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS session (
@@ -157,9 +162,12 @@ export function initDatabase() {
       created_at TEXT NOT NULL
     );
   `);
+
+  databaseInitialized = true;
 }
 
 export function saveSession(session: LoginResponse) {
+  initDatabase();
   db.runSync(
     "INSERT OR REPLACE INTO session (id, access_token, refresh_token, user_json, saved_at) VALUES (1, ?, ?, ?, ?)",
     session.accessToken,
@@ -170,12 +178,14 @@ export function saveSession(session: LoginResponse) {
 }
 
 export function getSession() {
+  initDatabase();
   return db.getFirstSync<LocalSession>(
     "SELECT access_token AS accessToken, refresh_token AS refreshToken, user_json AS userJson, saved_at AS savedAt FROM session WHERE id = 1"
   );
 }
 
 export function saveSnapshot(snapshot: MobileSnapshot) {
+  initDatabase();
   db.withTransactionSync(() => {
     for (const client of snapshot.clients) {
       saveClient(client);
@@ -195,6 +205,7 @@ export function saveSnapshot(snapshot: MobileSnapshot) {
 }
 
 function saveClient(client: ClientSnapshot) {
+  initDatabase();
   db.runSync(
     `INSERT OR REPLACE INTO clients (id, code, name, address, city, state, payload_json)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -209,6 +220,7 @@ function saveClient(client: ClientSnapshot) {
 }
 
 function saveRoute(route: RouteSnapshot) {
+  initDatabase();
   db.runSync(
     `INSERT OR REPLACE INTO routes (id, name, status, scheduled_date, payload_json)
      VALUES (?, ?, ?, ?, ?)`,
@@ -221,6 +233,7 @@ function saveRoute(route: RouteSnapshot) {
 }
 
 function saveRouteItem(item: RouteItemSnapshot) {
+  initDatabase();
   db.runSync(
     `INSERT OR REPLACE INTO route_items (id, route_id, client_id, sequence, status, payload_json)
      VALUES (?, ?, ?, ?, ?, ?)`,
@@ -234,6 +247,7 @@ function saveRouteItem(item: RouteItemSnapshot) {
 }
 
 export function listRouteItems() {
+  initDatabase();
   return db.getAllSync<LocalRouteItem & { clientName: string; clientAddress?: string | null; routeName: string }>(
     `SELECT
       route_items.id,
@@ -253,6 +267,7 @@ export function listRouteItems() {
 }
 
 export function getClient(clientId: string) {
+  initDatabase();
   return db.getFirstSync<LocalClient>(
     `SELECT id, code, name, address, city, state, payload_json AS payloadJson FROM clients WHERE id = ?`,
     clientId
@@ -260,6 +275,7 @@ export function getClient(clientId: string) {
 }
 
 export function getVisitByRouteItem(routeItemId: string) {
+  initDatabase();
   return db.getFirstSync<LocalVisit>(
     `SELECT
       local_id AS localId,
@@ -281,6 +297,7 @@ export function getVisitByRouteItem(routeItemId: string) {
 }
 
 export function getVisit(localId: string) {
+  initDatabase();
   return db.getFirstSync<LocalVisit>(
     `SELECT
       local_id AS localId,
@@ -302,6 +319,7 @@ export function getVisit(localId: string) {
 }
 
 export function upsertVisit(visit: LocalVisit) {
+  initDatabase();
   db.runSync(
     `INSERT OR REPLACE INTO visits (
       local_id, server_id, route_id, route_item_id, client_id, status, started_at, finished_at,
@@ -324,6 +342,7 @@ export function upsertVisit(visit: LocalVisit) {
 }
 
 export function addPhoto(photo: LocalPhoto) {
+  initDatabase();
   db.runSync(
     `INSERT OR REPLACE INTO photos (
       local_id, visit_local_id, server_id, type, uri, captured_at, gps_latitude, gps_longitude, sync_status
@@ -341,6 +360,7 @@ export function addPhoto(photo: LocalPhoto) {
 }
 
 export function listPhotos(visitLocalId: string) {
+  initDatabase();
   return db.getAllSync<LocalPhoto>(
     `SELECT
       local_id AS localId,
@@ -358,6 +378,7 @@ export function listPhotos(visitLocalId: string) {
 }
 
 export function getPhoto(localId: string) {
+  initDatabase();
   return db.getFirstSync<LocalPhoto>(
     `SELECT
       local_id AS localId,
@@ -375,22 +396,27 @@ export function getPhoto(localId: string) {
 }
 
 export function updateVisitServerId(localId: string, serverId: string, status: SyncStatus) {
+  initDatabase();
   db.runSync("UPDATE visits SET server_id = ?, sync_status = ?, updated_at = ? WHERE local_id = ?", serverId, status, nowIso(), localId);
 }
 
 export function updateVisitSyncStatus(localId: string, status: SyncStatus) {
+  initDatabase();
   db.runSync("UPDATE visits SET sync_status = ?, updated_at = ? WHERE local_id = ?", status, nowIso(), localId);
 }
 
 export function updatePhotoServerId(localId: string, serverId: string, status: SyncStatus) {
+  initDatabase();
   db.runSync("UPDATE photos SET server_id = ?, sync_status = ? WHERE local_id = ?", serverId, status, localId);
 }
 
 export function updatePhotoSyncStatus(localId: string, status: SyncStatus) {
+  initDatabase();
   db.runSync("UPDATE photos SET sync_status = ? WHERE local_id = ?", status, localId);
 }
 
 export function enqueue(kind: "visit" | "photo", entityLocalId: string) {
+  initDatabase();
   const existing = db.getFirstSync<{ id: number }>(
     "SELECT id FROM sync_queue WHERE kind = ? AND entity_local_id = ? AND status IN ('pending', 'failed')",
     kind,
@@ -412,6 +438,7 @@ export function enqueue(kind: "visit" | "photo", entityLocalId: string) {
 }
 
 export function getPendingQueue() {
+  initDatabase();
   return db.getAllSync<{ id: number; kind: "visit" | "photo"; entityLocalId: string; attempts: number }>(
     `SELECT id, kind, entity_local_id AS entityLocalId, attempts
      FROM sync_queue
@@ -421,6 +448,7 @@ export function getPendingQueue() {
 }
 
 export function setQueueStatus(id: number, status: SyncStatus, error?: string) {
+  initDatabase();
   db.runSync(
     "UPDATE sync_queue SET status = ?, attempts = attempts + 1, last_error = ?, updated_at = ? WHERE id = ?",
     status,
@@ -431,10 +459,12 @@ export function setQueueStatus(id: number, status: SyncStatus, error?: string) {
 }
 
 export function removeQueueItem(id: number) {
+  initDatabase();
   db.runSync("DELETE FROM sync_queue WHERE id = ?", id);
 }
 
 export function getQueueSummary() {
+  initDatabase();
   return db.getFirstSync<{ pending: number; failed: number }>(
     `SELECT
       SUM(CASE WHEN status IN ('pending', 'syncing') THEN 1 ELSE 0 END) AS pending,
@@ -444,10 +474,12 @@ export function getQueueSummary() {
 }
 
 export function addSyncLog(status: SyncStatus, message: string) {
+  initDatabase();
   db.runSync("INSERT INTO sync_logs (status, message, created_at) VALUES (?, ?, ?)", status, message, nowIso());
 }
 
 export function listSyncLogs() {
+  initDatabase();
   return db.getAllSync<SyncLog>(
     "SELECT id, status, message, created_at AS createdAt FROM sync_logs ORDER BY id DESC LIMIT 30"
   );
