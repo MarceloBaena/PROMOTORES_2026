@@ -187,6 +187,9 @@ export function getSession() {
 export function saveSnapshot(snapshot: MobileSnapshot) {
   initDatabase();
   db.withTransactionSync(() => {
+    db.runSync("DELETE FROM route_items");
+    db.runSync("DELETE FROM routes");
+
     for (const client of snapshot.clients) {
       saveClient(client);
     }
@@ -200,7 +203,15 @@ export function saveSnapshot(snapshot: MobileSnapshot) {
       }
     }
 
-    addSyncLog("synced", `Roteiro salvo localmente: ${snapshot.routes.length} rota(s), ${snapshot.clients.length} cliente(s).`);
+    if (snapshot.routes.length === 0) {
+      addSyncLog(
+        "failed",
+        "Nenhum roteiro publicado para este promotor. Confira no painel se a rota foi criada, publicada e vinculada ao promotor correto."
+      );
+      return;
+    }
+
+    addSyncLog("synced", `Roteiro atualizado: ${snapshot.routes.length} rota(s), ${snapshot.clients.length} cliente(s).`);
   });
 }
 

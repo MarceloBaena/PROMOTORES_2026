@@ -34,6 +34,26 @@ mobileRouter.get(
         }
       }
     });
+    const [publishedRoutesForPromoter, draftRoutesForPromoter, assignedClients] = await Promise.all([
+      prisma.route.count({
+        where: {
+          promoterId: promoter.id,
+          status: "PUBLISHED"
+        }
+      }),
+      prisma.route.count({
+        where: {
+          promoterId: promoter.id,
+          status: "DRAFT"
+        }
+      }),
+      prisma.client.count({
+        where: {
+          defaultPromoterId: promoter.id,
+          status: "ACTIVE"
+        }
+      })
+    ]);
 
     const clientsById = new Map<string, (typeof routes)[number]["items"][number]["client"]>();
 
@@ -53,7 +73,12 @@ mobileRouter.get(
           email: promoter.user.email
         },
         routes,
-        clients: Array.from(clientsById.values())
+        clients: Array.from(clientsById.values()),
+        diagnostics: {
+          publishedRoutesForPromoter,
+          draftRoutesForPromoter,
+          assignedClients
+        }
       }
     });
   })

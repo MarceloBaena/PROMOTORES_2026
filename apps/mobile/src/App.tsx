@@ -314,8 +314,12 @@ export default function App() {
     try {
       setBusy(true);
       const result = await syncPending(session.accessToken);
+      const snapshot = await downloadMobileSnapshot(session.accessToken);
+      saveSnapshot(snapshot);
       reloadLocalData();
-      setMessage(`Sincronizacao concluida. Enviados: ${result.synced}. Falhas: ${result.failed}.`);
+      setMessage(
+        `Sincronizacao concluida. Enviados: ${result.synced}. Falhas: ${result.failed}. Roteiros baixados: ${snapshot.routes.length}.`
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha na sincronizacao.");
     } finally {
@@ -347,7 +351,7 @@ export default function App() {
           <Text style={styles.cardTitle}>Fila local persistente</Text>
           <Text style={styles.metric}>{syncSummary.pending ?? 0} pendente(s)</Text>
           <Text style={styles.danger}>{syncSummary.failed ?? 0} falha(s)</Text>
-          <PrimaryButton label={busy ? "Sincronizando..." : "Reprocessar agora"} disabled={busy} onPress={runSync} />
+          <PrimaryButton label={busy ? "Sincronizando..." : "Sincronizar agora"} disabled={busy} onPress={runSync} />
         </View>
         <FlatList
           data={listSyncLogs()}

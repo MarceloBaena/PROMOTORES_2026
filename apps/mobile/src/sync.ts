@@ -118,6 +118,10 @@ export async function syncPending(accessToken: string) {
   let synced = 0;
   let failed = 0;
 
+  if (queue.length === 0) {
+    return { synced, failed };
+  }
+
   for (const item of queue) {
     try {
       setQueueStatus(item.id, "syncing");
