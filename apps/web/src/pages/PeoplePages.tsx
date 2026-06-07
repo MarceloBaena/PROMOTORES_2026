@@ -49,8 +49,8 @@ export function PromotersPage() {
       endpoint="/promoters"
       initialValues={{ name: "", email: "", password: "", supervisorId: "" }}
       fields={[
-        { name: "name", label: "Nome", placeholder: "Nome do promotor", required: true, fullWidth: true },
-        { name: "email", label: "E-mail", type: "email", placeholder: "email@exemplo.com", required: true, fullWidth: true },
+        { name: "name", source: "user.name", label: "Nome", placeholder: "Nome do promotor", required: true, fullWidth: true },
+        { name: "email", source: "user.email", label: "E-mail", type: "email", placeholder: "email@exemplo.com", required: true, fullWidth: true },
         {
           name: "password",
           label: "Senha",
@@ -95,8 +95,8 @@ export function SupervisorsPage() {
       endpoint="/supervisors"
       initialValues={{ name: "", email: "", password: "", region: "" }}
       fields={[
-        { name: "name", label: "Nome", required: true },
-        { name: "email", label: "E-mail", type: "email", required: true },
+        { name: "name", source: "user.name", label: "Nome", required: true },
+        { name: "email", source: "user.email", label: "E-mail", type: "email", required: true },
         { name: "password", label: "Senha", type: "password", minLength: 8 },
         { name: "region", label: "Regiao" }
       ]}

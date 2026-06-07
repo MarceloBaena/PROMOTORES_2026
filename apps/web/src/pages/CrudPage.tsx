@@ -8,6 +8,7 @@ import { apiJson } from "../lib/api";
 interface Field {
   name: string;
   label: string;
+  source?: string;
   type?: "text" | "email" | "password" | "select" | "search";
   options?: Array<string | { value: string; label: string }>;
   placeholder?: string;
@@ -39,13 +40,13 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
   const [message, setMessage] = useState<string | null>(null);
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
 
-  const actionLabel = useMemo(() => (editingId ? "Salvar" : "Criar"), [editingId]);
+  const actionLabel = useMemo(() => (editingId ? "Alterar" : "Incluir"), [editingId]);
   const formTitle = useMemo(() => {
     if (title === "Clientes") {
-      return editingId ? "Editar ficha do cliente" : "Novo cliente operacional";
+      return editingId ? "Alterar ficha do cliente" : "Incluir cliente";
     }
 
-    return editingId ? "Editar registro" : "Novo registro";
+    return editingId ? "Alterar registro" : "Incluir registro";
   }, [editingId, title]);
 
   async function load() {
@@ -84,6 +85,29 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
     }
 
     return null;
+  }
+
+  function valueFromPath(item: Record<string, unknown>, path: string) {
+    return path.split(".").reduce<unknown>((current, key) => {
+      if (current && typeof current === "object") {
+        return (current as Record<string, unknown>)[key];
+      }
+
+      return undefined;
+    }, item);
+  }
+
+  function formFromItem(item: Record<string, unknown>) {
+    return fields.reduce<Record<string, string>>((acc, field) => {
+      if (field.type === "password") {
+        acc[field.name] = "";
+        return acc;
+      }
+
+      const value = valueFromPath(item, field.source ?? field.name) ?? valueFromPath(item, field.name);
+      acc[field.name] = value == null ? "" : String(value);
+      return acc;
+    }, { ...initialValues });
   }
 
   async function onSubmit(event: FormEvent) {
@@ -163,7 +187,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                   {columns.map((column) => (
                     <th key={column.label} className="px-4 py-3">{column.label}</th>
                   ))}
-                  <th className="w-28 px-4 py-3">Acoes</th>
+                  <th className="w-56 px-4 py-3">Acoes</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,31 +200,28 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          title="Editar"
-                          className="icon-button"
+                          title="Alterar"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-graphite shadow-sm transition hover:-translate-y-0.5 hover:bg-muted"
                           onClick={() => {
                             setEditingId(String(item.id));
-                            setForm(fields.reduce<Record<string, string>>((acc, field) => {
-                              const value = field.name.split(".").reduce<unknown>((current, key) => {
-                                if (current && typeof current === "object") {
-                                  return (current as Record<string, unknown>)[key];
-                                }
-                                return undefined;
-                              }, item);
-                              acc[field.name] = typeof value === "string" ? value : "";
-                              return acc;
-                            }, { ...initialValues }));
+                            setForm(formFromItem(item));
                           }}
                         >
                           <Edit3 className="h-4 w-4" />
+                          Alterar
                         </button>
                         <button
                           type="button"
-                          title="Inativar"
-                          className="danger-button"
-                          onClick={() => void remove(String(item.id))}
+                          title="Excluir"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-berry shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-50"
+                          onClick={() => {
+                            if (window.confirm("Deseja excluir/inativar este registro?")) {
+                              void remove(String(item.id));
+                            }
+                          }}
                         >
                           <Trash2 className="h-4 w-4" />
+                          Excluir
                         </button>
                       </div>
                     </td>
