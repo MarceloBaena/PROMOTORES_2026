@@ -104,6 +104,17 @@ export default function App() {
     }
   }
 
+  function returnToHome(nextMessage = "Voltou ao menu principal. Toque em Sync para enviar os dados pendentes.") {
+    setRouteItems(listRouteItems());
+    setSyncSummary(getQueueSummary());
+    setActiveVisit(null);
+    setActiveItem(null);
+    setPhotos([]);
+    setNotes("");
+    setScreen("home");
+    setMessage(nextMessage);
+  }
+
   useEffect(() => {
     initDatabase();
     const stored = getSession();
@@ -242,6 +253,16 @@ export default function App() {
       return;
     }
 
+    if (activeVisit.status === "completed") {
+      Alert.alert("Atendimento concluido", "Esta visita ja foi encerrada. Volte ao menu principal para sincronizar.");
+      return;
+    }
+
+    if (type !== "occurrence_extra" && completedPhotoTypes.has(type)) {
+      Alert.alert("Foto ja capturada", "Esta evidencia obrigatoria ja foi registrada para esta visita.");
+      return;
+    }
+
     const permission = await ImagePicker.requestCameraPermissionsAsync();
 
     if (permission.status !== "granted") {
@@ -301,14 +322,7 @@ export default function App() {
 
     upsertVisit(nextVisit);
     enqueue("visit", nextVisit.localId);
-    setRouteItems(listRouteItems());
-    setSyncSummary(getQueueSummary());
-    setActiveVisit(null);
-    setActiveItem(null);
-    setPhotos([]);
-    setNotes("");
-    setScreen("home");
-    setMessage("Visita encerrada offline. Toque em Sync para enviar o atendimento.");
+    returnToHome("Visita encerrada offline. Toque em Sync para enviar o atendimento.");
   }
 
   async function runSync() {
@@ -374,10 +388,11 @@ export default function App() {
 
   if (screen === "visit" && activeItem) {
     const client = getClient(activeItem.clientId);
+    const visitCompleted = activeVisit?.status === "completed";
 
     return (
       <SafeAreaView style={styles.safe}>
-        <Header title="Atendimento" onBack={() => setScreen("home")} />
+        <Header title="Atendimento" onBack={() => returnToHome()} />
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.cardStrong}>
             <Text style={styles.kicker}>Cliente #{activeItem.sequence}</Text>
@@ -388,6 +403,15 @@ export default function App() {
 
           {!activeVisit ? (
             <PrimaryButton label="Iniciar atendimento" onPress={startVisit} />
+          ) : visitCompleted ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Atendimento concluido</Text>
+              <Text style={styles.muted}>Esta visita foi encerrada localmente. Volte ao menu principal para sincronizar ou conferir o roteiro.</Text>
+              <View style={styles.actionStack}>
+                <PrimaryButton label="Voltar ao menu principal" onPress={() => returnToHome("Atendimento concluido. Toque em Sync para enviar a visita.")} />
+                <SecondaryButton label="Ir para sincronizacao" onPress={() => setScreen("sync")} />
+              </View>
+            </View>
           ) : (
             <>
               <View style={styles.stepGrid}>
@@ -423,8 +447,8 @@ export default function App() {
     <SafeAreaView style={styles.safe}>
       <Header title="Roteiro do promotor" />
       <View style={styles.toolbar}>
-        <SecondaryButton label="Atualizar roteiro" disabled={busy} onPress={refreshSnapshot} />
-        <SecondaryButton label="Sync" disabled={busy} onPress={() => setScreen("sync")} />
+        <SecondaryButton label="Atualizar roteiro" grow disabled={busy} onPress={refreshSnapshot} />
+        <SecondaryButton label="Sync" grow disabled={busy} onPress={() => setScreen("sync")} />
       </View>
       <Text style={styles.statusText}>{message}</Text>
       <FlatList
@@ -469,9 +493,9 @@ function PrimaryButton(props: { label: string; disabled?: boolean; onPress: () =
   );
 }
 
-function SecondaryButton(props: { label: string; disabled?: boolean; onPress: () => void }) {
+function SecondaryButton(props: { label: string; grow?: boolean; disabled?: boolean; onPress: () => void }) {
   return (
-    <TouchableOpacity style={[styles.secondaryButton, props.disabled ? styles.disabled : null]} disabled={props.disabled} onPress={props.onPress}>
+    <TouchableOpacity style={[styles.secondaryButton, props.grow ? styles.buttonGrow : null, props.disabled ? styles.disabled : null]} disabled={props.disabled} onPress={props.onPress}>
       <Text style={styles.secondaryText}>{props.label}</Text>
     </TouchableOpacity>
   );
@@ -575,13 +599,15 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   secondaryButton: {
-    flex: 1,
     backgroundColor: "#FFFFFF",
     borderColor: "#C7D8D0",
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
     alignItems: "center"
+  },
+  buttonGrow: {
+    flex: 1
   },
   secondaryText: {
     color: "#12312C",
@@ -681,6 +707,9 @@ const styles = StyleSheet.create({
     color: "#8A5200"
   },
   stepGrid: {
+    gap: 10
+  },
+  actionStack: {
     gap: 10
   },
   photoButton: {
