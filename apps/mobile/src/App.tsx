@@ -301,9 +301,14 @@ export default function App() {
 
     upsertVisit(nextVisit);
     enqueue("visit", nextVisit.localId);
-    setActiveVisit(nextVisit);
-    setMessage("Visita encerrada offline. Sincronize quando tiver internet.");
-    reloadLocalData();
+    setRouteItems(listRouteItems());
+    setSyncSummary(getQueueSummary());
+    setActiveVisit(null);
+    setActiveItem(null);
+    setPhotos([]);
+    setNotes("");
+    setScreen("home");
+    setMessage("Visita encerrada offline. Toque em Sync para enviar o atendimento.");
   }
 
   async function runSync() {
