@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
-import { API_BASE_URL, downloadMobileSnapshot, login, type LoginResponse } from "./api";
+import { API_BASE_URL, downloadMobileSnapshot, login, refreshSession, type LoginResponse } from "./api";
 import {
   addPhoto,
   addSyncLog,
@@ -115,6 +115,24 @@ export default function App() {
     setMessage(nextMessage);
   }
 
+  async function renewSession() {
+    if (!session) {
+      throw new Error("Sessao local nao encontrada. Faca login novamente.");
+    }
+
+    try {
+      const renewed = await refreshSession(session.refreshToken);
+      saveSession(renewed);
+      setSession(renewed);
+      return renewed;
+    } catch {
+      setEmail(session.user.email);
+      setPassword("");
+      setScreen("login");
+      throw new Error("Sessao expirada. Faca login novamente com internet. A fila offline continua salva no aparelho.");
+    }
+  }
+
   useEffect(() => {
     initDatabase();
     const stored = getSession();
@@ -190,7 +208,8 @@ export default function App() {
 
     try {
       setBusy(true);
-      const snapshot = await downloadMobileSnapshot(session.accessToken);
+      const currentSession = await renewSession();
+      const snapshot = await downloadMobileSnapshot(currentSession.accessToken);
       saveSnapshot(snapshot);
       reloadLocalData();
       setMessage("Roteiro atualizado e salvo no SQLite.");
@@ -332,8 +351,9 @@ export default function App() {
 
     try {
       setBusy(true);
-      const result = await syncPending(session.accessToken);
-      const snapshot = await downloadMobileSnapshot(session.accessToken);
+      const currentSession = await renewSession();
+      const result = await syncPending(currentSession.accessToken);
+      const snapshot = await downloadMobileSnapshot(currentSession.accessToken);
       saveSnapshot(snapshot);
       reloadLocalData();
       setMessage(

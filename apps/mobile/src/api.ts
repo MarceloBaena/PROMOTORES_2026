@@ -96,6 +96,20 @@ export async function login(email: string, password: string): Promise<LoginRespo
   return response.json() as Promise<LoginResponse>;
 }
 
+export async function refreshSession(refreshToken: string): Promise<LoginResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ refreshToken })
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response));
+  }
+
+  return response.json() as Promise<LoginResponse>;
+}
+
 export async function downloadMobileSnapshot(accessToken: string): Promise<MobileSnapshot> {
   const response = await fetch(`${API_BASE_URL}/mobile/snapshot`, {
     headers: { authorization: `Bearer ${accessToken}` }
