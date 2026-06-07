@@ -273,7 +273,7 @@ export default function App() {
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: false,
-      quality: 0.7,
+      quality: 0.35,
       exif: false
     });
 

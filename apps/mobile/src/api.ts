@@ -1,3 +1,5 @@
+import * as FileSystem from "expo-file-system/legacy";
+
 declare const process: {
   env?: {
     EXPO_PUBLIC_API_BASE_URL?: string;
@@ -141,34 +143,21 @@ export async function uploadVisitPhoto(
     gpsLongitude?: number | null;
   }
 ) {
-  const formData = new FormData();
-  formData.append("type", input.type);
-  formData.append("clientGeneratedId", input.clientGeneratedId);
-  formData.append("capturedAt", input.capturedAt);
-
-  if (input.gpsLatitude != null) {
-    formData.append("gpsLatitude", String(input.gpsLatitude));
-  }
-
-  if (input.gpsLongitude != null) {
-    formData.append("gpsLongitude", String(input.gpsLongitude));
-  }
-
-  formData.append("file", {
-    uri: input.uri,
-    name: `${input.type}-${input.clientGeneratedId}.jpg`,
-    type: "image/jpeg"
-  } as unknown as Blob);
-
-  const response = await fetch(`${API_BASE_URL}/visits/${visitId}/photos`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${accessToken}` },
-    body: formData
+  const base64Image = await FileSystem.readAsStringAsync(input.uri, {
+    encoding: FileSystem.EncodingType.Base64
   });
 
-  if (!response.ok) {
-    throw new Error(await parseApiError(response));
-  }
-
-  return response.json() as Promise<{ data: { id: string; url: string } }>;
+  return postJson<{ data: { id: string; url: string } }>(
+    accessToken,
+    `/visits/${visitId}/photos/base64`,
+    {
+      type: input.type,
+      clientGeneratedId: input.clientGeneratedId,
+      capturedAt: input.capturedAt,
+      gpsLatitude: input.gpsLatitude,
+      gpsLongitude: input.gpsLongitude,
+      contentType: "image/jpeg",
+      base64Image
+    }
+  );
 }

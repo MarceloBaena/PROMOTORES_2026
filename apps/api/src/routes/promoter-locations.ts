@@ -171,7 +171,7 @@ promoterLocationsRouter.post(
     const location = await prisma.promoterLocation.create({
       data: {
         promoterId: promoter.id,
-        visitId: activeVisit.id,
+        visitId: activeVisit?.id ?? null,
         latitude: input.latitude,
         longitude: input.longitude,
         accuracyMeters: input.accuracyMeters,

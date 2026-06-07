@@ -71,7 +71,7 @@ export function createApp() {
     })
   );
   app.use(helmet());
-  app.use(express.json({ limit: "10mb" }));
+  app.use(express.json({ limit: "25mb" }));
   app.use(express.urlencoded({ extended: true }));
   app.use("/uploads", express.static("uploads"));
 
