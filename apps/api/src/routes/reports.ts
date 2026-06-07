@@ -39,15 +39,13 @@ function excelXml(rows: unknown[][]) {
 reportsRouter.get(
   "/summary",
   asyncHandler(async (_req, res) => {
-    const [clients, promoters, supervisors, routes, visits, auditFlags, imports] = await Promise.all([
-      prisma.client.count({ where: { status: "ACTIVE" } }),
-      prisma.promoter.count({ where: { status: "ACTIVE" } }),
-      prisma.supervisor.count({ where: { status: "ACTIVE" } }),
-      prisma.route.count(),
-      prisma.visit.groupBy({ by: ["status"], _count: { id: true } }),
-      prisma.auditFlag.count({ where: { resolved: false } }),
-      prisma.clientImportLog.findMany({ orderBy: { createdAt: "desc" }, take: 5 })
-    ]);
+    const clients = await prisma.client.count({ where: { status: "ACTIVE" } });
+    const promoters = await prisma.promoter.count({ where: { status: "ACTIVE" } });
+    const supervisors = await prisma.supervisor.count({ where: { status: "ACTIVE" } });
+    const routes = await prisma.route.count();
+    const visits = await prisma.visit.groupBy({ by: ["status"], _count: { id: true } });
+    const auditFlags = await prisma.auditFlag.count({ where: { resolved: false } });
+    const imports = await prisma.clientImportLog.findMany({ orderBy: { createdAt: "desc" }, take: 5 });
 
     res.json({
       data: {
