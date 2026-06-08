@@ -74,6 +74,18 @@ export interface SyncLog {
   createdAt: string;
 }
 
+export interface SyncQueueDiagnostic {
+  id: number;
+  kind: "visit" | "photo";
+  entityLocalId: string;
+  status: SyncStatus;
+  attempts: number;
+  lastError?: string | null;
+  updatedAt: string;
+  clientName?: string | null;
+  photoType?: PhotoType | null;
+}
+
 const db = SQLite.openDatabaseSync("promotores_offline.db");
 let databaseInitialized = false;
 
@@ -482,6 +494,32 @@ export function getQueueSummary() {
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
     FROM sync_queue`
   ) ?? { pending: 0, failed: 0 };
+}
+
+export function listQueueDiagnostics() {
+  initDatabase();
+  return db.getAllSync<SyncQueueDiagnostic>(
+    `SELECT
+      sync_queue.id,
+      sync_queue.kind,
+      sync_queue.entity_local_id AS entityLocalId,
+      sync_queue.status,
+      sync_queue.attempts,
+      sync_queue.last_error AS lastError,
+      sync_queue.updated_at AS updatedAt,
+      clients.name AS clientName,
+      photos.type AS photoType
+    FROM sync_queue
+    LEFT JOIN visits
+      ON (sync_queue.kind = 'visit' AND visits.local_id = sync_queue.entity_local_id)
+      OR (sync_queue.kind = 'photo' AND visits.local_id = (SELECT visit_local_id FROM photos WHERE photos.local_id = sync_queue.entity_local_id LIMIT 1))
+    LEFT JOIN clients ON clients.id = visits.client_id
+    LEFT JOIN photos ON photos.local_id = sync_queue.entity_local_id
+    WHERE sync_queue.status IN ('pending', 'syncing', 'failed')
+    ORDER BY
+      CASE sync_queue.status WHEN 'failed' THEN 0 WHEN 'syncing' THEN 1 ELSE 2 END,
+      sync_queue.updated_at DESC`
+  );
 }
 
 export function addSyncLog(status: SyncStatus, message: string) {

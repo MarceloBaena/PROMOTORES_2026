@@ -15,6 +15,7 @@ import {
   getVisit,
   getVisitByRouteItem,
   initDatabase,
+  listQueueDiagnostics,
   listPhotos,
   listRouteItems,
   listSyncLogs,
@@ -88,6 +89,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("Inicializando banco local...");
   const [syncSummary, setSyncSummary] = useState(getQueueSummary());
+  const [syncDiagnostics, setSyncDiagnostics] = useState(listQueueDiagnostics());
   const trackerRef = useRef<ReturnType<typeof createForegroundLocationTracker> | null>(null);
 
   const completedPhotoTypes = useMemo(() => new Set(photos.map((photo) => photo.type)), [photos]);
@@ -96,6 +98,7 @@ export default function App() {
   function reloadLocalData() {
     setRouteItems(listRouteItems());
     setSyncSummary(getQueueSummary());
+    setSyncDiagnostics(listQueueDiagnostics());
 
     if (activeVisit) {
       const latestVisit = getVisit(activeVisit.localId);
@@ -107,6 +110,7 @@ export default function App() {
   function returnToHome(nextMessage = "Voltou ao menu principal. Toque em Sync para enviar os dados pendentes.") {
     setRouteItems(listRouteItems());
     setSyncSummary(getQueueSummary());
+    setSyncDiagnostics(listQueueDiagnostics());
     setActiveVisit(null);
     setActiveItem(null);
     setPhotos([]);
@@ -151,6 +155,7 @@ export default function App() {
 
     setRouteItems(listRouteItems());
     setSyncSummary(getQueueSummary());
+    setSyncDiagnostics(listQueueDiagnostics());
   }, []);
 
   useEffect(() => {
@@ -361,6 +366,8 @@ export default function App() {
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha na sincronizacao.");
+      setSyncSummary(getQueueSummary());
+      setSyncDiagnostics(listQueueDiagnostics());
     } finally {
       setBusy(false);
     }
@@ -392,6 +399,18 @@ export default function App() {
           <Text style={styles.danger}>{syncSummary.failed ?? 0} falha(s)</Text>
           <PrimaryButton label={busy ? "Sincronizando..." : "Sincronizar agora"} disabled={busy} onPress={runSync} />
         </View>
+        <SyncDiagnostics
+          diagnostics={syncDiagnostics}
+          onLoginAgain={() => {
+            if (session) {
+              setEmail(session.user.email);
+            }
+
+            setPassword("");
+            setScreen("login");
+            setMessage("Entre novamente para renovar a sessao. A fila offline continua salva.");
+          }}
+        />
         <FlatList
           data={listSyncLogs()}
           keyExtractor={(item) => String(item.id)}
@@ -519,6 +538,65 @@ function SecondaryButton(props: { label: string; grow?: boolean; disabled?: bool
       <Text style={styles.secondaryText}>{props.label}</Text>
     </TouchableOpacity>
   );
+}
+
+function SyncDiagnostics(props: { diagnostics: ReturnType<typeof listQueueDiagnostics>; onLoginAgain: () => void }) {
+  const failedItems = props.diagnostics.filter((item) => item.status === "failed");
+  const visibleItems = failedItems.length > 0 ? failedItems : props.diagnostics;
+  const hasExpiredToken = visibleItems.some((item) => /expired access token|invalid or expired|token/i.test(item.lastError ?? ""));
+
+  if (visibleItems.length === 0) {
+    return (
+      <View style={styles.diagnosticOk}>
+        <Text style={styles.diagnosticTitle}>Sem criticas no sincronismo</Text>
+        <Text style={styles.diagnosticText}>Nao ha itens presos na fila local neste momento.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.diagnosticCard}>
+      <Text style={styles.diagnosticTitle}>Critica do sincronismo</Text>
+      <Text style={styles.diagnosticText}>{syncDiagnosticSummary(visibleItems[0]?.lastError)}</Text>
+      {hasExpiredToken ? (
+        <SecondaryButton label="Entrar novamente" onPress={props.onLoginAgain} />
+      ) : null}
+      {visibleItems.slice(0, 6).map((item) => (
+        <View key={item.id} style={styles.diagnosticItem}>
+          <Text style={styles.diagnosticItemTitle}>
+            {item.kind === "visit" ? "Visita" : `Foto ${photoLabels[item.photoType ?? "occurrence_extra"]}`} - {item.clientName ?? "cliente nao identificado"}
+          </Text>
+          <Text style={styles.diagnosticText}>Status: {item.status} | Tentativas: {item.attempts}</Text>
+          <Text style={styles.diagnosticError}>{item.lastError ?? "Sem mensagem tecnica registrada."}</Text>
+        </View>
+      ))}
+      {visibleItems.length > 6 ? (
+        <Text style={styles.diagnosticText}>Mais {visibleItems.length - 6} item(ns) com critica. Corrija a causa acima e toque em Sincronizar agora.</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function syncDiagnosticSummary(error?: string | null) {
+  const message = error ?? "";
+
+  if (/expired access token|invalid or expired|token/i.test(message)) {
+    return "A sessao do promotor expirou. Entre novamente com internet e toque em Sincronizar agora. As visitas e fotos continuam salvas no aparelho.";
+  }
+
+  if (/missing|required photo|foto/i.test(message)) {
+    return "Existe visita tentando concluir sem todas as fotos obrigatorias sincronizadas. Confira check-in, foto before e foto after.";
+  }
+
+  if (/network|internet|failed to fetch|conexao|connection/i.test(message)) {
+    return "Falha de conexao com a retaguarda. Verifique internet do aparelho e tente novamente.";
+  }
+
+  if (/visit.*not found|visita/i.test(message)) {
+    return "A visita local nao foi reconciliada corretamente com a retaguarda. Toque em Sincronizar agora para reprocessar com seguranca.";
+  }
+
+  return "Existe item pendente com falha na fila local. Veja o erro tecnico abaixo e tente sincronizar novamente.";
 }
 
 function PhotoButton(props: { type: PhotoType; done: boolean; onPress: (type: PhotoType) => void }) {
@@ -766,5 +844,53 @@ const styles = StyleSheet.create({
   logText: {
     color: "#41544E",
     marginTop: 4
+  },
+  diagnosticCard: {
+    backgroundColor: "#FFF4E5",
+    borderColor: "#E6A23C",
+    borderWidth: 1,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 16,
+    gap: 10
+  },
+  diagnosticOk: {
+    backgroundColor: "#E8F5EE",
+    borderColor: "#A5D6BA",
+    borderWidth: 1,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 16,
+    gap: 6
+  },
+  diagnosticTitle: {
+    color: "#12312C",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  diagnosticText: {
+    color: "#52645E",
+    fontSize: 14,
+    lineHeight: 20
+  },
+  diagnosticItem: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E8D5B8",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 4
+  },
+  diagnosticItemTitle: {
+    color: "#12312C",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  diagnosticError: {
+    color: "#9A3412",
+    fontSize: 13,
+    lineHeight: 18
   }
 });
