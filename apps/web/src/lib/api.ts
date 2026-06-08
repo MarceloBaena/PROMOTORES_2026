@@ -14,7 +14,7 @@ function resolveApiBaseUrl() {
   return (import.meta.env.PROD ? PRODUCTION_API_BASE_URL : LOCAL_API_BASE_URL).replace(/\/$/, "");
 }
 
-const API_BASE_URL = resolveApiBaseUrl();
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export class ApiConnectionError extends Error {
   constructor() {
