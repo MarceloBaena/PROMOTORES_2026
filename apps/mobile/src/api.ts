@@ -7,7 +7,9 @@ declare const process: {
 };
 
 const PRODUCTION_API_BASE_URL = "https://promotores-2026-api.vercel.app";
-const REQUEST_TIMEOUT_MS = 25000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
+const SNAPSHOT_REQUEST_TIMEOUT_MS = 90000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 120000;
 
 function resolveApiBaseUrl() {
   const configuredUrl = process.env?.EXPO_PUBLIC_API_BASE_URL?.trim();
@@ -21,24 +23,24 @@ function resolveApiBaseUrl() {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
-async function fetchWithTimeout(url: string, init?: RequestInit) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<Response>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Tempo esgotado ao conectar na API apos ${Math.round(timeoutMs / 1000)}s.`));
+    }, timeoutMs);
+  });
 
   try {
-    return await fetch(url, {
-      ...init,
-      signal: controller.signal
-    });
+    return await Promise.race([fetch(url, init), timeoutPromise]);
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("Tempo esgotado ao conectar na API. Verifique se o celular esta com internet e tente novamente.");
-    }
-
     const technicalMessage = error instanceof Error ? ` Detalhe tecnico: ${error.message}` : "";
     throw new Error(`Nao foi possivel conectar na API. Verifique internet, Wi-Fi/dados moveis e tente novamente.${technicalMessage}`);
   } finally {
-    clearTimeout(timeout);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -147,7 +149,7 @@ export async function refreshSession(refreshToken: string): Promise<LoginRespons
 export async function downloadMobileSnapshot(accessToken: string): Promise<MobileSnapshot> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/mobile/snapshot`, {
     headers: { authorization: `Bearer ${accessToken}` }
-  });
+  }, SNAPSHOT_REQUEST_TIMEOUT_MS);
 
   if (!response.ok) {
     throw new Error(await parseApiError(response));
@@ -170,7 +172,7 @@ export async function postJson<TResponse>(
       "content-type": "application/json"
     },
     body: JSON.stringify(payload)
-  });
+  }, UPLOAD_REQUEST_TIMEOUT_MS);
 
   if (!response.ok) {
     throw new Error(await parseApiError(response));

@@ -282,7 +282,7 @@ export default function App() {
 
     try {
       setBusy(true);
-      setMessage(`Conectando na API: ${API_BASE_URL}`);
+      setMessage(`Conectando na API: ${API_BASE_URL}. No primeiro acesso pode levar alguns segundos.`);
       const result = await login(normalizedEmail, password);
 
       if (result.user.role !== "PROMOTOR") {
