@@ -2,7 +2,7 @@
   "expo": {
     "name": "Promotores 2026",
     "slug": "promotores-2026-mobile",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "orientation": "portrait",
     "scheme": "promotores2026",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
     ],
     "android": {
       "package": "com.promotores2026.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",

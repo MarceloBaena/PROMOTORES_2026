@@ -4,7 +4,15 @@ import * as Crypto from "expo-crypto";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
-import { API_BASE_URL, downloadMobileSnapshot, login, refreshSession, type LoginResponse } from "./api";
+import {
+  API_BASE_URL,
+  downloadMobileSnapshot,
+  login,
+  refreshSession,
+  testApiConnection,
+  type LoginResponse,
+  type MobileSnapshot
+} from "./api";
 import {
   addPhoto,
   addSyncLog,
@@ -32,6 +40,11 @@ import { syncPending } from "./sync";
 type Screen = "login" | "home" | "visit" | "sync";
 type RouteItem = ReturnType<typeof listRouteItems>[number];
 
+const TEST_PROMOTER_EMAIL = "promotor.teste@formula.local";
+const TEST_PROMOTER_PASSWORD = "Promotor@123";
+const OFFLINE_DEMO_ACCESS_TOKEN = "offline-demo-access-token";
+const OFFLINE_DEMO_REFRESH_TOKEN = "offline-demo-refresh-token";
+
 const photoLabels: Record<PhotoType, string> = {
   checkin: "Check-in",
   before: "Foto before",
@@ -45,6 +58,73 @@ function nowIso() {
 
 function createLocalId(prefix: string) {
   return `${prefix}_${Crypto.randomUUID()}`;
+}
+
+function createOfflineDemoSession(): LoginResponse {
+  return {
+    accessToken: OFFLINE_DEMO_ACCESS_TOKEN,
+    refreshToken: OFFLINE_DEMO_REFRESH_TOKEN,
+    user: {
+      id: "c7eaf11f-86be-4548-be9a-635d5298abf2",
+      email: TEST_PROMOTER_EMAIL,
+      name: "Promotor Teste",
+      role: "PROMOTOR",
+      status: "ACTIVE"
+    }
+  };
+}
+
+function createOfflineDemoSnapshot(): MobileSnapshot {
+  const client = {
+    id: "c5a8a99c-980a-4fc7-9552-3b47fbd7da67",
+    code: "9001",
+    name: "CLIENTE TESTE MOBILE",
+    document: null,
+    address: "Cliente salvo para teste offline",
+    city: "Varzea Grande",
+    state: "MT",
+    latitude: null,
+    longitude: null
+  };
+
+  return {
+    downloadedAt: nowIso(),
+    promoter: {
+      id: "c7eaf11f-86be-4548-be9a-635d5298abf2",
+      code: 4,
+      name: "Promotor Teste",
+      email: TEST_PROMOTER_EMAIL
+    },
+    clients: [client],
+    routes: [
+      {
+        id: "3c8f8836-d8b3-4418-8339-d911bcfc1555",
+        name: "ROTA TESTE MOBILE",
+        status: "PUBLISHED",
+        scheduledDate: nowIso(),
+        items: [
+          {
+            id: "1841813b-4410-4a63-97fe-aa61d2413e70",
+            routeId: "3c8f8836-d8b3-4418-8339-d911bcfc1555",
+            clientId: client.id,
+            sequence: 1,
+            status: "PENDING",
+            plannedStart: null,
+            plannedEnd: null,
+            client
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function isOfflineDemoSession(session: LoginResponse | null) {
+  return session?.accessToken === OFFLINE_DEMO_ACCESS_TOKEN || session?.refreshToken === OFFLINE_DEMO_REFRESH_TOKEN;
+}
+
+function isNetworkConnectionError(message: string) {
+  return /nao foi possivel conectar|tempo esgotado|network request failed|failed to fetch|conexao|internet|timeout/i.test(message);
 }
 
 async function getGps() {
@@ -79,8 +159,8 @@ async function copyPhotoToLocalStore(sourceUri: string, localId: string) {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
   const [session, setSession] = useState<LoginResponse | null>(null);
-  const [email, setEmail] = useState("promotor.teste@formula.local");
-  const [password, setPassword] = useState("Promotor@123");
+  const [email, setEmail] = useState(TEST_PROMOTER_EMAIL);
+  const [password, setPassword] = useState(TEST_PROMOTER_PASSWORD);
   const [routeItems, setRouteItems] = useState<RouteItem[]>([]);
   const [activeItem, setActiveItem] = useState<RouteItem | null>(null);
   const [activeVisit, setActiveVisit] = useState<LocalVisit | null>(null);
@@ -122,6 +202,13 @@ export default function App() {
   async function renewSession() {
     if (!session) {
       throw new Error("Sessao local nao encontrada. Faca login novamente.");
+    }
+
+    if (isOfflineDemoSession(session)) {
+      setEmail(session.user.email);
+      setPassword("");
+      setScreen("login");
+      throw new Error("Voce esta em modo teste offline. Para sincronizar com a retaguarda, entre novamente com internet.");
     }
 
     try {
@@ -213,8 +300,52 @@ export default function App() {
       setMessage(`Login feito. ${snapshot.routes.length} rota(s) e ${snapshot.clients.length} cliente(s) salvos para uso offline.`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Erro no login.";
+
+      if (
+        normalizedEmail === TEST_PROMOTER_EMAIL &&
+        password === TEST_PROMOTER_PASSWORD &&
+        isNetworkConnectionError(errorMessage)
+      ) {
+        startOfflineDemoMode(
+          "Nao foi possivel conectar na API pelo aparelho. O modo teste offline foi ativado para validar o fluxo de atendimento. Para sincronizar com a retaguarda, entre novamente quando a internet/API estiver acessivel."
+        );
+        return;
+      }
+
       setMessage(errorMessage);
       Alert.alert("Nao foi possivel entrar", errorMessage);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startOfflineDemoMode(reason?: string) {
+    const demoSession = createOfflineDemoSession();
+    const demoSnapshot = createOfflineDemoSnapshot();
+    saveSession(demoSession);
+    saveSnapshot(demoSnapshot);
+    setSession(demoSession);
+    setRouteItems(listRouteItems());
+    setScreen("home");
+    setMessage(reason ?? "Modo teste offline ativado. O roteiro esta salvo no aparelho.");
+    Alert.alert(
+      "Modo teste offline",
+      "Roteiro local liberado para testar o atendimento. A sincronizacao com a retaguarda exige entrar novamente com internet."
+    );
+  }
+
+  async function handleApiConnectionTest() {
+    try {
+      setBusy(true);
+      setMessage(`Testando API: ${API_BASE_URL}`);
+      const result = await testApiConnection();
+      const successMessage = `API respondeu no aparelho: ${result.status}.`;
+      setMessage(successMessage);
+      Alert.alert("API conectada", successMessage);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Falha ao testar API.";
+      setMessage(errorMessage);
+      Alert.alert("API nao respondeu", errorMessage);
     } finally {
       setBusy(false);
     }
@@ -403,6 +534,8 @@ export default function App() {
           <TextInput style={styles.input} placeholder="email do promotor" autoCapitalize="none" value={email} onChangeText={setEmail} />
           <TextInput style={styles.input} placeholder="senha" secureTextEntry value={password} onChangeText={setPassword} />
           <PrimaryButton label={busy ? "Entrando..." : "Entrar e baixar roteiro"} disabled={busy} onPress={handleLogin} />
+          <SecondaryButton label="Testar conexao da API" disabled={busy} onPress={handleApiConnectionTest} />
+          <SecondaryButton label="Entrar em modo teste offline" disabled={busy} onPress={() => startOfflineDemoMode()} />
           <Text style={[styles.statusText, message.toLowerCase().includes("erro") || message.toLowerCase().includes("nao foi") || message.toLowerCase().includes("invalid") ? styles.statusError : null]}>
             {message}
           </Text>

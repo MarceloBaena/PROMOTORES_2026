@@ -35,7 +35,8 @@ async function fetchWithTimeout(url: string, init?: RequestInit) {
       throw new Error("Tempo esgotado ao conectar na API. Verifique se o celular esta com internet e tente novamente.");
     }
 
-    throw new Error("Nao foi possivel conectar na API. Verifique internet, Wi-Fi/dados moveis e tente novamente.");
+    const technicalMessage = error instanceof Error ? ` Detalhe tecnico: ${error.message}` : "";
+    throw new Error(`Nao foi possivel conectar na API. Verifique internet, Wi-Fi/dados moveis e tente novamente.${technicalMessage}`);
   } finally {
     clearTimeout(timeout);
   }
@@ -115,6 +116,18 @@ export async function login(email: string, password: string): Promise<LoginRespo
   }
 
   return response.json() as Promise<LoginResponse>;
+}
+
+export async function testApiConnection() {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/health`, {
+    method: "GET"
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response));
+  }
+
+  return response.json() as Promise<{ status: string }>;
 }
 
 export async function refreshSession(refreshToken: string): Promise<LoginResponse> {
