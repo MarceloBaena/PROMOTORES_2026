@@ -57,9 +57,9 @@ export function ClientsPage() {
       fields={[
         {
           name: "code",
-          label: "Codigo",
-          placeholder: "Automatico",
-          description: "Gerado automaticamente pelo sistema em sequencia numerica.",
+          label: "Código",
+          placeholder: "Automático",
+          description: "Gerado automaticamente pelo sistema em sequência numérica.",
           readOnly: true,
           noSubmit: true
         },
@@ -75,21 +75,30 @@ export function ClientsPage() {
           description: "Promotor padrao que atendera este cliente em campo.",
           fullWidth: true
         },
-        { name: "address", label: "Endereco", fullWidth: true },
-        { name: "addressNumber", label: "Numero" },
+        { name: "address", label: "Endereço", fullWidth: true },
+        { name: "addressNumber", label: "Número" },
         { name: "district", label: "Bairro" },
         { name: "city", label: "Cidade" },
         { name: "state", label: "UF" },
         { name: "latitude", label: "Latitude" },
         { name: "longitude", label: "Longitude" },
-        { name: "status", label: "Status", type: "select", options: ["ACTIVE", "INACTIVE", "ARCHIVED"] }
+        {
+          name: "status",
+          label: "Situação",
+          type: "select",
+          options: [
+            { value: "ACTIVE", label: "Ativo" },
+            { value: "INACTIVE", label: "Inativo" },
+            { value: "ARCHIVED", label: "Arquivado" }
+          ]
+        }
       ]}
       columns={[
-        { label: "Codigo", value: (item) => String(item.code ?? "-") },
+        { label: "Código", value: (item) => String(item.code ?? "-") },
         { label: "Nome", value: (item) => String(item.name ?? "-") },
         { label: "Promotor", value: (item) => promoterLabel(item.defaultPromoter) },
         {
-          label: "Endereco",
+          label: "Endereço",
           value: (item) => {
             const street = String(item.address ?? "-");
             const number = item.addressNumber ? `, ${String(item.addressNumber)}` : "";
@@ -98,7 +107,7 @@ export function ClientsPage() {
           }
         },
         { label: "Cidade", value: (item) => `${String(item.city ?? "-")}/${String(item.state ?? "-")}` },
-        { label: "Status", value: (item) => <StatusPill value={String(item.status ?? "")} /> }
+        { label: "Situação", value: (item) => <StatusPill value={String(item.status ?? "")} /> }
       ]}
     />
   );

@@ -1,3 +1,5 @@
+import { statusLabel } from "../lib/labels";
+
 const styles: Record<string, string> = {
   ACTIVE: "bg-emerald-50 text-emerald-800 ring-emerald-200",
   INACTIVE: "bg-stone-100 text-stone-700 ring-stone-200",
@@ -21,7 +23,7 @@ export function StatusPill({ value }: { value?: string | null }) {
 
   return (
     <span className={`inline-flex h-7 items-center rounded-full px-3 text-[10px] font-black uppercase tracking-[0.12em] ring-1 ${styles[value] ?? styles.INACTIVE}`}>
-      {value}
+      {statusLabel(value)}
     </span>
   );
 }

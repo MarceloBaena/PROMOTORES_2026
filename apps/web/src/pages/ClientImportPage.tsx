@@ -39,7 +39,7 @@ export function ClientImportPage() {
       });
       setLog(response.data);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Importacao nao concluida.");
+      setMessage(error instanceof Error ? error.message : "Importação não concluída.");
     } finally {
       setLoading(false);
     }
@@ -47,7 +47,7 @@ export function ClientImportPage() {
 
   return (
     <section>
-      <PageHeader title="Importacao CSV" />
+      <PageHeader title="Importação CSV" />
       <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
         <form onSubmit={onSubmit} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
           <div className="panel-header">
@@ -84,7 +84,7 @@ export function ClientImportPage() {
                 <dd className="mt-1 font-medium">{log.fileName}</dd>
               </div>
               <div>
-                <dt className="field-label">Status</dt>
+                <dt className="field-label">Situação</dt>
                 <dd className="mt-1"><StatusPill value={log.status} /></dd>
               </div>
               <div>
@@ -101,7 +101,7 @@ export function ClientImportPage() {
               </div>
             </dl>
           ) : (
-            <div className="p-4 text-sm text-stone-500">Nenhuma importacao executada nesta sessao.</div>
+            <div className="p-4 text-sm text-stone-500">Nenhuma importação executada nesta sessão.</div>
           )}
         </div>
       </div>

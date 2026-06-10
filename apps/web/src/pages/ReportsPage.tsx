@@ -3,9 +3,9 @@ import { PageHeader } from "../components/PageHeader";
 import { apiDownload, triggerDownload } from "../lib/api";
 
 const reports = [
-  { label: "Visitas CSV", path: "/reports/visits.csv", fileName: "visits.csv" },
-  { label: "Clientes Excel", path: "/reports/clients.xls", fileName: "clients.xls" },
-  { label: "Auditoria PDF", path: "/reports/audit.pdf", fileName: "audit.pdf" }
+  { label: "Visitas em CSV", path: "/reports/visits.csv", fileName: "visitas.csv" },
+  { label: "Clientes em Excel", path: "/reports/clients.xls", fileName: "clientes.xls" },
+  { label: "Auditoria em PDF", path: "/reports/audit.pdf", fileName: "auditoria.pdf" }
 ];
 
 export function ReportsPage() {
@@ -16,14 +16,14 @@ export function ReportsPage() {
 
   return (
     <section>
-      <PageHeader title="Relatorios" />
+      <PageHeader title="Relatórios" />
       <div className="table-wrap">
         <table className="data-table">
           <thead>
             <tr>
-              <th>Relatorio</th>
+              <th>Relatório</th>
               <th>Arquivo</th>
-              <th className="w-28">Acao</th>
+              <th className="w-28">Ação</th>
             </tr>
           </thead>
           <tbody>

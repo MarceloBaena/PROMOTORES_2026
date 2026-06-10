@@ -16,17 +16,18 @@ import {
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { roleLabel } from "../lib/labels";
 
 const navSections = [
   {
-    label: "Operacao",
+    label: "Operação",
     items: [
-      { to: "/", label: "Dashboard", icon: BarChart3 },
-      { to: "/roteirizacao", label: "Roteirizacao", icon: Route },
+      { to: "/", label: "Painel", icon: BarChart3 },
+      { to: "/roteirizacao", label: "Roteirização", icon: Route },
       { to: "/visitas", label: "Visitas", icon: Map },
       { to: "/mapa", label: "Mapa ao vivo", icon: MapPinned },
       { to: "/auditoria", label: "Auditoria", icon: Flag },
-      { to: "/relatorios", label: "Relatorios", icon: ClipboardList }
+      { to: "/relatorios", label: "Relatórios", icon: ClipboardList }
     ]
   },
   {
@@ -35,7 +36,7 @@ const navSections = [
       { to: "/clientes", label: "Clientes", icon: Store },
       { to: "/promotores", label: "Promotores", icon: Users },
       { to: "/supervisores", label: "Supervisores", icon: ShieldCheck },
-      { to: "/importacao", label: "Importacao", icon: FileSpreadsheet }
+      { to: "/importacao", label: "Importação", icon: FileSpreadsheet }
     ]
   }
 ];
@@ -60,8 +61,8 @@ export function Layout() {
               <Building2 className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <div className="truncate font-display text-lg font-bold tracking-tight">Sales Promoters</div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/55">Console operacional</div>
+              <div className="truncate font-display text-lg font-bold tracking-tight">Promotores 2026</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/55">Central operacional</div>
             </div>
           </div>
           <div className="mt-5 rounded-2xl border border-white/10 bg-white/10 p-3 shadow-inner shadow-black/10">
@@ -69,7 +70,7 @@ export function Layout() {
               <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/55">Hoje</span>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-bold text-emerald-100 ring-1 ring-emerald-300/20">
                 <Wifi className="h-3.5 w-3.5" />
-                Online
+                Conectado
               </span>
             </div>
             <div className="mt-2 font-display text-sm font-bold capitalize text-white">{today}</div>
@@ -131,8 +132,8 @@ export function Layout() {
         <header className="sticky top-0 z-10 border-b border-white/70 bg-white/78 shadow-sm shadow-stone-900/5 backdrop-blur-xl">
           <div className="flex min-h-16 items-center justify-between gap-4 px-4 sm:px-5 lg:px-7">
             <div className="hidden min-w-0 sm:block">
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-500">Ambiente de producao</div>
-              <div className="truncate font-display text-base font-bold text-ink">Painel de operacao de campo</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-500">Ambiente de produção</div>
+              <div className="truncate font-display text-base font-bold text-ink">Painel de operação de campo</div>
             </div>
             <div className="flex min-w-0 items-center gap-3 sm:hidden">
               <div className="grid h-10 w-10 place-items-center rounded-xl bg-forest text-white">
@@ -140,7 +141,7 @@ export function Layout() {
               </div>
               <div className="min-w-0">
                 <div className="truncate font-display text-base font-bold">Promotores</div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Operacao</div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Operação</div>
               </div>
             </div>
             <nav className="hidden gap-1 overflow-x-auto sm:flex lg:hidden">
@@ -164,7 +165,7 @@ export function Layout() {
             </nav>
             <div className="hidden items-center gap-2 lg:flex">
               <span className="rounded-full border border-line bg-field px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-stone-600">
-                {user?.role}
+                {roleLabel(user?.role)}
               </span>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { Camera, CheckCircle2, Clock, Eye, FileText, MapPin, RefreshCw, UserRoun
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { API_BASE_URL, apiJson } from "../lib/api";
+import { auditTypeLabel } from "../lib/labels";
 
 interface VisitPhoto {
   id: string;
@@ -36,9 +37,9 @@ interface Visit {
 
 const photoLabels: Record<VisitPhoto["type"], string> = {
   checkin: "Check-in",
-  before: "Foto before",
-  after: "Foto after",
-  occurrence_extra: "Extra"
+  before: "Foto antes",
+  after: "Foto depois",
+  occurrence_extra: "Ocorrência extra"
 };
 
 function promoterLabel(promoter?: Visit["promoter"]) {
@@ -109,7 +110,7 @@ export function VisitsPage() {
         return response.data[0]?.id ?? null;
       });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel carregar visitas.");
+      setMessage(error instanceof Error ? error.message : "Não foi possível carregar visitas.");
     } finally {
       setLoading(false);
     }
@@ -121,7 +122,7 @@ export function VisitsPage() {
 
   async function completeVisit(visit: Visit) {
     if (!hasRequiredPhotos(visit)) {
-      setMessage("Nao e possivel concluir manualmente sem check-in, foto before e foto after sincronizadas.");
+      setMessage("Não é possível concluir manualmente sem check-in, foto antes e foto depois sincronizadas.");
       return;
     }
 
@@ -139,7 +140,7 @@ export function VisitsPage() {
       await load();
       setMessage("Visita marcada como concluida.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel concluir a visita.");
+      setMessage(error instanceof Error ? error.message : "Não foi possível concluir a visita.");
     } finally {
       setLoading(false);
     }
@@ -149,7 +150,7 @@ export function VisitsPage() {
     <section>
       <PageHeader
         title="Visitas"
-        subtitle="Consulte atendimentos enviados pelo APK: status, horarios, fotos, GPS e auditoria."
+        subtitle="Consulte atendimentos enviados pelo aplicativo: situação, horários, fotos, GPS e auditoria."
         action={(
           <button className="secondary-button" type="button" disabled={loading} onClick={() => void load()}>
             <RefreshCw className="h-4 w-4" />
@@ -168,10 +169,10 @@ export function VisitsPage() {
                 <tr>
                   <th>Cliente</th>
                   <th>Promotor</th>
-                  <th>Status</th>
+                  <th>Situação</th>
                   <th>Fotos</th>
                   <th>Criada em</th>
-                  <th>Acoes</th>
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -213,7 +214,7 @@ export function VisitsPage() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Detalhe da visita</h2>
-              <p className="panel-subtitle">Dados recebidos do atendimento mobile</p>
+              <p className="panel-subtitle">Dados recebidos do atendimento no aplicativo</p>
             </div>
           </div>
 
@@ -224,7 +225,7 @@ export function VisitsPage() {
               <div className="rounded-2xl bg-forest p-4 text-white">
                 <div className="text-xs font-black uppercase tracking-[0.14em] text-white/55">Cliente</div>
                 <div className="mt-2 font-display text-2xl font-black">{selectedVisit.client.name}</div>
-                <div className="mt-2 text-sm font-semibold text-white/75">{selectedVisit.client.address ?? "Endereco nao informado"}</div>
+                <div className="mt-2 text-sm font-semibold text-white/75">{selectedVisit.client.address ?? "Endereço não informado"}</div>
                 <div className="mt-3"><StatusPill value={selectedVisit.status} /></div>
               </div>
 
@@ -242,8 +243,8 @@ export function VisitsPage() {
               <div className="surface-card">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
-                    <h3 className="font-display text-lg font-black text-ink">Evidencias</h3>
-                    <p className="text-xs font-semibold text-stone-500">Fotos sincronizadas pelo APK</p>
+                    <h3 className="font-display text-lg font-black text-ink">Evidências</h3>
+                    <p className="text-xs font-semibold text-stone-500">Fotos sincronizadas pelo aplicativo</p>
                   </div>
                   <span className="rounded-full bg-muted px-3 py-1 text-xs font-black text-graphite">{selectedVisit.photos.length} foto(s)</span>
                 </div>
@@ -272,9 +273,9 @@ export function VisitsPage() {
               <div className="surface-card">
                 <div className="flex items-center gap-2 font-display text-lg font-black text-ink">
                   <FileText className="h-4 w-4" />
-                  Observacoes
+                  Observações
                 </div>
-                <p className="mt-2 text-sm font-semibold text-stone-600">{selectedVisit.notes || "Sem observacoes registradas."}</p>
+                <p className="mt-2 text-sm font-semibold text-stone-600">{selectedVisit.notes || "Sem observações registradas."}</p>
               </div>
 
               {selectedVisit.auditFlags && selectedVisit.auditFlags.length > 0 ? (
@@ -283,7 +284,7 @@ export function VisitsPage() {
                   <div className="mt-3 space-y-2">
                     {selectedVisit.auditFlags.map((flag) => (
                       <div key={flag.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted px-3 py-2 text-sm font-bold">
-                        <span>{flag.type}</span>
+                        <span>{auditTypeLabel(flag.type)}</span>
                         <StatusPill value={flag.severity} />
                       </div>
                     ))}

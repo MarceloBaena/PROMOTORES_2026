@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { apiJson } from "../lib/api";
+import { auditTypeLabel } from "../lib/labels";
 
 interface AuditFlag {
   id: string;
@@ -50,7 +51,7 @@ export function AuditPage() {
                 <th className="px-4 py-3">Promotor</th>
                 <th className="px-4 py-3">Tipo</th>
                 <th className="px-4 py-3">Severidade</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Situação</th>
               </tr>
             </thead>
             <tbody>
@@ -58,14 +59,14 @@ export function AuditPage() {
                 <tr key={flag.id}>
                   <td className="px-4 py-3 font-medium">{flag.visit.client.name}</td>
                   <td className="px-4 py-3">{promoterLabel(flag.visit.promoter)}</td>
-                  <td className="px-4 py-3">{flag.type}</td>
+                  <td className="px-4 py-3">{auditTypeLabel(flag.type)}</td>
                   <td className="px-4 py-3"><StatusPill value={flag.severity} /></td>
                   <td className="px-4 py-3">{flag.resolved ? "Resolvida" : "Aberta"}</td>
                 </tr>
               ))}
               {flags.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-stone-500">Nenhuma flag encontrada.</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-stone-500">Nenhum alerta encontrado.</td>
                 </tr>
               ) : null}
             </tbody>

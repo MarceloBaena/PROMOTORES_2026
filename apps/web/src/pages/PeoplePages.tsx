@@ -55,8 +55,8 @@ export function PromotersPage() {
           name: "password",
           label: "Senha",
           type: "password",
-          placeholder: "Minimo de 8 caracteres",
-          description: "Se deixar em branco, o sistema usa a senha padrao Promotor@123.",
+          placeholder: "Mínimo de 8 caracteres",
+          description: "Se deixar em branco, o sistema usa a senha padrão Promotor@123.",
           minLength: 8,
           fullWidth: true
         },
@@ -72,10 +72,10 @@ export function PromotersPage() {
         }
       ]}
       columns={[
-        { label: "Codigo", value: (item) => numericCode(item, "PRO") },
+        { label: "Código", value: (item) => numericCode(item, "PRO") },
         { label: "Nome", value: userName },
         { label: "E-mail", value: userEmail },
-        { label: "Status", value: userStatus },
+        { label: "Situação", value: userStatus },
         {
           label: "Supervisor",
           value: (item) => {
@@ -98,14 +98,14 @@ export function SupervisorsPage() {
         { name: "name", source: "user.name", label: "Nome", required: true },
         { name: "email", source: "user.email", label: "E-mail", type: "email", required: true },
         { name: "password", label: "Senha", type: "password", minLength: 8 },
-        { name: "region", label: "Regiao" }
+        { name: "region", label: "Região" }
       ]}
       columns={[
-        { label: "Codigo", value: (item) => numericCode(item, "SUP") },
+        { label: "Código", value: (item) => numericCode(item, "SUP") },
         { label: "Nome", value: userName },
         { label: "E-mail", value: userEmail },
-        { label: "Status", value: userStatus },
-        { label: "Regiao", value: (item) => String(item.region ?? "-") }
+        { label: "Situação", value: userStatus },
+        { label: "Região", value: (item) => String(item.region ?? "-") }
       ]}
     />
   );

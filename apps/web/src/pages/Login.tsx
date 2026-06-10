@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 const loginFeatures = [
   { icon: MapPinned, label: "Roteiro publicado e monitorado" },
   { icon: Smartphone, label: "App de campo conectado ao fluxo real" },
-  { icon: ShieldCheck, label: "Auditoria com evidencias e status" }
+  { icon: ShieldCheck, label: "Auditoria com evidências e situação" }
 ] as const;
 
 export function Login() {
@@ -23,7 +23,7 @@ export function Login() {
     try {
       await login(email, password);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Nao foi possivel entrar.");
+      setError(nextError instanceof Error ? nextError.message : "Não foi possível entrar.");
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ export function Login() {
               </div>
               <div>
                 <div className="font-display text-xl font-bold tracking-tight">Sales Promoters</div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/55">Console de campo</div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/55">Central de campo</div>
               </div>
             </div>
             <div className="mt-14">
@@ -53,7 +53,7 @@ export function Login() {
                 Controle de promotores, rotas e visitas em tempo real.
               </h1>
               <p className="mt-4 max-w-sm text-sm font-medium leading-6 text-white/65">
-                Painel interno para supervisao de campo, auditoria, roteirizacao e acompanhamento das evidencias de visita.
+                Painel interno para supervisão de campo, auditoria, roteirização e acompanhamento das evidências de visita.
               </p>
             </div>
             <div className="mt-10 grid gap-3">
@@ -76,7 +76,7 @@ export function Login() {
               </div>
               <div>
                 <h1 className="font-display text-lg font-bold">Sales Promoters</h1>
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-500">Console</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-500">Central</p>
               </div>
             </div>
 
@@ -129,7 +129,7 @@ export function Login() {
               {loading ? "Entrando..." : "Entrar"}
             </button>
             <p className="mt-5 text-center text-xs font-semibold text-stone-500">
-              Acesso restrito ao time autorizado da operacao.
+              Acesso restrito ao time autorizado da operação.
             </p>
           </form>
         </div>

@@ -57,7 +57,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
       const response = await apiJson<{ data: Array<Record<string, unknown>> }>(endpoint);
       setItems(response.data);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel carregar.");
+      setMessage(error instanceof Error ? error.message : "Não foi possível carregar.");
     } finally {
       setLoading(false);
     }
@@ -139,7 +139,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
       setEditingId(null);
       await load();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Operacao nao concluida.");
+      setMessage(error instanceof Error ? error.message : "Operação não concluída.");
     } finally {
       setLoading(false);
     }
@@ -153,7 +153,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
       await apiJson(`${endpoint}/${id}`, { method: "DELETE" });
       await load();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel remover.");
+      setMessage(error instanceof Error ? error.message : "Não foi possível remover.");
     } finally {
       setLoading(false);
     }
@@ -187,7 +187,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                   {columns.map((column) => (
                     <th key={column.label} className="px-4 py-3">{column.label}</th>
                   ))}
-                  <th className="w-56 px-4 py-3">Acoes</th>
+                  <th className="w-56 px-4 py-3">Ações</th>
                 </tr>
               </thead>
               <tbody>

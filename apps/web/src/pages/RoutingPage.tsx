@@ -126,7 +126,7 @@ export function RoutingPage() {
       setFilters({ supervisor: "", promoter: "", client: "" });
       await load();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Rota nao criada.");
+      setMessage(error instanceof Error ? error.message : "Rota não criada.");
     }
   }
 
@@ -159,14 +159,14 @@ export function RoutingPage() {
 
   return (
     <section>
-      <PageHeader title="Roteirizacao" />
+      <PageHeader title="Roteirização" />
       {message ? <div className="notice notice-warning">{message}</div> : null}
       <div className="grid gap-4 xl:grid-cols-[440px_minmax(0,1fr)]">
         <form onSubmit={createRoute} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Nova rota</h2>
-              <p className="panel-subtitle">Selecione equipe e clientes sem digitar IDs.</p>
+              <p className="panel-subtitle">Selecione equipe e clientes sem digitar códigos internos.</p>
             </div>
           </div>
           <div className="space-y-3 p-4">
@@ -193,7 +193,7 @@ export function RoutingPage() {
               <input
                 className="input-control mb-2"
                 type="search"
-                placeholder="Buscar supervisor por codigo ou nome"
+                placeholder="Buscar supervisor por código ou nome"
                 value={filters.supervisor}
                 onChange={(event) => setFilters((current) => ({ ...current, supervisor: event.target.value }))}
               />
@@ -213,7 +213,7 @@ export function RoutingPage() {
               <input
                 className="input-control mb-2"
                 type="search"
-                placeholder="Buscar promotor por codigo, nome ou e-mail"
+                placeholder="Buscar promotor por código, nome ou e-mail"
                 value={filters.promoter}
                 onChange={(event) => setFilters((current) => ({ ...current, promoter: event.target.value }))}
               />
@@ -246,7 +246,7 @@ export function RoutingPage() {
               <input
                 className="input-control mb-3"
                 type="search"
-                placeholder="Buscar cliente por codigo, nome ou cidade"
+                placeholder="Buscar cliente por código, nome ou cidade"
                 value={filters.client}
                 onChange={(event) => setFilters((current) => ({ ...current, client: event.target.value }))}
               />
@@ -302,10 +302,10 @@ export function RoutingPage() {
               <thead>
                 <tr>
                   <th className="px-4 py-3">Rota</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Situação</th>
                   <th className="px-4 py-3">Promotor</th>
                   <th className="px-4 py-3">Clientes</th>
-                  <th className="px-4 py-3">Acoes</th>
+                  <th className="px-4 py-3">Ações</th>
                 </tr>
               </thead>
               <tbody>

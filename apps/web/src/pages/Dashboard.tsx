@@ -47,15 +47,15 @@ export function Dashboard() {
     ["Promotores", summary?.promoters ?? 0],
     ["Supervisores", summary?.supervisors ?? 0],
     ["Rotas", summary?.routes ?? 0],
-    ["Visitas concluidas", summary?.visits.completed ?? 0],
-    ["Flags abertas", summary?.auditFlags ?? 0]
+    ["Visitas concluídas", summary?.visits.completed ?? 0],
+    ["Alertas abertos", summary?.auditFlags ?? 0]
   ] as const;
 
   return (
     <section>
       <PageHeader
-        title="Dashboard operacional"
-        subtitle="Visao executiva do campo: equipe, rotas, visitas, importacoes e alertas de auditoria."
+        title="Painel operacional"
+        subtitle="Visão executiva do campo: equipe, rotas, visitas, importações e alertas de auditoria."
       />
       {error ? <div className="notice notice-error">{error}</div> : null}
 
@@ -65,7 +65,7 @@ export function Dashboard() {
             <div className="pointer-events-none absolute right-[-6rem] top-[-8rem] h-72 w-72 rounded-full bg-white/12 blur-2xl" />
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-100/70">Centro de comando</p>
             <h2 className="mt-3 max-w-2xl font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
-              Operacao pronta para acompanhar a equipe em campo.
+              Operação pronta para acompanhar a equipe em campo.
             </h2>
             <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-white/68">
               Use este painel para validar cadastros, publicar roteiros, revisar visitas e agir rapidamente sobre auditorias abertas.
@@ -89,17 +89,17 @@ export function Dashboard() {
 
         <div className="surface-card">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">Prioridade do dia</p>
-          <h3 className="mt-2 font-display text-xl font-bold tracking-tight text-ink">Acompanhar evidencias</h3>
+          <h3 className="mt-2 font-display text-xl font-bold tracking-tight text-ink">Acompanhar evidências</h3>
           <p className="mt-2 text-sm font-semibold leading-6 text-stone-500">
-            Verifique flags abertas, visitas concluidas e importacoes com falha antes de publicar novos roteiros.
+            Verifique alertas abertos, visitas concluídas e importações com falha antes de publicar novos roteiros.
           </p>
           <div className="mt-5 space-y-3">
             <div className="flex items-center justify-between rounded-xl bg-field px-4 py-3">
-              <span className="text-sm font-bold text-graphite">Flags abertas</span>
+              <span className="text-sm font-bold text-graphite">Alertas abertos</span>
               <span className="font-display text-xl font-bold text-berry">{summary?.auditFlags ?? 0}</span>
             </div>
             <div className="flex items-center justify-between rounded-xl bg-field px-4 py-3">
-              <span className="text-sm font-bold text-graphite">Importacoes recentes</span>
+              <span className="text-sm font-bold text-graphite">Importações recentes</span>
               <span className="font-display text-xl font-bold text-steel">{summary?.imports.length ?? 0}</span>
             </div>
           </div>
@@ -126,8 +126,8 @@ export function Dashboard() {
       <div className="table-wrap mt-6">
         <div className="panel-header">
           <div>
-            <h2 className="panel-title">Importacoes recentes</h2>
-            <p className="panel-subtitle">Historico de cargas CSV e consistencia dos dados importados.</p>
+            <h2 className="panel-title">Importações recentes</h2>
+            <p className="panel-subtitle">Histórico de cargas CSV e consistência dos dados importados.</p>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -135,7 +135,7 @@ export function Dashboard() {
             <thead>
               <tr>
                 <th className="px-4 py-3">Arquivo</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Situação</th>
                 <th className="px-4 py-3">Linhas</th>
                 <th className="px-4 py-3">Importadas</th>
                 <th className="px-4 py-3">Falhas</th>
@@ -154,7 +154,7 @@ export function Dashboard() {
               {(summary?.imports?.length ?? 0) === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-stone-500">
-                    {summary ? "Sem importacoes registradas." : "Carregando..."}
+                    {summary ? "Sem importações registradas." : "Carregando..."}
                   </td>
                 </tr>
               ) : null}

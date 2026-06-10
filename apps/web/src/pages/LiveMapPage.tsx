@@ -35,9 +35,9 @@ const statusStyles = {
 };
 
 const statusLabels = {
-  online: "Online",
+  online: "Conectado",
   stale: "Sem sinal recente",
-  offline: "Offline"
+  offline: "Desconectado"
 };
 
 function promoterCode(code: number) {
@@ -134,7 +134,7 @@ export function LiveMapPage() {
       setItems(response.data);
       setLastRefresh(new Date());
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel carregar o mapa.");
+      setMessage(error instanceof Error ? error.message : "Não foi possível carregar o mapa.");
     } finally {
       setLoading(false);
     }
@@ -169,7 +169,7 @@ export function LiveMapPage() {
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <div className="metric-card">
-          <div className="relative z-[1] text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Promotores online</div>
+          <div className="relative z-[1] text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Promotores conectados</div>
           <div className="relative z-[1] mt-3 font-display text-3xl font-bold">{onlineCount}</div>
         </div>
         <div className="metric-card">
@@ -177,7 +177,7 @@ export function LiveMapPage() {
           <div className="relative z-[1] mt-3 font-display text-3xl font-bold">{activeCount}</div>
         </div>
         <div className="metric-card">
-          <div className="relative z-[1] text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Ultima atualizacao</div>
+          <div className="relative z-[1] text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Última atualização</div>
           <div className="relative z-[1] mt-3 font-display text-xl font-bold">{lastRefresh ? formatTime(lastRefresh.toISOString()) : "-"}</div>
         </div>
       </div>
@@ -242,7 +242,7 @@ export function LiveMapPage() {
                     <LocateFixed className="mx-auto h-10 w-10 text-stone-400" />
                     <h3 className="mt-4 font-display text-2xl font-bold text-ink">Nenhuma posicao recebida</h3>
                     <p className="mt-2 text-sm font-semibold leading-6 text-stone-500">
-                      O mapa sera preenchido quando um promotor abrir o app durante a jornada autorizada e enviar a localizacao.
+                      O mapa será preenchido quando um promotor abrir o aplicativo durante a jornada autorizada e enviar a localização.
                     </p>
                   </div>
                 </div>
@@ -254,7 +254,7 @@ export function LiveMapPage() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Sinais dos promotores</h2>
-              <p className="panel-subtitle">Ultima localizacao registrada por promotor ativo.</p>
+              <p className="panel-subtitle">Última localização registrada por promotor ativo.</p>
             </div>
           </div>
           <div className="max-h-[630px] overflow-auto">
@@ -274,7 +274,7 @@ export function LiveMapPage() {
                 <div className="mt-4 rounded-2xl bg-field p-3 text-sm">
                   <div className="font-bold text-graphite">{item.activeVisit?.clientName ?? "Sem visita em andamento"}</div>
                   <div className="mt-1 text-xs font-semibold text-stone-500">
-                    Ultimo sinal: {minutesAgo(item.location?.capturedAt)} · {formatTime(item.location?.capturedAt)}
+                    Último sinal: {minutesAgo(item.location?.capturedAt)} - {formatTime(item.location?.capturedAt)}
                   </div>
                 </div>
 
