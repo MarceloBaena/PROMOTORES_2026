@@ -79,8 +79,8 @@ async function copyPhotoToLocalStore(sourceUri: string, localId: string) {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
   const [session, setSession] = useState<LoginResponse | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("promotor.teste@formula.local");
+  const [password, setPassword] = useState("Promotor@123");
   const [routeItems, setRouteItems] = useState<RouteItem[]>([]);
   const [activeItem, setActiveItem] = useState<RouteItem | null>(null);
   const [activeVisit, setActiveVisit] = useState<LocalVisit | null>(null);
@@ -184,23 +184,37 @@ export default function App() {
   }, [activeVisit, session]);
 
   async function handleLogin() {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
+      const validationMessage = "Informe e-mail e senha do promotor para entrar.";
+      setMessage(validationMessage);
+      Alert.alert("Login incompleto", validationMessage);
+      return;
+    }
+
     try {
       setBusy(true);
-      const result = await login(email, password);
+      setMessage(`Conectando na API: ${API_BASE_URL}`);
+      const result = await login(normalizedEmail, password);
 
       if (result.user.role !== "PROMOTOR") {
         throw new Error("Este app e exclusivo para usuario PROMOTOR.");
       }
 
+      setMessage("Senha validada. Baixando roteiro do promotor...");
       saveSession(result);
       setSession(result);
       const snapshot = await downloadMobileSnapshot(result.accessToken);
+      setMessage("Roteiro recebido. Salvando dados offline no aparelho...");
       saveSnapshot(snapshot);
       setRouteItems(listRouteItems());
       setScreen("home");
-      setMessage("Login feito. Roteiro e clientes foram salvos para uso offline.");
+      setMessage(`Login feito. ${snapshot.routes.length} rota(s) e ${snapshot.clients.length} cliente(s) salvos para uso offline.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Erro no login.");
+      const errorMessage = error instanceof Error ? error.message : "Erro no login.";
+      setMessage(errorMessage);
+      Alert.alert("Nao foi possivel entrar", errorMessage);
     } finally {
       setBusy(false);
     }
@@ -376,15 +390,23 @@ export default function App() {
   if (screen === "login") {
     return (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.loginPanel}>
+        <ScrollView contentContainerStyle={styles.loginPanel} keyboardShouldPersistTaps="handled">
           <Text style={styles.kicker}>PROMOTORES 2026</Text>
           <Text style={styles.title}>Operacao de campo</Text>
           <Text style={styles.muted}>Faca o primeiro login com internet. Depois disso, roteiro, clientes, fotos e visitas ficam salvos no aparelho.</Text>
+          <View style={styles.loginHint}>
+            <Text style={styles.loginHintTitle}>Usuario de teste do app</Text>
+            <Text style={styles.loginHintText}>promotor.teste@formula.local</Text>
+            <Text style={styles.loginHintText}>Senha: Promotor@123</Text>
+            <Text style={styles.loginHintApi}>API: {API_BASE_URL}</Text>
+          </View>
           <TextInput style={styles.input} placeholder="email do promotor" autoCapitalize="none" value={email} onChangeText={setEmail} />
           <TextInput style={styles.input} placeholder="senha" secureTextEntry value={password} onChangeText={setPassword} />
           <PrimaryButton label={busy ? "Entrando..." : "Entrar e baixar roteiro"} disabled={busy} onPress={handleLogin} />
-          <Text style={styles.statusText}>{message}</Text>
-        </View>
+          <Text style={[styles.statusText, message.toLowerCase().includes("erro") || message.toLowerCase().includes("nao foi") || message.toLowerCase().includes("invalid") ? styles.statusError : null]}>
+            {message}
+          </Text>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -623,10 +645,33 @@ const styles = StyleSheet.create({
     gap: 12
   },
   loginPanel: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
     padding: 24,
     gap: 14
+  },
+  loginHint: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#BFD8CE",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 4,
+    padding: 14
+  },
+  loginHintTitle: {
+    color: "#12312C",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  loginHintText: {
+    color: "#0E5A49",
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  loginHintApi: {
+    color: "#66756F",
+    fontSize: 12,
+    marginTop: 4
   },
   header: {
     minHeight: 72,
@@ -718,6 +763,14 @@ const styles = StyleSheet.create({
     color: "#52645E",
     paddingHorizontal: 16,
     paddingVertical: 8
+  },
+  statusError: {
+    backgroundColor: "#FDECEC",
+    borderColor: "#F5B5B5",
+    borderRadius: 14,
+    borderWidth: 1,
+    color: "#9F1D1D",
+    fontWeight: "800"
   },
   empty: {
     color: "#52645E",

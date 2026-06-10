@@ -7,6 +7,7 @@ declare const process: {
 };
 
 const PRODUCTION_API_BASE_URL = "https://promotores-2026-api.vercel.app";
+const REQUEST_TIMEOUT_MS = 25000;
 
 function resolveApiBaseUrl() {
   const configuredUrl = process.env?.EXPO_PUBLIC_API_BASE_URL?.trim();
@@ -19,6 +20,26 @@ function resolveApiBaseUrl() {
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
+
+async function fetchWithTimeout(url: string, init?: RequestInit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Tempo esgotado ao conectar na API. Verifique se o celular esta com internet e tente novamente.");
+    }
+
+    throw new Error("Nao foi possivel conectar na API. Verifique internet, Wi-Fi/dados moveis e tente novamente.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export interface SessionUser {
   id: string;
@@ -83,7 +104,7 @@ async function parseApiError(response: Response) {
 }
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email: email.trim().toLowerCase(), password })
@@ -97,7 +118,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
 }
 
 export async function refreshSession(refreshToken: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/auth/refresh`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ refreshToken })
@@ -111,7 +132,7 @@ export async function refreshSession(refreshToken: string): Promise<LoginRespons
 }
 
 export async function downloadMobileSnapshot(accessToken: string): Promise<MobileSnapshot> {
-  const response = await fetch(`${API_BASE_URL}/mobile/snapshot`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/mobile/snapshot`, {
     headers: { authorization: `Bearer ${accessToken}` }
   });
 
@@ -129,7 +150,7 @@ export async function postJson<TResponse>(
   payload: Record<string, unknown>,
   method = "POST"
 ) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     method,
     headers: {
       authorization: `Bearer ${accessToken}`,
