@@ -59,16 +59,67 @@ function formatDate(value?: string | null) {
     return "-";
   }
 
-  return new Date(value).toLocaleString("pt-BR");
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("pt-BR");
 }
 
-function coordinate(value?: string | number | null) {
-  if (value === null || value === undefined || value === "") {
+function formatOnlyDate(value?: string | null) {
+  if (!value) {
     return "-";
   }
 
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString("pt-BR");
+}
+
+function formatOnlyTime(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleTimeString("pt-BR");
+}
+
+function coordinateNumber(value?: string | number | null) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
   const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? numberValue.toFixed(6) : String(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function validGpsPair(latitude?: string | number | null, longitude?: string | number | null) {
+  const lat = coordinateNumber(latitude);
+  const lng = coordinateNumber(longitude);
+
+  if (lat === null || lng === null || (lat === 0 && lng === 0)) {
+    return null;
+  }
+
+  return { latitude: lat, longitude: lng };
+}
+
+function photoEvidence(photo: VisitPhoto, visit: Visit) {
+  const capturedAt = photo.metadata?.capturedAt ?? photo.createdAt;
+  const photoGps = validGpsPair(photo.metadata?.gpsLatitude, photo.metadata?.gpsLongitude);
+  const visitGps = validGpsPair(visit.gpsLatitude, visit.gpsLongitude);
+
+  return {
+    capturedAt,
+    gpsLabel: photoGps ? "GPS da foto" : visitGps ? "GPS da visita" : "GPS",
+    gpsValue: photoGps
+      ? `${photoGps.latitude.toFixed(6)}, ${photoGps.longitude.toFixed(6)}`
+      : visitGps
+        ? `${visitGps.latitude.toFixed(6)}, ${visitGps.longitude.toFixed(6)}`
+        : "Não capturado pelo aparelho"
+  };
+}
+
+function visitGpsText(visit: Visit) {
+  const gps = validGpsPair(visit.gpsLatitude, visit.gpsLongitude);
+  return gps ? `${gps.latitude.toFixed(6)}, ${gps.longitude.toFixed(6)}` : "GPS não capturado";
 }
 
 function photoUrl(url: string) {
@@ -236,7 +287,7 @@ export function VisitsPage() {
                 <InfoCard
                   icon={<MapPin className="h-4 w-4" />}
                   label="GPS da visita"
-                  value={`${coordinate(selectedVisit.gpsLatitude)}, ${coordinate(selectedVisit.gpsLongitude)}`}
+                  value={visitGpsText(selectedVisit)}
                 />
               </div>
 
@@ -250,18 +301,23 @@ export function VisitsPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {selectedVisit.photos.map((photo) => (
-                    <div key={photo.id} className="overflow-hidden rounded-2xl border border-line bg-white">
-                      <img className="h-44 w-full object-cover" src={photoUrl(photo.url)} alt={photoLabels[photo.type]} />
-                      <div className="space-y-1 p-3 text-sm">
-                        <div className="font-black text-ink">{photoLabels[photo.type]}</div>
-                        <div className="text-xs font-semibold text-stone-500">Capturada: {formatDate(photo.metadata?.capturedAt ?? photo.createdAt)}</div>
-                        <div className="text-xs font-semibold text-stone-500">
-                          GPS: {coordinate(photo.metadata?.gpsLatitude)}, {coordinate(photo.metadata?.gpsLongitude)}
+                  {selectedVisit.photos.map((photo) => {
+                    const evidence = photoEvidence(photo, selectedVisit);
+
+                    return (
+                      <div key={photo.id} className="overflow-hidden rounded-2xl border border-line bg-white">
+                        <img className="h-44 w-full object-cover" src={photoUrl(photo.url)} alt={photoLabels[photo.type]} />
+                        <div className="space-y-2 p-3 text-sm">
+                          <div className="font-black text-ink">{photoLabels[photo.type]}</div>
+                          <div className="grid gap-2 rounded-xl bg-muted/50 p-3 text-xs font-semibold text-stone-600">
+                            <div><span className="font-black text-ink">Data:</span> {formatOnlyDate(evidence.capturedAt)}</div>
+                            <div><span className="font-black text-ink">Hora:</span> {formatOnlyTime(evidence.capturedAt)}</div>
+                            <div><span className="font-black text-ink">{evidence.gpsLabel}:</span> {evidence.gpsValue}</div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {selectedVisit.photos.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-line bg-muted/40 p-4 text-sm font-semibold text-stone-500">
                       Nenhuma foto chegou para esta visita ainda.

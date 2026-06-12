@@ -44,6 +44,7 @@ const TEST_PROMOTER_EMAIL = "promotor.teste@formula.local";
 const TEST_PROMOTER_PASSWORD = "Promotor@123";
 const OFFLINE_DEMO_ACCESS_TOKEN = "offline-demo-access-token";
 const OFFLINE_DEMO_REFRESH_TOKEN = "offline-demo-refresh-token";
+const GPS_CAPTURE_TIMEOUT_MS = 8000;
 
 const photoLabels: Record<PhotoType, string> = {
   checkin: "Check-in",
@@ -136,14 +137,34 @@ async function getGps() {
   }
 
   try {
-    const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    const position = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("GPS_TIMEOUT")), GPS_CAPTURE_TIMEOUT_MS);
+      })
+    ]);
+
     return {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
       accuracyMeters: position.coords.accuracy ?? undefined
     };
   } catch {
-    addSyncLog("failed", "GPS indisponivel no aparelho. A evidencia foi mantida localmente.");
+    const lastKnownPosition = await Location.getLastKnownPositionAsync({
+      maxAge: 300000,
+      requiredAccuracy: 500
+    }).catch(() => null);
+
+    if (lastKnownPosition) {
+      addSyncLog("pending", "GPS atual demorou. Evidencia registrada com a ultima localizacao conhecida do aparelho.");
+      return {
+        latitude: lastKnownPosition.coords.latitude,
+        longitude: lastKnownPosition.coords.longitude,
+        accuracyMeters: lastKnownPosition.coords.accuracy ?? undefined
+      };
+    }
+
+    addSyncLog("failed", "GPS indisponivel no aparelho. A evidencia foi mantida localmente sem coordenada.");
     return null;
   }
 }

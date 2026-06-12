@@ -14,6 +14,12 @@ export const visitsRouter = Router();
 
 const requiredPhotoTypes = ["checkin", "before", "after"] as const;
 
+const optionalCoordinate = (min: number, max: number) =>
+  z.preprocess(
+    (value) => (value === null || value === "" ? undefined : value),
+    z.coerce.number().min(min).max(max).optional()
+  );
+
 const visitSchema = z.object({
   clientGeneratedId: z.string().min(8).max(120).optional(),
   companyId: z.string().uuid().optional(),
@@ -24,8 +30,8 @@ const visitSchema = z.object({
   status: z.enum(["pending", "in_progress", "completed", "not_completed"]).optional(),
   startedAt: z.string().datetime().optional(),
   finishedAt: z.string().datetime().optional(),
-  gpsLatitude: z.coerce.number().optional(),
-  gpsLongitude: z.coerce.number().optional(),
+  gpsLatitude: optionalCoordinate(-90, 90),
+  gpsLongitude: optionalCoordinate(-180, 180),
   notes: z.string().optional()
 });
 
@@ -33,8 +39,8 @@ const photoSchema = z.object({
   type: z.enum(["checkin", "before", "after", "occurrence_extra"]).default("occurrence_extra"),
   clientGeneratedId: z.string().min(8).max(120).optional(),
   capturedAt: z.string().datetime().optional(),
-  gpsLatitude: z.coerce.number().optional(),
-  gpsLongitude: z.coerce.number().optional()
+  gpsLatitude: optionalCoordinate(-90, 90),
+  gpsLongitude: optionalCoordinate(-180, 180)
 });
 
 const base64PhotoSchema = photoSchema.extend({
@@ -91,7 +97,7 @@ visitsRouter.get(
         client: true,
         promoter: { include: { user: true } },
         route: true,
-        photos: true,
+        photos: { orderBy: { createdAt: "asc" } },
         occurrences: true,
         auditFlags: true
       },
@@ -117,7 +123,7 @@ visitsRouter.post(
         include: {
           client: true,
           promoter: { include: { user: true } },
-          photos: true,
+          photos: { orderBy: { createdAt: "asc" } },
           occurrences: true,
           auditFlags: true
         }
@@ -157,7 +163,7 @@ visitsRouter.post(
       include: {
         client: true,
         promoter: { include: { user: true } },
-        photos: true,
+        photos: { orderBy: { createdAt: "asc" } },
         occurrences: true,
         auditFlags: true
       }
@@ -203,7 +209,7 @@ visitsRouter.put(
         include: {
           client: true,
           promoter: { include: { user: true } },
-          photos: true,
+          photos: { orderBy: { createdAt: "asc" } },
           occurrences: true,
           auditFlags: true
         }
