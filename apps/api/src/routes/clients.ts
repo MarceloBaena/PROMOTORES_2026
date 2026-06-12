@@ -5,12 +5,14 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
 import { AppError } from "../lib/errors";
+import { requireCompanyId, scopedCompanyWhere, assertSameCompany } from "../lib/tenant";
 import { upload } from "../services/uploads";
 
 export const clientsRouter = Router();
 
 const clientSchema = z.object({
   code: z.string().optional(),
+  companyId: z.string().uuid().optional(),
   name: z.string().min(2),
   document: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).optional(),
@@ -24,8 +26,9 @@ const clientSchema = z.object({
   defaultPromoterId: z.string().uuid().optional()
 });
 
-async function generateNextClientCode() {
+async function generateNextClientCode(companyId: string) {
   const clients = await prisma.client.findMany({
+    where: { companyId },
     select: { code: true }
   });
 
@@ -45,18 +48,22 @@ clientsRouter.get(
   asyncHandler(async (req, res) => {
     const q = typeof req.query.q === "string" ? req.query.q : undefined;
     const clients = await prisma.client.findMany({
-      where: q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { code: { contains: q, mode: "insensitive" } },
-              { city: { contains: q, mode: "insensitive" } }
-            ]
-          }
-        : undefined,
+      where: {
+        ...scopedCompanyWhere(req),
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { code: { contains: q, mode: "insensitive" } },
+                { city: { contains: q, mode: "insensitive" } }
+              ]
+            }
+          : {})
+      },
       orderBy: { createdAt: "desc" },
       take: 200,
       include: {
+        company: true,
         defaultPromoter: { include: { user: true } }
       }
     });
@@ -69,15 +76,31 @@ clientsRouter.post(
   "/",
   asyncHandler(async (req, res) => {
     const input = clientSchema.parse(req.body);
+    const companyId = requireCompanyId(req, input.companyId);
+
+    if (input.defaultPromoterId) {
+      const promoter = await prisma.promoter.findUnique({
+        where: { id: input.defaultPromoterId },
+        select: { companyId: true }
+      });
+      assertSameCompany(req, promoter?.companyId);
+
+      if (promoter?.companyId !== companyId) {
+        throw new AppError(400, "PROMOTER_COMPANY_MISMATCH", "Promotor responsavel pertence a outra empresa/filial.");
+      }
+    }
+
     const client = await prisma.client.create({
       data: {
         ...input,
-        code: input.code?.trim() || await generateNextClientCode(),
+        companyId,
+        code: input.code?.trim() || await generateNextClientCode(companyId),
         status: input.status ?? "ACTIVE",
         latitude: input.latitude,
         longitude: input.longitude
       },
       include: {
+        company: true,
         defaultPromoter: { include: { user: true } }
       }
     });
@@ -90,10 +113,37 @@ clientsRouter.put(
   "/:id",
   asyncHandler(async (req, res) => {
     const input = clientSchema.partial().parse(req.body);
+    const existing = await prisma.client.findUnique({
+      where: { id: req.params.id },
+      select: { companyId: true }
+    });
+
+    if (!existing) {
+      throw new AppError(404, "CLIENT_NOT_FOUND", "Cliente nao encontrado.");
+    }
+
+    assertSameCompany(req, existing.companyId);
+    const companyId = input.companyId ? requireCompanyId(req, input.companyId) : existing.companyId;
+
+    if (input.defaultPromoterId) {
+      const promoter = await prisma.promoter.findUnique({
+        where: { id: input.defaultPromoterId },
+        select: { companyId: true }
+      });
+
+      if (promoter?.companyId !== companyId) {
+        throw new AppError(400, "PROMOTER_COMPANY_MISMATCH", "Promotor responsavel pertence a outra empresa/filial.");
+      }
+    }
+
     const client = await prisma.client.update({
       where: { id: req.params.id },
-      data: input,
+      data: {
+        ...input,
+        companyId
+      },
       include: {
+        company: true,
         defaultPromoter: { include: { user: true } }
       }
     });
@@ -105,6 +155,16 @@ clientsRouter.put(
 clientsRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {
+    const existing = await prisma.client.findUnique({
+      where: { id: req.params.id },
+      select: { companyId: true }
+    });
+
+    if (!existing) {
+      throw new AppError(404, "CLIENT_NOT_FOUND", "Cliente nao encontrado.");
+    }
+
+    assertSameCompany(req, existing.companyId);
     await prisma.client.update({
       where: { id: req.params.id },
       data: { status: "ARCHIVED" }
@@ -123,6 +183,8 @@ clientsRouter.post(
     }
 
     const content = fs.readFileSync(req.file.path, "utf8");
+    const requestedCompanyId = typeof req.body.companyId === "string" ? req.body.companyId : undefined;
+    const companyId = requireCompanyId(req, requestedCompanyId);
     const records = parse(content, {
       columns: true,
       skip_empty_lines: true,
@@ -143,8 +205,9 @@ clientsRouter.post(
         const code = row.code || row.codigo || `CSV-${Date.now()}-${index}`;
 
         await prisma.client.upsert({
-          where: { code },
+          where: { companyId_code: { companyId, code } },
           create: {
+            companyId,
             code,
             name,
             document: row.document || row.documento || undefined,
@@ -156,6 +219,7 @@ clientsRouter.post(
             status: "ACTIVE"
           },
           update: {
+            companyId,
             name,
             document: row.document || row.documento || undefined,
             address: row.address || row.endereco || undefined,
@@ -185,7 +249,8 @@ clientsRouter.post(
         failedRows: errors.length,
         errors,
         preview: records.slice(0, 5),
-        createdById: req.user?.id
+        createdById: req.user?.id,
+        companyId
       }
     });
 

@@ -14,7 +14,7 @@ mobileRouter.get(
 
     const promoter = await prisma.promoter.findUnique({
       where: { userId: req.user.id },
-      include: { user: true }
+      include: { user: true, company: true }
     });
 
     if (!promoter || promoter.status !== "ACTIVE") {
@@ -23,6 +23,7 @@ mobileRouter.get(
 
     const routes = await prisma.route.findMany({
       where: {
+        companyId: promoter.companyId,
         promoterId: promoter.id,
         status: "PUBLISHED"
       },
@@ -36,18 +37,21 @@ mobileRouter.get(
     });
     const publishedRoutesForPromoter = await prisma.route.count({
       where: {
+        companyId: promoter.companyId,
         promoterId: promoter.id,
         status: "PUBLISHED"
       }
     });
     const draftRoutesForPromoter = await prisma.route.count({
       where: {
+        companyId: promoter.companyId,
         promoterId: promoter.id,
         status: "DRAFT"
       }
     });
     const assignedClients = await prisma.client.count({
       where: {
+        companyId: promoter.companyId,
         defaultPromoterId: promoter.id,
         status: "ACTIVE"
       }
@@ -70,6 +74,13 @@ mobileRouter.get(
           name: promoter.user.name,
           email: promoter.user.email
         },
+        company: promoter.company
+          ? {
+              id: promoter.company.id,
+              code: promoter.company.code,
+              name: promoter.company.name
+            }
+          : null,
         routes,
         clients: Array.from(clientsById.values()),
         diagnostics: {

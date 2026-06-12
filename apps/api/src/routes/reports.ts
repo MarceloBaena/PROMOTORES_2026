@@ -2,6 +2,7 @@ import { Router } from "express";
 import PDFDocument from "pdfkit";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
+import { scopedCompanyWhere } from "../lib/tenant";
 
 export const reportsRouter = Router();
 
@@ -38,14 +39,15 @@ function excelXml(rows: unknown[][]) {
 
 reportsRouter.get(
   "/summary",
-  asyncHandler(async (_req, res) => {
-    const clients = await prisma.client.count({ where: { status: "ACTIVE" } });
-    const promoters = await prisma.promoter.count({ where: { status: "ACTIVE" } });
-    const supervisors = await prisma.supervisor.count({ where: { status: "ACTIVE" } });
-    const routes = await prisma.route.count();
-    const visits = await prisma.visit.groupBy({ by: ["status"], _count: { id: true } });
-    const auditFlags = await prisma.auditFlag.count({ where: { resolved: false } });
-    const imports = await prisma.clientImportLog.findMany({ orderBy: { createdAt: "desc" }, take: 5 });
+  asyncHandler(async (req, res) => {
+    const companyWhere = scopedCompanyWhere(req);
+    const clients = await prisma.client.count({ where: { ...companyWhere, status: "ACTIVE" } });
+    const promoters = await prisma.promoter.count({ where: { ...companyWhere, status: "ACTIVE" } });
+    const supervisors = await prisma.supervisor.count({ where: { ...companyWhere, status: "ACTIVE" } });
+    const routes = await prisma.route.count({ where: companyWhere });
+    const visits = await prisma.visit.groupBy({ by: ["status"], where: companyWhere, _count: { id: true } });
+    const auditFlags = await prisma.auditFlag.count({ where: { resolved: false, visit: companyWhere } });
+    const imports = await prisma.clientImportLog.findMany({ where: companyWhere, orderBy: { createdAt: "desc" }, take: 5 });
 
     res.json({
       data: {
@@ -66,8 +68,9 @@ reportsRouter.get(
 
 reportsRouter.get(
   "/visits.csv",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const visits = await prisma.visit.findMany({
+      where: scopedCompanyWhere(req),
       include: { client: true, promoter: { include: { user: true } } },
       orderBy: { createdAt: "desc" },
       take: 1000
@@ -93,8 +96,8 @@ reportsRouter.get(
 
 reportsRouter.get(
   "/clients.xls",
-  asyncHandler(async (_req, res) => {
-    const clients = await prisma.client.findMany({ orderBy: { createdAt: "desc" }, take: 1000 });
+  asyncHandler(async (req, res) => {
+    const clients = await prisma.client.findMany({ where: scopedCompanyWhere(req), orderBy: { createdAt: "desc" }, take: 1000 });
     const workbook = excelXml([
       ["code", "name", "document", "status", "city", "state"],
       ...clients.map((client) => [
@@ -115,8 +118,8 @@ reportsRouter.get(
 
 reportsRouter.get(
   "/clients.xlsx",
-  asyncHandler(async (_req, res) => {
-    const clients = await prisma.client.findMany({ orderBy: { createdAt: "desc" }, take: 1000 });
+  asyncHandler(async (req, res) => {
+    const clients = await prisma.client.findMany({ where: scopedCompanyWhere(req), orderBy: { createdAt: "desc" }, take: 1000 });
     const workbook = excelXml([
       [
         "code",
@@ -144,8 +147,9 @@ reportsRouter.get(
 
 reportsRouter.get(
   "/audit.pdf",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const flags = await prisma.auditFlag.findMany({
+      where: { visit: scopedCompanyWhere(req) },
       include: { visit: { include: { client: true } } },
       orderBy: { createdAt: "desc" },
       take: 100

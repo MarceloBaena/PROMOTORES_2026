@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import { authRouter } from "./routes/auth";
 import { supervisorsRouter } from "./routes/supervisors";
 import { promotersRouter } from "./routes/promoters";
+import { companiesRouter } from "./routes/companies";
 import { clientsRouter } from "./routes/clients";
 import { routePlansRouter } from "./routes/route-plans";
 import { visitsRouter } from "./routes/visits";
@@ -124,6 +125,7 @@ export function createApp() {
   });
 
   app.use("/auth", authLimiter, authRouter);
+  app.use("/companies", authenticate, authorizeRoles("ADMIN"), companiesRouter);
   app.use("/supervisors", authenticate, authorizeRoles("ADMIN"), supervisorsRouter);
   app.use("/promoters", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), promotersRouter);
   app.use("/clients", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), clientsRouter);

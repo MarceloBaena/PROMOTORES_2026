@@ -29,7 +29,7 @@ authRouter.post(
     const credentials = loginSchema.parse(req.body);
     const user = await prisma.user.findUnique({
       where: { email: credentials.email.toLowerCase() },
-      include: { role: true }
+      include: { role: true, company: true }
     });
 
     if (!user || user.status !== "ACTIVE") {

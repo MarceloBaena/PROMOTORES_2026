@@ -8,6 +8,7 @@ import { asyncHandler } from "../middleware/async-handler";
 import { upload, publicUploadUrl } from "../services/uploads";
 import { AppError } from "../lib/errors";
 import { logger } from "../lib/logger";
+import { resolveCompanyId, requireCompanyId, scopedCompanyWhere, assertSameCompany } from "../lib/tenant";
 
 export const visitsRouter = Router();
 
@@ -15,6 +16,7 @@ const requiredPhotoTypes = ["checkin", "before", "after"] as const;
 
 const visitSchema = z.object({
   clientGeneratedId: z.string().min(8).max(120).optional(),
+  companyId: z.string().uuid().optional(),
   routeId: z.string().uuid().optional(),
   routeItemId: z.string().uuid().optional(),
   clientId: z.string().uuid(),
@@ -40,9 +42,10 @@ const base64PhotoSchema = photoSchema.extend({
   base64Image: z.string().min(100)
 });
 
-function visitCreatePayload(input: z.infer<typeof visitSchema>, promoterId?: string | null): Prisma.VisitUncheckedCreateInput {
+function visitCreatePayload(input: z.infer<typeof visitSchema>, companyId: string, promoterId?: string | null): Prisma.VisitUncheckedCreateInput {
   return {
     clientGeneratedId: input.clientGeneratedId,
+    companyId,
     routeId: input.routeId,
     routeItemId: input.routeItemId,
     clientId: input.clientId,
@@ -56,9 +59,10 @@ function visitCreatePayload(input: z.infer<typeof visitSchema>, promoterId?: str
   };
 }
 
-function visitUpdatePayload(input: Partial<z.infer<typeof visitSchema>>): Prisma.VisitUncheckedUpdateInput {
+function visitUpdatePayload(input: Partial<z.infer<typeof visitSchema>>, companyId?: string | null): Prisma.VisitUncheckedUpdateInput {
   return {
     clientGeneratedId: input.clientGeneratedId,
+    companyId,
     routeId: input.routeId,
     routeItemId: input.routeItemId,
     clientId: input.clientId,
@@ -79,8 +83,9 @@ function dataUrl(contentType: string, base64Image: string) {
 
 visitsRouter.get(
   "/",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const visits = await prisma.visit.findMany({
+      where: scopedCompanyWhere(req),
       orderBy: { createdAt: "desc" },
       include: {
         client: true,
@@ -119,6 +124,7 @@ visitsRouter.post(
       });
 
       if (existingVisit) {
+        assertSameCompany(req, existingVisit.companyId);
         res.json({ data: existingVisit });
         return;
       }
@@ -127,9 +133,27 @@ visitsRouter.post(
     const promoter = req.user?.role === "PROMOTOR"
       ? await prisma.promoter.findUnique({ where: { userId: req.user.id } })
       : null;
+    const companyId = requireCompanyId(req, input.companyId ?? promoter?.companyId);
+
+    const [client, route, routeItem, inputPromoter] = await Promise.all([
+      prisma.client.findUnique({ where: { id: input.clientId }, select: { companyId: true } }),
+      input.routeId ? prisma.route.findUnique({ where: { id: input.routeId }, select: { companyId: true } }) : null,
+      input.routeItemId
+        ? prisma.routeItem.findUnique({ where: { id: input.routeItemId }, select: { route: { select: { companyId: true } } } })
+        : null,
+      input.promoterId ? prisma.promoter.findUnique({ where: { id: input.promoterId }, select: { companyId: true } }) : null
+    ]);
+
+    if (client?.companyId !== companyId || route?.companyId && route.companyId !== companyId || routeItem?.route.companyId && routeItem.route.companyId !== companyId) {
+      throw new AppError(400, "VISIT_COMPANY_MISMATCH", "Cliente, rota e visita precisam pertencer a mesma empresa/filial.");
+    }
+
+    if (inputPromoter && inputPromoter.companyId !== companyId) {
+      throw new AppError(400, "PROMOTER_COMPANY_MISMATCH", "Promotor pertence a outra empresa/filial.");
+    }
 
     const visit = await prisma.visit.create({
-      data: visitCreatePayload(input, promoter?.id),
+      data: visitCreatePayload(input, companyId, promoter?.id),
       include: {
         client: true,
         promoter: { include: { user: true } },
@@ -147,6 +171,17 @@ visitsRouter.put(
   "/:id",
   asyncHandler(async (req, res) => {
     const input = visitSchema.partial().parse(req.body);
+    const existing = await prisma.visit.findUnique({
+      where: { id: req.params.id },
+      select: { companyId: true }
+    });
+
+    if (!existing) {
+      throw new AppError(404, "VISIT_NOT_FOUND", "Visita nao encontrada.");
+    }
+
+    assertSameCompany(req, existing.companyId);
+    const companyId = resolveCompanyId(req, input.companyId ?? existing.companyId);
 
     if (input.status === "completed") {
       const photos = await prisma.visitPhoto.findMany({
@@ -164,7 +199,7 @@ visitsRouter.put(
     const visit = await prisma.$transaction(async (tx) => {
       const updated = await tx.visit.update({
         where: { id: req.params.id },
-        data: visitUpdatePayload(input),
+        data: visitUpdatePayload(input, companyId),
         include: {
           client: true,
           promoter: { include: { user: true } },
@@ -194,13 +229,25 @@ visitsRouter.post(
   upload.single("file"),
   asyncHandler(async (req, res) => {
     const input = photoSchema.parse(req.body);
+    const visit = await prisma.visit.findUnique({
+      where: { id: req.params.id },
+      select: { companyId: true }
+    });
+
+    if (!visit) {
+      throw new AppError(404, "VISIT_NOT_FOUND", "Visit was not found for photo upload.");
+    }
+
+    assertSameCompany(req, visit.companyId);
 
     if (input.clientGeneratedId) {
       const existingPhoto = await prisma.visitPhoto.findUnique({
-        where: { clientGeneratedId: input.clientGeneratedId }
+        where: { clientGeneratedId: input.clientGeneratedId },
+        include: { visit: { select: { companyId: true } } }
       });
 
       if (existingPhoto) {
+        assertSameCompany(req, existingPhoto.visit.companyId);
         if (req.file) {
           await unlink(req.file.path).catch(() => undefined);
         }
@@ -244,10 +291,12 @@ visitsRouter.post(
 
     if (input.clientGeneratedId) {
       const existingPhoto = await prisma.visitPhoto.findUnique({
-        where: { clientGeneratedId: input.clientGeneratedId }
+        where: { clientGeneratedId: input.clientGeneratedId },
+        include: { visit: { select: { companyId: true } } }
       });
 
       if (existingPhoto) {
+        assertSameCompany(req, existingPhoto.visit.companyId);
         res.json({ data: existingPhoto });
         return;
       }
@@ -255,12 +304,14 @@ visitsRouter.post(
 
     const visit = await prisma.visit.findUnique({
       where: { id: req.params.id },
-      select: { id: true }
+      select: { id: true, companyId: true }
     });
 
     if (!visit) {
       throw new AppError(404, "VISIT_NOT_FOUND", "Visit was not found for photo upload.");
     }
+
+    assertSameCompany(req, visit.companyId);
 
     const photo = await prisma.visitPhoto.create({
       data: {

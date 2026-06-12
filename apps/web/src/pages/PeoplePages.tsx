@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { CrudPage, userEmail, userName, userStatus } from "./CrudPage";
+import { useAuth } from "../context/AuthContext";
 import { apiJson } from "../lib/api";
+import { companyLabel, toCompanyOptions, type CompanyOption } from "../lib/company-options";
 
 function numericCode(item: Record<string, unknown>, prefix: "PRO" | "SUP") {
   const code = Number(item.code);
@@ -17,14 +19,20 @@ function numericCode(item: Record<string, unknown>, prefix: "PRO" | "SUP") {
 }
 
 export function PromotersPage() {
+  const { user } = useAuth();
   const [supervisorOptions, setSupervisorOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [companyOptions, setCompanyOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const isPlatformAdmin = user?.role === "ADMIN" && !user.companyId;
 
   useEffect(() => {
     void (async () => {
       try {
-        const response = await apiJson<{ data: Array<Record<string, unknown>> }>("/supervisors");
+        const [supervisorsResponse, companiesResponse] = await Promise.all([
+          apiJson<{ data: Array<Record<string, unknown>> }>("/supervisors"),
+          apiJson<{ data: CompanyOption[] }>("/companies")
+        ]);
         setSupervisorOptions(
-          response.data
+          supervisorsResponse.data
             .map((supervisor) => {
               const user = supervisor.user as { name?: string } | undefined;
               const id = String(supervisor.id ?? "");
@@ -37,8 +45,10 @@ export function PromotersPage() {
             })
             .filter((option) => option.value !== "")
         );
+        setCompanyOptions(toCompanyOptions(companiesResponse.data));
       } catch {
         setSupervisorOptions([]);
+        setCompanyOptions([]);
       }
     })();
   }, []);
@@ -47,8 +57,20 @@ export function PromotersPage() {
     <CrudPage
       title="Promotores"
       endpoint="/promoters"
-      initialValues={{ name: "", email: "", password: "", supervisorId: "" }}
+      initialValues={{ name: "", email: "", password: "", companyId: user?.companyId ?? "", supervisorId: "" }}
       fields={[
+        ...(isPlatformAdmin
+          ? [{
+              name: "companyId",
+              label: "Empresa/Filial",
+              type: "select" as const,
+              searchable: true,
+              placeholder: "Selecione a empresa/filial",
+              options: companyOptions,
+              required: true,
+              fullWidth: true
+            }]
+          : []),
         { name: "name", source: "user.name", label: "Nome", placeholder: "Nome do promotor", required: true, fullWidth: true },
         { name: "email", source: "user.email", label: "E-mail", type: "email", placeholder: "email@exemplo.com", required: true, fullWidth: true },
         {
@@ -73,6 +95,7 @@ export function PromotersPage() {
       ]}
       columns={[
         { label: "Código", value: (item) => numericCode(item, "PRO") },
+        { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
         { label: "Nome", value: userName },
         { label: "E-mail", value: userEmail },
         { label: "Situação", value: userStatus },
@@ -89,12 +112,39 @@ export function PromotersPage() {
 }
 
 export function SupervisorsPage() {
+  const { user } = useAuth();
+  const [companyOptions, setCompanyOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const isPlatformAdmin = user?.role === "ADMIN" && !user.companyId;
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await apiJson<{ data: CompanyOption[] }>("/companies");
+        setCompanyOptions(toCompanyOptions(response.data));
+      } catch {
+        setCompanyOptions([]);
+      }
+    })();
+  }, []);
+
   return (
     <CrudPage
       title="Supervisores"
       endpoint="/supervisors"
-      initialValues={{ name: "", email: "", password: "", region: "" }}
+      initialValues={{ name: "", email: "", password: "", companyId: user?.companyId ?? "", region: "" }}
       fields={[
+        ...(isPlatformAdmin
+          ? [{
+              name: "companyId",
+              label: "Empresa/Filial",
+              type: "select" as const,
+              searchable: true,
+              placeholder: "Selecione a empresa/filial",
+              options: companyOptions,
+              required: true,
+              fullWidth: true
+            }]
+          : []),
         { name: "name", source: "user.name", label: "Nome", required: true },
         { name: "email", source: "user.email", label: "E-mail", type: "email", required: true },
         { name: "password", label: "Senha", type: "password", minLength: 8 },
@@ -102,6 +152,7 @@ export function SupervisorsPage() {
       ]}
       columns={[
         { label: "Código", value: (item) => numericCode(item, "SUP") },
+        { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
         { label: "Nome", value: userName },
         { label: "E-mail", value: userEmail },
         { label: "Situação", value: userStatus },

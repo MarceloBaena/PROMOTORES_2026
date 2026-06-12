@@ -9,6 +9,12 @@ declare global {
         name: string;
         role: RoleCode;
         status: UserStatus;
+        companyId?: string | null;
+        company?: {
+          id: string;
+          code: number;
+          name: string;
+        } | null;
       };
     }
   }

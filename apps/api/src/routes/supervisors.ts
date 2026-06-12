@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
 import { AppError } from "../lib/errors";
+import { requireCompanyId, scopedCompanyWhere, assertSameCompany } from "../lib/tenant";
 import { hashPassword } from "../services/auth-service";
 
 export const supervisorsRouter = Router();
@@ -11,6 +12,7 @@ const createSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8).optional(),
+  companyId: z.string().uuid().optional(),
   region: z.string().optional()
 });
 
@@ -23,13 +25,13 @@ supervisorsRouter.get(
   asyncHandler(async (req, res) => {
     const promoterId = req.query.promoterId ? String(req.query.promoterId) : undefined;
     const where = promoterId
-      ? { promoters: { some: { id: promoterId } } }
-      : undefined;
+      ? { ...scopedCompanyWhere(req), promoters: { some: { id: promoterId } } }
+      : scopedCompanyWhere(req);
 
     const supervisors = await prisma.supervisor.findMany({
       where,
       orderBy: { code: "asc" },
-      include: { user: { include: { role: true } } }
+      include: { user: { include: { role: true } }, company: true }
     });
 
     res.json({ data: supervisors });
@@ -40,6 +42,7 @@ supervisorsRouter.post(
   "/",
   asyncHandler(async (req, res) => {
     const input = createSchema.parse(req.body);
+    const companyId = requireCompanyId(req, input.companyId);
     const role = await prisma.role.findUnique({ where: { code: "SUPERVISOR" } });
 
     if (!role) {
@@ -53,17 +56,19 @@ supervisorsRouter.post(
           email: input.email.toLowerCase(),
           passwordHash: await hashPassword(input.password ?? "Supervisor@123"),
           status: "ACTIVE",
+          companyId,
           roleId: role.id
         }
       });
 
       return tx.supervisor.create({
         data: {
+          companyId,
           userId: user.id,
           status: "ACTIVE",
           region: input.region
         },
-        include: { user: { include: { role: true } } }
+        include: { user: { include: { role: true } }, company: true }
       });
     });
 
@@ -81,12 +86,16 @@ supervisorsRouter.put(
       throw new AppError(404, "SUPERVISOR_NOT_FOUND", "Supervisor was not found.");
     }
 
+    assertSameCompany(req, supervisor.companyId);
+    const companyId = input.companyId ? requireCompanyId(req, input.companyId) : supervisor.companyId;
+
     const updated = await prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: supervisor.userId },
         data: {
           name: input.name,
           email: input.email?.toLowerCase(),
+          companyId,
           ...(input.password ? { passwordHash: await hashPassword(input.password) } : {})
         }
       });
@@ -94,10 +103,11 @@ supervisorsRouter.put(
       return tx.supervisor.update({
         where: { id: supervisor.id },
         data: {
+          companyId,
           status: input.status,
           region: input.region
         },
-        include: { user: { include: { role: true } } }
+        include: { user: { include: { role: true } }, company: true }
       });
     });
 
@@ -113,6 +123,8 @@ supervisorsRouter.delete(
     if (!supervisor) {
       throw new AppError(404, "SUPERVISOR_NOT_FOUND", "Supervisor was not found.");
     }
+
+    assertSameCompany(req, supervisor.companyId);
 
     await prisma.$transaction([
       prisma.supervisor.update({ where: { id: supervisor.id }, data: { status: "INACTIVE" } }),

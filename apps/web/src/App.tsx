@@ -4,6 +4,7 @@ import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { PromotersPage, SupervisorsPage } from "./pages/PeoplePages";
+import { CompaniesPage } from "./pages/CompaniesPage";
 import { ClientsPage } from "./pages/ClientsPage";
 import { ClientImportPage } from "./pages/ClientImportPage";
 import { RoutingPage } from "./pages/RoutingPage";
@@ -27,6 +28,7 @@ function ProtectedApp() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
+        <Route path="/empresas" element={<CompaniesPage />} />
         <Route path="/promotores" element={<PromotersPage />} />
         <Route path="/supervisores" element={<SupervisorsPage />} />
         <Route path="/clientes" element={<ClientsPage />} />

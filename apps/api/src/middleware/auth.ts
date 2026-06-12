@@ -34,11 +34,15 @@ export const authenticate = asyncHandler(async (req: Request, _res: Response, ne
 
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    include: { role: true }
+    include: { role: true, company: true }
   });
 
   if (!user || user.status !== "ACTIVE") {
     throw new AppError(401, "UNAUTHORIZED", "User is not active.");
+  }
+
+  if (user.role.code !== "ADMIN" && !user.companyId) {
+    throw new AppError(403, "COMPANY_REQUIRED", "Usuario precisa estar vinculado a uma empresa/filial.");
   }
 
   req.user = {
@@ -46,7 +50,15 @@ export const authenticate = asyncHandler(async (req: Request, _res: Response, ne
     email: user.email,
     name: user.name,
     role: user.role.code,
-    status: user.status
+    status: user.status,
+    companyId: user.companyId,
+    company: user.company
+      ? {
+          id: user.company.id,
+          code: user.company.code,
+          name: user.company.name
+        }
+      : null
   };
 
   next();

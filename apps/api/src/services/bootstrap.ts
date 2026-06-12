@@ -32,6 +32,7 @@ async function ensureUser(input: {
   password: string;
   roleCode: RoleCode;
   resetPasswords: boolean;
+  companyId?: string | null;
 }) {
   const role = await ensureRole(input.roleCode);
   const existing = await prisma.user.findUnique({
@@ -45,6 +46,7 @@ async function ensureUser(input: {
         name: input.name,
         passwordHash: await hashPassword(input.password),
         status: "ACTIVE",
+        companyId: input.companyId ?? null,
         roleId: role.id
       }
     });
@@ -56,6 +58,7 @@ async function ensureUser(input: {
       name: input.name,
       roleId: role.id,
       status: "ACTIVE",
+      companyId: input.companyId ?? existing.companyId,
       ...(input.resetPasswords
         ? {
             passwordHash: await hashPassword(input.password)
@@ -68,12 +71,24 @@ async function ensureUser(input: {
 export async function bootstrapAccess(options: BootstrapOptions) {
   await Promise.all((["ADMIN", "SUPERVISOR", "PROMOTOR"] as RoleCode[]).map((role) => ensureRole(role)));
 
+  const defaultCompany = await prisma.company.upsert({
+    where: { code: 1 },
+    create: {
+      name: "Empresa Padrao",
+      status: "ACTIVE"
+    },
+    update: {
+      status: "ACTIVE"
+    }
+  });
+
   const admin = await ensureUser({
     email: DEFAULT_USERS.admin.email,
     name: "Admin Sales Promoters",
     password: DEFAULT_USERS.admin.password,
     roleCode: "ADMIN",
-    resetPasswords: options.resetPasswords
+    resetPasswords: options.resetPasswords,
+    companyId: null
   });
 
   const supervisor = await ensureUser({
@@ -81,16 +96,19 @@ export async function bootstrapAccess(options: BootstrapOptions) {
     name: "Supervisor Sales Promoters",
     password: DEFAULT_USERS.supervisor.password,
     roleCode: "SUPERVISOR",
-    resetPasswords: options.resetPasswords
+    resetPasswords: options.resetPasswords,
+    companyId: defaultCompany.id
   });
 
   await prisma.supervisor.upsert({
     where: { userId: supervisor.id },
     create: {
+      companyId: defaultCompany.id,
       userId: supervisor.id,
       status: "ACTIVE"
     },
     update: {
+      companyId: defaultCompany.id,
       status: "ACTIVE"
     }
   });

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
 import { AppError } from "../lib/errors";
+import { scopedCompanyWhere, assertSameCompany } from "../lib/tenant";
 
 export const promoterLocationsRouter = Router();
 
@@ -60,6 +61,7 @@ promoterLocationsRouter.get(
 
     const promoters = await prisma.promoter.findMany({
       where: {
+        ...scopedCompanyWhere(req),
         status: "ACTIVE",
         user: { status: "ACTIVE" }
       },
@@ -157,6 +159,8 @@ promoterLocationsRouter.post(
       throw new AppError(404, "PROMOTER_NOT_FOUND", "Promoter profile was not found.");
     }
 
+    assertSameCompany(req, promoter.companyId);
+
     const activeVisit = promoter.visits[0];
     const activeRoute = promoter.routes[0];
 
@@ -171,6 +175,7 @@ promoterLocationsRouter.post(
     const location = await prisma.promoterLocation.create({
       data: {
         promoterId: promoter.id,
+        companyId: promoter.companyId,
         visitId: activeVisit?.id ?? null,
         latitude: input.latitude,
         longitude: input.longitude,

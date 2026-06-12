@@ -4,6 +4,9 @@ export type RoleCode = (typeof ROLE_CODES)[number];
 export const USER_STATUSES = ["ACTIVE", "INACTIVE", "BLOCKED"] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
+export const COMPANY_STATUSES = ["ACTIVE", "INACTIVE"] as const;
+export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
+
 export const PROFILE_STATUSES = ["ACTIVE", "INACTIVE", "SUSPENDED"] as const;
 export type ProfileStatus = (typeof PROFILE_STATUSES)[number];
 
@@ -64,6 +67,12 @@ export interface SessionUser {
   name: string;
   role: RoleCode;
   status: UserStatus;
+  companyId?: string | null;
+  company?: {
+    id: string;
+    code: number;
+    name: string;
+  } | null;
 }
 
 export interface AuthSession {

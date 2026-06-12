@@ -2,7 +2,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { Plus, Send, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
+import { useAuth } from "../context/AuthContext";
 import { apiJson } from "../lib/api";
+import { companyLabel, type CompanyOption } from "../lib/company-options";
 
 interface RoutePlan {
   id: string;
@@ -16,6 +18,7 @@ interface RoutePlan {
 interface PersonOption {
   id: string;
   code?: number;
+  companyId?: string | null;
   user?: {
     name?: string;
     email?: string;
@@ -24,6 +27,7 @@ interface PersonOption {
 
 interface ClientOption {
   id: string;
+  companyId?: string | null;
   code?: string | null;
   name?: string;
   city?: string | null;
@@ -56,24 +60,29 @@ function clientLabel(client: ClientOption) {
 }
 
 export function RoutingPage() {
+  const { user } = useAuth();
   const [routes, setRoutes] = useState<RoutePlan[]>([]);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [supervisors, setSupervisors] = useState<PersonOption[]>([]);
   const [promoters, setPromoters] = useState<PersonOption[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
-  const [form, setForm] = useState({ name: "", scheduledDate: "", supervisorId: "", promoterId: "" });
+  const [form, setForm] = useState({ name: "", scheduledDate: "", companyId: user?.companyId ?? "", supervisorId: "", promoterId: "" });
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [filters, setFilters] = useState({ supervisor: "", promoter: "", client: "" });
   const [message, setMessage] = useState<string | null>(null);
+  const isPlatformAdmin = user?.role === "ADMIN" && !user.companyId;
 
   async function load() {
-    const [routesResponse, supervisorsResponse, promotersResponse, clientsResponse] = await Promise.all([
+    const [routesResponse, companiesResponse, supervisorsResponse, promotersResponse, clientsResponse] = await Promise.all([
       apiJson<{ data: RoutePlan[] }>("/routes"),
+      apiJson<{ data: CompanyOption[] }>("/companies"),
       apiJson<{ data: PersonOption[] }>("/supervisors"),
       apiJson<{ data: PersonOption[] }>("/promoters"),
       apiJson<{ data: ClientOption[] }>("/clients")
     ]);
 
     setRoutes(routesResponse.data);
+    setCompanies(companiesResponse.data);
     setSupervisors(supervisorsResponse.data);
     setPromoters(promotersResponse.data);
     setClients(clientsResponse.data);
@@ -94,6 +103,11 @@ export function RoutingPage() {
 
     if (!form.scheduledDate) {
       setMessage("Informe a data da rota.");
+      return;
+    }
+
+    if (isPlatformAdmin && !form.companyId) {
+      setMessage("Selecione a empresa/filial da rota.");
       return;
     }
 
@@ -121,7 +135,7 @@ export function RoutingPage() {
           clientIds: selectedClientIds
         })
       });
-      setForm({ name: "", scheduledDate: "", supervisorId: "", promoterId: "" });
+      setForm({ name: "", scheduledDate: "", companyId: user?.companyId ?? "", supervisorId: "", promoterId: "" });
       setSelectedClientIds([]);
       setFilters({ supervisor: "", promoter: "", client: "" });
       await load();
@@ -139,12 +153,15 @@ export function RoutingPage() {
   }
 
   const filteredSupervisors = supervisors.filter((supervisor) =>
+    (!form.companyId || supervisor.companyId === form.companyId) &&
     optionLabel(supervisor, "SUP").toLowerCase().includes(filters.supervisor.toLowerCase())
   );
   const filteredPromoters = promoters.filter((promoter) =>
+    (!form.companyId || promoter.companyId === form.companyId) &&
     optionLabel(promoter, "PRO").toLowerCase().includes(filters.promoter.toLowerCase())
   );
   const filteredClients = clients.filter((client) =>
+    (!form.companyId || client.companyId === form.companyId) &&
     clientLabel(client).toLowerCase().includes(filters.client.toLowerCase())
   );
   const selectedClients = selectedClientIds
@@ -170,6 +187,23 @@ export function RoutingPage() {
             </div>
           </div>
           <div className="space-y-3 p-4">
+            <label className="block">
+              <span className="field-label">Empresa/Filial</span>
+              <select
+                className="input-control"
+                disabled={!isPlatformAdmin}
+                value={form.companyId}
+                onChange={(event) => {
+                  setForm((current) => ({ ...current, companyId: event.target.value, supervisorId: "", promoterId: "" }));
+                  setSelectedClientIds([]);
+                }}
+              >
+                <option value="">Selecione a empresa/filial</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>{companyLabel(company)}</option>
+                ))}
+              </select>
+            </label>
             <label className="block">
               <span className="field-label">Nome</span>
               <input

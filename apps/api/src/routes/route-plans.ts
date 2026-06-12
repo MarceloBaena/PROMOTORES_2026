@@ -2,11 +2,14 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
+import { AppError } from "../lib/errors";
+import { requireCompanyId, scopedCompanyWhere, assertSameCompany } from "../lib/tenant";
 
 export const routePlansRouter = Router();
 
 const routeSchema = z.object({
   name: z.string().min(2),
+  companyId: z.string().uuid().optional(),
   status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED", "COMPLETED"]).optional(),
   scheduledDate: z.string().datetime().optional(),
   supervisorId: z.string().uuid().optional(),
@@ -16,10 +19,12 @@ const routeSchema = z.object({
 
 routePlansRouter.get(
   "/",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const routes = await prisma.route.findMany({
+      where: scopedCompanyWhere(req),
       orderBy: { createdAt: "desc" },
       include: {
+        company: true,
         promoter: { include: { user: true } },
         supervisor: { include: { user: true } },
         items: { include: { client: true }, orderBy: { sequence: "asc" } }
@@ -34,8 +39,29 @@ routePlansRouter.post(
   "/",
   asyncHandler(async (req, res) => {
     const input = routeSchema.parse(req.body);
+    const companyId = requireCompanyId(req, input.companyId);
+
+    const [supervisor, promoter, clients] = await Promise.all([
+      input.supervisorId ? prisma.supervisor.findUnique({ where: { id: input.supervisorId }, select: { companyId: true } }) : null,
+      input.promoterId ? prisma.promoter.findUnique({ where: { id: input.promoterId }, select: { companyId: true } }) : null,
+      prisma.client.findMany({ where: { id: { in: input.clientIds } }, select: { id: true, companyId: true } })
+    ]);
+
+    if (supervisor && supervisor.companyId !== companyId) {
+      throw new AppError(400, "SUPERVISOR_COMPANY_MISMATCH", "Supervisor pertence a outra empresa/filial.");
+    }
+
+    if (promoter && promoter.companyId !== companyId) {
+      throw new AppError(400, "PROMOTER_COMPANY_MISMATCH", "Promotor pertence a outra empresa/filial.");
+    }
+
+    if (clients.length !== input.clientIds.length || clients.some((client) => client.companyId !== companyId)) {
+      throw new AppError(400, "CLIENT_COMPANY_MISMATCH", "Todos os clientes da rota precisam pertencer a mesma empresa/filial.");
+    }
+
     const route = await prisma.route.create({
       data: {
+        companyId,
         name: input.name,
         status: input.status ?? "DRAFT",
         scheduledDate: input.scheduledDate ? new Date(input.scheduledDate) : undefined,
@@ -50,6 +76,7 @@ routePlansRouter.post(
         }
       },
       include: {
+        company: true,
         promoter: { include: { user: true } },
         supervisor: { include: { user: true } },
         items: { include: { client: true }, orderBy: { sequence: "asc" } }
@@ -64,6 +91,16 @@ routePlansRouter.put(
   "/:id/status",
   asyncHandler(async (req, res) => {
     const input = z.object({ status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED", "COMPLETED"]) }).parse(req.body);
+    const existing = await prisma.route.findUnique({
+      where: { id: req.params.id },
+      select: { companyId: true }
+    });
+
+    if (!existing) {
+      throw new AppError(404, "ROUTE_NOT_FOUND", "Rota nao encontrada.");
+    }
+
+    assertSameCompany(req, existing.companyId);
     const route = await prisma.route.update({
       where: { id: req.params.id },
       data: { status: input.status },

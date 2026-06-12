@@ -18,6 +18,16 @@ Guia detalhado: `docs/fonte-unica.md`.
 - `packages/shared` - constantes e tipos compartilhados.
 - `docs` - guias operacionais.
 
+## Multiempresa / filiais
+
+O sistema possui cadastro de `Empresas/Filiais` para uso comercial com separacao de dados entre clientes.
+
+- Administrador geral: usuario `ADMIN` sem empresa vinculada. Pode cadastrar empresas/filiais e escolher a empresa em cadastros operacionais.
+- Usuario de empresa: usuario com `companyId`. Enxerga somente clientes, promotores, supervisores, rotas, visitas, mapa, auditorias, importacoes e relatorios da propria empresa.
+- Cada empresa/filial tem codigo numerico sequencial, nome, CNPJ opcional, contato, telefone, e-mail, endereco, numero, bairro, cidade, UF e situacao.
+- Clientes possuem codigo sequencial por empresa/filial, permitindo `0001` em empresas diferentes sem misturar dados.
+- Antes de publicar em producao, rode `npm run api:migrate` para criar a tabela `companies` e os campos `company_id`.
+
 ## Scripts principais
 
 ```bash

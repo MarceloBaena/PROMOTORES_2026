@@ -13,6 +13,12 @@ interface UserWithRole {
   email: string;
   name: string;
   status: "ACTIVE" | "INACTIVE" | "BLOCKED";
+  companyId?: string | null;
+  company?: {
+    id: string;
+    code: number;
+    name: string;
+  } | null;
   role: {
     code: RoleCode;
   };
@@ -30,7 +36,15 @@ export function toSessionUser(user: UserWithRole): SessionUser {
     email: user.email,
     name: user.name,
     role: user.role.code,
-    status: user.status
+    status: user.status,
+    companyId: user.companyId ?? null,
+    company: user.company
+      ? {
+          id: user.company.id,
+          code: user.company.code,
+          name: user.company.name
+        }
+      : null
   };
 }
 
@@ -72,6 +86,7 @@ export async function issueTokenPair(user: UserWithRole) {
       sub: user.id,
       email: user.email,
       role: user.role.code,
+      companyId: user.companyId,
       type: "access"
     },
     config.JWT_ACCESS_SECRET,
@@ -127,7 +142,7 @@ export async function consumeRefreshToken(refreshToken: string) {
     where: { tokenHash },
     include: {
       user: {
-        include: { role: true }
+        include: { role: true, company: true }
       }
     }
   });

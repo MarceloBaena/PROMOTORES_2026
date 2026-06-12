@@ -1,8 +1,10 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { FileUp } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
+import { useAuth } from "../context/AuthContext";
 import { apiJson } from "../lib/api";
+import { companyLabel, type CompanyOption } from "../lib/company-options";
 
 interface ImportLog {
   id: string;
@@ -14,10 +16,20 @@ interface ImportLog {
 }
 
 export function ClientImportPage() {
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [companyId, setCompanyId] = useState(user?.companyId ?? "");
   const [log, setLog] = useState<ImportLog | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const isPlatformAdmin = user?.role === "ADMIN" && !user.companyId;
+
+  useEffect(() => {
+    void apiJson<{ data: CompanyOption[] }>("/companies")
+      .then((response) => setCompanies(response.data))
+      .catch(() => setCompanies([]));
+  }, []);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -27,8 +39,16 @@ export function ClientImportPage() {
       return;
     }
 
+    if (isPlatformAdmin && !companyId) {
+      setMessage("Selecione a empresa/filial da importação.");
+      return;
+    }
+
     const formData = new FormData();
     formData.append("file", file);
+    if (companyId) {
+      formData.append("companyId", companyId);
+    }
     setLoading(true);
     setMessage(null);
 
@@ -56,6 +76,20 @@ export function ClientImportPage() {
             </div>
           </div>
           <div className="p-4">
+            <label className="mb-4 block">
+              <span className="field-label">Empresa/Filial</span>
+              <select
+                className="input-control"
+                disabled={!isPlatformAdmin}
+                value={companyId}
+                onChange={(event) => setCompanyId(event.target.value)}
+              >
+                <option value="">Selecione a empresa/filial</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>{companyLabel(company)}</option>
+                ))}
+              </select>
+            </label>
             <label className="block">
               <span className="field-label">Arquivo CSV</span>
               <input

@@ -19,6 +19,11 @@ enum UserStatus {
   BLOCKED
 }
 
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum ProfileStatus {
   ACTIVE
   INACTIVE
@@ -119,12 +124,44 @@ model Role {
   @@map("roles")
 }
 
+model Company {
+  id            String        @id @default(uuid())
+  code          Int           @unique @default(autoincrement())
+  name          String
+  document      String?
+  contactName   String?       @map("contact_name")
+  contactPhone  String?       @map("contact_phone")
+  contactEmail  String?       @map("contact_email")
+  address       String?
+  addressNumber String?       @map("address_number")
+  district      String?
+  city          String?
+  state         String?
+  status        CompanyStatus @default(ACTIVE)
+  users         User[]
+  supervisors   Supervisor[]
+  promoters     Promoter[]
+  clients       Client[]
+  routes        Route[]
+  visits        Visit[]
+  locations     PromoterLocation[]
+  syncLogs      SyncLog[]
+  importLogs    ClientImportLog[]
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@map("companies")
+}
+
 model User {
   id               String            @id @default(uuid())
   email            String            @unique
   name             String
   passwordHash     String            @map("password_hash")
   status           UserStatus        @default(ACTIVE)
+  companyId        String?           @map("company_id")
+  company          Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
   roleId           String            @map("role_id")
   role             Role              @relation(fields: [roleId], references: [id])
   supervisor       Supervisor?
@@ -135,12 +172,15 @@ model User {
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
 
+  @@index([companyId])
   @@map("users")
 }
 
 model Supervisor {
   id        String        @id @default(uuid())
   code      Int           @unique @default(autoincrement())
+  companyId String?       @map("company_id")
+  company   Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   userId    String        @unique @map("user_id")
   user      User          @relation(fields: [userId], references: [id])
   status    ProfileStatus @default(ACTIVE)
@@ -150,12 +190,15 @@ model Supervisor {
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
+  @@index([companyId])
   @@map("supervisors")
 }
 
 model Promoter {
   id           String        @id @default(uuid())
   code         Int           @unique @default(autoincrement())
+  companyId    String?       @map("company_id")
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   userId       String        @unique @map("user_id")
   user         User          @relation(fields: [userId], references: [id])
   supervisorId String?       @map("supervisor_id")
@@ -168,12 +211,15 @@ model Promoter {
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
+  @@index([companyId])
   @@map("promoters")
 }
 
 model Client {
   id             String            @id @default(uuid())
-  code           String?           @unique
+  code           String?
+  companyId      String?           @map("company_id")
+  company        Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
   name           String
   document       String?
   status         ClientStatus      @default(ACTIVE)
@@ -192,11 +238,15 @@ model Client {
   updatedAt      DateTime          @updatedAt @map("updated_at")
 
   @@index([name])
+  @@index([companyId])
+  @@unique([companyId, code])
   @@map("clients")
 }
 
 model Route {
   id           String      @id @default(uuid())
+  companyId    String?     @map("company_id")
+  company      Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
   name         String
   status       RouteStatus @default(DRAFT)
   scheduledDate DateTime?  @map("scheduled_date")
@@ -209,6 +259,7 @@ model Route {
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
+  @@index([companyId])
   @@map("routes")
 }
 
@@ -233,6 +284,8 @@ model RouteItem {
 model Visit {
   id           String            @id @default(uuid())
   clientGeneratedId String?      @unique @map("client_generated_id")
+  companyId    String?           @map("company_id")
+  company      Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
   routeId      String?           @map("route_id")
   route        Route?            @relation(fields: [routeId], references: [id])
   routeItemId  String?           @map("route_item_id")
@@ -254,11 +307,14 @@ model Visit {
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
 
+  @@index([companyId])
   @@map("visits")
 }
 
 model PromoterLocation {
   id             String   @id @default(uuid())
+  companyId      String?  @map("company_id")
+  company        Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   promoterId     String   @map("promoter_id")
   promoter       Promoter @relation(fields: [promoterId], references: [id], onDelete: Cascade)
   visitId        String?  @map("visit_id")
@@ -272,6 +328,7 @@ model PromoterLocation {
 
   @@index([promoterId, capturedAt])
   @@index([visitId])
+  @@index([companyId])
   @@map("promoter_locations")
 }
 
@@ -302,6 +359,8 @@ model VisitOccurrence {
 
 model SyncLog {
   id         String     @id @default(uuid())
+  companyId  String?    @map("company_id")
+  company    Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
   type       SyncType
   status     SyncStatus @default(pending)
   userId     String?    @map("user_id")
@@ -313,6 +372,7 @@ model SyncLog {
   createdAt  DateTime   @default(now()) @map("created_at")
   updatedAt  DateTime   @updatedAt @map("updated_at")
 
+  @@index([companyId])
   @@map("sync_logs")
 }
 
@@ -361,6 +421,8 @@ model RefreshToken {
 
 model ClientImportLog {
   id           String       @id @default(uuid())
+  companyId    String?      @map("company_id")
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   fileName     String       @map("file_name")
   status       ImportStatus @default(PREVIEW)
   totalRows    Int          @default(0) @map("total_rows")
@@ -372,5 +434,6 @@ model ClientImportLog {
   createdBy    User?        @relation(fields: [createdById], references: [id])
   createdAt    DateTime     @default(now()) @map("created_at")
 
+  @@index([companyId])
   @@map("client_import_logs")
 }

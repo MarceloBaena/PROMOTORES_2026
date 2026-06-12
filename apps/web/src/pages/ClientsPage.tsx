@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { StatusPill } from "../components/StatusPill";
+import { useAuth } from "../context/AuthContext";
 import { apiJson } from "../lib/api";
+import { companyLabel, toCompanyOptions, type CompanyOption } from "../lib/company-options";
 import { CrudPage } from "./CrudPage";
 
 function promoterLabel(promoter: unknown) {
@@ -16,22 +18,30 @@ function promoterLabel(promoter: unknown) {
 }
 
 export function ClientsPage() {
+  const { user } = useAuth();
   const [promoterOptions, setPromoterOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [companyOptions, setCompanyOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const isPlatformAdmin = user?.role === "ADMIN" && !user.companyId;
 
   useEffect(() => {
     void (async () => {
       try {
-        const response = await apiJson<{ data: Array<Record<string, unknown>> }>("/promoters");
+        const [promotersResponse, companiesResponse] = await Promise.all([
+          apiJson<{ data: Array<Record<string, unknown>> }>("/promoters"),
+          apiJson<{ data: CompanyOption[] }>("/companies")
+        ]);
         setPromoterOptions(
-          response.data
+          promotersResponse.data
             .map((promoter) => ({
               value: String(promoter.id ?? ""),
               label: promoterLabel(promoter)
             }))
             .filter((option) => option.value !== "")
         );
+        setCompanyOptions(toCompanyOptions(companiesResponse.data));
       } catch {
         setPromoterOptions([]);
+        setCompanyOptions([]);
       }
     })();
   }, []);
@@ -42,6 +52,7 @@ export function ClientsPage() {
       endpoint="/clients"
       initialValues={{
         code: "",
+        companyId: user?.companyId ?? "",
         name: "",
         document: "",
         defaultPromoterId: "",
@@ -63,6 +74,18 @@ export function ClientsPage() {
           readOnly: true,
           noSubmit: true
         },
+        ...(isPlatformAdmin
+          ? [{
+              name: "companyId",
+              label: "Empresa/Filial",
+              type: "select" as const,
+              searchable: true,
+              placeholder: "Selecione a empresa/filial",
+              options: companyOptions,
+              required: true,
+              fullWidth: true
+            }]
+          : []),
         { name: "name", label: "Nome", fullWidth: true },
         { name: "document", label: "Documento" },
         {
@@ -95,6 +118,7 @@ export function ClientsPage() {
       ]}
       columns={[
         { label: "Código", value: (item) => String(item.code ?? "-") },
+        { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
         { label: "Nome", value: (item) => String(item.name ?? "-") },
         { label: "Promotor", value: (item) => promoterLabel(item.defaultPromoter) },
         {

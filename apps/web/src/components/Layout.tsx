@@ -2,6 +2,7 @@ import {
   Activity,
   BarChart3,
   Building2,
+  Building,
   ClipboardList,
   FileSpreadsheet,
   Flag,
@@ -33,6 +34,7 @@ const navSections = [
   {
     label: "Cadastros",
     items: [
+      { to: "/empresas", label: "Empresas/Filiais", icon: Building },
       { to: "/clientes", label: "Clientes", icon: Store },
       { to: "/promotores", label: "Promotores", icon: Users },
       { to: "/supervisores", label: "Supervisores", icon: ShieldCheck },
