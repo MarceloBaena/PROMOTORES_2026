@@ -8,7 +8,7 @@ declare const process: {
 
 const PRODUCTION_API_BASE_URL = "https://promotores-2026-api.vercel.app";
 const DEFAULT_REQUEST_TIMEOUT_MS = 25000;
-const SNAPSHOT_REQUEST_TIMEOUT_MS = 30000;
+const SNAPSHOT_REQUEST_TIMEOUT_MS = 60000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 120000;
 
 function resolveApiBaseUrl() {

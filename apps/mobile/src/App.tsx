@@ -16,6 +16,7 @@ import {
 import {
   addPhoto,
   addSyncLog,
+  clearLocalOperationalData,
   enqueue,
   getClient,
   getQueueSummary,
@@ -392,13 +393,16 @@ export default function App() {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "";
 
-        if (!isExpiredSessionError(errorMessage)) {
+        if (isNetworkConnectionError(errorMessage)) {
+          setMessage("Primeira tentativa falhou. Tentando novamente com a API...");
+          snapshot = await downloadMobileSnapshot(currentSession.accessToken);
+        } else if (isExpiredSessionError(errorMessage)) {
+          setMessage("Sessao renovada. Continuando atualizacao do roteiro...");
+          currentSession = await renewSession();
+          snapshot = await downloadMobileSnapshot(currentSession.accessToken);
+        } else {
           throw error;
         }
-
-        setMessage("Sessao renovada. Continuando atualizacao do roteiro...");
-        currentSession = await renewSession();
-        snapshot = await downloadMobileSnapshot(currentSession.accessToken);
       }
 
       saveSnapshot(snapshot);
@@ -409,6 +413,29 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function confirmClearLocalData() {
+    Alert.alert(
+      "Limpar dados do aparelho?",
+      "Use apenas quando a retaguarda foi zerada ou quando houver sujeira local. Isso apaga visitas, fotos e fila ainda nao sincronizadas deste aparelho, mas mantem o login.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Limpar aparelho",
+          style: "destructive",
+          onPress: () => {
+            clearLocalOperationalData();
+            setActiveVisit(null);
+            setActiveItem(null);
+            setPhotos([]);
+            setNotes("");
+            reloadLocalData();
+            setMessage("Dados locais limpos. Toque em Atualizar roteiro para baixar a base limpa.");
+          }
+        }
+      ]
+    );
   }
 
   async function openVisit(item: RouteItem) {
@@ -602,6 +629,7 @@ export default function App() {
           <Text style={styles.metric}>{syncSummary.pending ?? 0} pendente(s)</Text>
           <Text style={styles.danger}>{syncSummary.failed ?? 0} falha(s)</Text>
           <PrimaryButton label={busy ? "Sincronizando..." : "Sincronizar agora"} disabled={busy} onPress={runSync} />
+          <SecondaryButton label="Limpar dados locais deste aparelho" disabled={busy} onPress={confirmClearLocalData} />
         </View>
         <SyncDiagnostics
           diagnostics={syncDiagnostics}

@@ -495,6 +495,19 @@ export function getQueueSummary() {
   ) ?? { pending: 0, failed: 0 };
 }
 
+export function clearLocalOperationalData() {
+  initDatabase();
+  db.withTransactionSync(() => {
+    db.runSync("DELETE FROM photos");
+    db.runSync("DELETE FROM visits");
+    db.runSync("DELETE FROM sync_queue");
+    db.runSync("DELETE FROM sync_logs");
+    db.runSync("DELETE FROM route_items");
+    db.runSync("DELETE FROM routes");
+    db.runSync("DELETE FROM clients");
+  });
+}
+
 export function listQueueDiagnostics() {
   initDatabase();
   return db.getAllSync<SyncQueueDiagnostic>(
