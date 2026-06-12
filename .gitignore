@@ -15,3 +15,7 @@ apps/web/.vite/
 *.tsbuildinfo
 
 .vercel
+apps/mobile/android/
+apps/mobile/ios/
+*.apk
+*.aab
