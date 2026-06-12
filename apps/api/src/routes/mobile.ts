@@ -39,13 +39,13 @@ mobileRouter.get(
       throw new AppError(403, "PROMOTER_NOT_ACTIVE", "Promoter profile is not active.");
     }
 
-    const routes = await prisma.route.findMany({
+    const latestRoute = await prisma.route.findFirst({
       where: {
         companyId: promoter.companyId,
         promoterId: promoter.id,
         status: "PUBLISHED"
       },
-      orderBy: [{ scheduledDate: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ scheduledDate: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
         name: true,
@@ -66,6 +66,7 @@ mobileRouter.get(
         }
       }
     });
+    const routes = latestRoute ? [latestRoute] : [];
 
     const clientsById = new Map<string, (typeof routes)[number]["items"][number]["client"]>();
 

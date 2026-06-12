@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
@@ -16,6 +17,25 @@ const routeSchema = z.object({
   promoterId: z.string().uuid().optional(),
   clientIds: z.array(z.string().uuid()).default([])
 });
+
+async function deactivatePreviousPublishedRoutes(
+  tx: Prisma.TransactionClient,
+  input: { companyId: string; promoterId?: string | null; exceptRouteId?: string }
+) {
+  if (!input.promoterId) {
+    return;
+  }
+
+  await tx.route.updateMany({
+    where: {
+      companyId: input.companyId,
+      promoterId: input.promoterId,
+      status: "PUBLISHED",
+      ...(input.exceptRouteId ? { id: { not: input.exceptRouteId } } : {})
+    },
+    data: { status: "CANCELLED" }
+  });
+}
 
 routePlansRouter.get(
   "/",
@@ -59,28 +79,36 @@ routePlansRouter.post(
       throw new AppError(400, "CLIENT_COMPANY_MISMATCH", "Todos os clientes da rota precisam pertencer a mesma empresa/filial.");
     }
 
-    const route = await prisma.route.create({
-      data: {
-        companyId,
-        name: input.name,
-        status: input.status ?? "DRAFT",
-        scheduledDate: input.scheduledDate ? new Date(input.scheduledDate) : undefined,
-        supervisorId: input.supervisorId,
-        promoterId: input.promoterId,
-        items: {
-          create: input.clientIds.map((clientId, index) => ({
-            clientId,
-            sequence: index + 1,
-            status: "PLANNED"
-          }))
-        }
-      },
-      include: {
-        company: true,
-        promoter: { include: { user: true } },
-        supervisor: { include: { user: true } },
-        items: { include: { client: true }, orderBy: { sequence: "asc" } }
+    const route = await prisma.$transaction(async (tx) => {
+      const status = input.status ?? "DRAFT";
+
+      if (status === "PUBLISHED") {
+        await deactivatePreviousPublishedRoutes(tx, { companyId, promoterId: input.promoterId });
       }
+
+      return tx.route.create({
+        data: {
+          companyId,
+          name: input.name,
+          status,
+          scheduledDate: input.scheduledDate ? new Date(input.scheduledDate) : undefined,
+          supervisorId: input.supervisorId,
+          promoterId: input.promoterId,
+          items: {
+            create: input.clientIds.map((clientId, index) => ({
+              clientId,
+              sequence: index + 1,
+              status: "PLANNED"
+            }))
+          }
+        },
+        include: {
+          company: true,
+          promoter: { include: { user: true } },
+          supervisor: { include: { user: true } },
+          items: { include: { client: true }, orderBy: { sequence: "asc" } }
+        }
+      });
     });
 
     res.status(201).json({ data: route });
@@ -93,7 +121,7 @@ routePlansRouter.put(
     const input = z.object({ status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED", "COMPLETED"]) }).parse(req.body);
     const existing = await prisma.route.findUnique({
       where: { id: req.params.id },
-      select: { companyId: true }
+      select: { companyId: true, promoterId: true }
     });
 
     if (!existing) {
@@ -101,12 +129,22 @@ routePlansRouter.put(
     }
 
     assertSameCompany(req, existing.companyId);
-    const route = await prisma.route.update({
-      where: { id: req.params.id },
-      data: { status: input.status },
-      include: {
-        items: { include: { client: true }, orderBy: { sequence: "asc" } }
+    const route = await prisma.$transaction(async (tx) => {
+      if (input.status === "PUBLISHED" && existing.companyId) {
+        await deactivatePreviousPublishedRoutes(tx, {
+          companyId: existing.companyId,
+          promoterId: existing.promoterId,
+          exceptRouteId: req.params.id
+        });
       }
+
+      return tx.route.update({
+        where: { id: req.params.id },
+        data: { status: input.status },
+        include: {
+          items: { include: { client: true }, orderBy: { sequence: "asc" } }
+        }
+      });
     });
 
     res.json({ data: route });

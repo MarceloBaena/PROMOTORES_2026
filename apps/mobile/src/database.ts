@@ -282,9 +282,17 @@ export function listRouteItems() {
       clients.address AS clientAddress,
       routes.name AS routeName
     FROM route_items
-    INNER JOIN clients ON clients.id = route_items.client_id
     INNER JOIN routes ON routes.id = route_items.route_id
-    ORDER BY routes.scheduled_date IS NULL, routes.scheduled_date ASC, route_items.sequence ASC`
+    INNER JOIN clients ON clients.id = route_items.client_id
+    WHERE route_items.id = (
+      SELECT candidate.id
+      FROM route_items candidate
+      INNER JOIN routes candidate_route ON candidate_route.id = candidate.route_id
+      WHERE candidate.client_id = route_items.client_id
+      ORDER BY candidate.sequence ASC, candidate_route.scheduled_date DESC, candidate.id ASC
+      LIMIT 1
+    )
+    ORDER BY route_items.sequence ASC`
   );
 }
 
