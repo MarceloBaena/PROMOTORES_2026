@@ -28,32 +28,24 @@ mobileRouter.get(
         status: "PUBLISHED"
       },
       orderBy: [{ scheduledDate: "asc" }, { createdAt: "asc" }],
-      include: {
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        scheduledDate: true,
         items: {
           orderBy: { sequence: "asc" },
-          include: { client: true }
+          select: {
+            id: true,
+            routeId: true,
+            clientId: true,
+            sequence: true,
+            status: true,
+            plannedStart: true,
+            plannedEnd: true,
+            client: true
+          }
         }
-      }
-    });
-    const publishedRoutesForPromoter = await prisma.route.count({
-      where: {
-        companyId: promoter.companyId,
-        promoterId: promoter.id,
-        status: "PUBLISHED"
-      }
-    });
-    const draftRoutesForPromoter = await prisma.route.count({
-      where: {
-        companyId: promoter.companyId,
-        promoterId: promoter.id,
-        status: "DRAFT"
-      }
-    });
-    const assignedClients = await prisma.client.count({
-      where: {
-        companyId: promoter.companyId,
-        defaultPromoterId: promoter.id,
-        status: "ACTIVE"
       }
     });
 
@@ -82,12 +74,7 @@ mobileRouter.get(
             }
           : null,
         routes,
-        clients: Array.from(clientsById.values()),
-        diagnostics: {
-          publishedRoutesForPromoter,
-          draftRoutesForPromoter,
-          assignedClients
-        }
+        clients: Array.from(clientsById.values())
       }
     });
   })

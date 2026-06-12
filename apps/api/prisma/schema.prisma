@@ -212,6 +212,7 @@ model Promoter {
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
   @@index([companyId])
+  @@index([companyId, status])
   @@map("promoters")
 }
 
@@ -239,6 +240,7 @@ model Client {
 
   @@index([name])
   @@index([companyId])
+  @@index([companyId, defaultPromoterId, status])
   @@unique([companyId, code])
   @@map("clients")
 }
@@ -260,6 +262,7 @@ model Route {
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
   @@index([companyId])
+  @@index([companyId, promoterId, status, scheduledDate])
   @@map("routes")
 }
 
@@ -278,6 +281,7 @@ model RouteItem {
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
   @@unique([routeId, sequence])
+  @@index([routeId, clientId])
   @@map("route_items")
 }
 
