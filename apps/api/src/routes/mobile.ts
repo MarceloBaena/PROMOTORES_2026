@@ -14,7 +14,25 @@ mobileRouter.get(
 
     const promoter = await prisma.promoter.findUnique({
       where: { userId: req.user.id },
-      include: { user: true, company: true }
+      select: {
+        id: true,
+        code: true,
+        status: true,
+        companyId: true,
+        user: {
+          select: {
+            name: true,
+            email: true
+          }
+        },
+        company: {
+          select: {
+            id: true,
+            code: true,
+            name: true
+          }
+        }
+      }
     });
 
     if (!promoter || promoter.status !== "ACTIVE") {

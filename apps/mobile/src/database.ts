@@ -210,7 +210,6 @@ export function saveSnapshot(snapshot: MobileSnapshot) {
       saveRoute(route);
 
       for (const item of route.items) {
-        saveClient(item.client);
         saveRouteItem(item);
       }
     }

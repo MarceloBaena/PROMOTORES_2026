@@ -128,6 +128,10 @@ function isNetworkConnectionError(message: string) {
   return /nao foi possivel conectar|tempo esgotado|network request failed|failed to fetch|conexao|internet|timeout/i.test(message);
 }
 
+function isExpiredSessionError(message: string) {
+  return /invalid or expired access token|sessao expirada|token/i.test(message);
+}
+
 async function getGps() {
   const permission = await Location.requestForegroundPermissionsAsync();
 
@@ -379,11 +383,27 @@ export default function App() {
 
     try {
       setBusy(true);
-      const currentSession = await renewSession();
-      const snapshot = await downloadMobileSnapshot(currentSession.accessToken);
+      setMessage("Atualizando roteiro direto da retaguarda...");
+      let currentSession = session;
+      let snapshot: MobileSnapshot;
+
+      try {
+        snapshot = await downloadMobileSnapshot(currentSession.accessToken);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "";
+
+        if (!isExpiredSessionError(errorMessage)) {
+          throw error;
+        }
+
+        setMessage("Sessao renovada. Continuando atualizacao do roteiro...");
+        currentSession = await renewSession();
+        snapshot = await downloadMobileSnapshot(currentSession.accessToken);
+      }
+
       saveSnapshot(snapshot);
       reloadLocalData();
-      setMessage("Roteiro atualizado e salvo no SQLite.");
+      setMessage(`Roteiro atualizado: ${snapshot.routes.length} rota(s), ${snapshot.clients.length} cliente(s).`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Sem internet. Usando roteiro salvo localmente.");
     } finally {
