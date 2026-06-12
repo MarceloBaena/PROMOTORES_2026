@@ -440,7 +440,7 @@ export function updatePhotoSyncStatus(localId: string, status: SyncStatus) {
 export function enqueue(kind: "visit" | "photo", entityLocalId: string) {
   initDatabase();
   const existing = db.getFirstSync<{ id: number }>(
-    "SELECT id FROM sync_queue WHERE kind = ? AND entity_local_id = ? AND status IN ('pending', 'failed')",
+    "SELECT id FROM sync_queue WHERE kind = ? AND entity_local_id = ? AND status IN ('pending', 'syncing', 'failed')",
     kind,
     entityLocalId
   );
@@ -464,7 +464,7 @@ export function getPendingQueue() {
   return db.getAllSync<{ id: number; kind: "visit" | "photo"; entityLocalId: string; attempts: number }>(
     `SELECT id, kind, entity_local_id AS entityLocalId, attempts
      FROM sync_queue
-     WHERE status IN ('pending', 'failed')
+     WHERE status IN ('pending', 'syncing', 'failed')
      ORDER BY id ASC`
   );
 }

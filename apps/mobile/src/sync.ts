@@ -113,7 +113,20 @@ async function syncPhoto(accessToken: string, localId: string) {
   await uploadPhoto(accessToken, serverVisitId, photo);
 }
 
-export async function syncPending(accessToken: string) {
+interface SyncProgress {
+  item: {
+    id: number;
+    kind: "visit" | "photo";
+    entityLocalId: string;
+    attempts: number;
+  };
+  status: "syncing" | "synced" | "failed";
+  synced: number;
+  failed: number;
+  error?: string;
+}
+
+export async function syncPending(accessToken: string, onProgress?: (progress: SyncProgress) => void) {
   const queue = getPendingQueue();
   let synced = 0;
   let failed = 0;
@@ -125,6 +138,7 @@ export async function syncPending(accessToken: string) {
   for (const item of queue) {
     try {
       setQueueStatus(item.id, "syncing");
+      onProgress?.({ item, status: "syncing", synced, failed });
 
       if (item.kind === "visit") {
         await syncVisit(accessToken, item.entityLocalId);
@@ -134,11 +148,13 @@ export async function syncPending(accessToken: string) {
 
       removeQueueItem(item.id);
       synced += 1;
+      onProgress?.({ item, status: "synced", synced, failed });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro desconhecido de sincronizacao.";
       setQueueStatus(item.id, "failed", message);
       addSyncLog("failed", message);
       failed += 1;
+      onProgress?.({ item, status: "failed", synced, failed, error: message });
     }
   }
 

@@ -543,7 +543,15 @@ export default function App() {
     try {
       setBusy(true);
       const currentSession = await renewSession();
-      const result = await syncPending(currentSession.accessToken);
+      setMessage("Enviando fila local para a retaguarda...");
+      reloadLocalData();
+      const result = await syncPending(currentSession.accessToken, (progress) => {
+        setSyncSummary(getQueueSummary());
+        setSyncDiagnostics(listQueueDiagnostics());
+        const itemName = progress.item.kind === "visit" ? "visita" : "foto";
+        const statusText = progress.status === "syncing" ? "enviando" : progress.status === "synced" ? "enviada" : "com falha";
+        setMessage(`Sincronizando ${itemName}: ${statusText}. Enviados: ${progress.synced}. Falhas: ${progress.failed}.`);
+      });
       const snapshot = await downloadMobileSnapshot(currentSession.accessToken);
       saveSnapshot(snapshot);
       reloadLocalData();
@@ -738,7 +746,8 @@ function SecondaryButton(props: { label: string; grow?: boolean; disabled?: bool
 
 function SyncDiagnostics(props: { diagnostics: ReturnType<typeof listQueueDiagnostics>; onLoginAgain: () => void }) {
   const failedItems = props.diagnostics.filter((item) => item.status === "failed");
-  const visibleItems = failedItems.length > 0 ? failedItems : props.diagnostics;
+  const activeItems = props.diagnostics.filter((item) => item.status === "syncing" || item.status === "pending");
+  const visibleItems = failedItems.length > 0 ? failedItems : activeItems;
   const hasExpiredToken = visibleItems.some((item) => /expired access token|invalid or expired|token/i.test(item.lastError ?? ""));
 
   if (visibleItems.length === 0) {
@@ -746,6 +755,27 @@ function SyncDiagnostics(props: { diagnostics: ReturnType<typeof listQueueDiagno
       <View style={styles.diagnosticOk}>
         <Text style={styles.diagnosticTitle}>Sem criticas no sincronismo</Text>
         <Text style={styles.diagnosticText}>Nao ha itens presos na fila local neste momento.</Text>
+      </View>
+    );
+  }
+
+  if (failedItems.length === 0) {
+    return (
+      <View style={styles.diagnosticPending}>
+        <Text style={styles.diagnosticTitle}>Fila aguardando envio</Text>
+        <Text style={styles.diagnosticText}>
+          Estes itens ainda nao sao erro. Para 1 atendimento completo e normal aparecer 1 visita e 3 fotos na fila.
+        </Text>
+        {visibleItems.slice(0, 6).map((item) => (
+          <View key={item.id} style={styles.diagnosticItem}>
+            <Text style={styles.diagnosticItemTitle}>
+              {item.kind === "visit" ? "Visita" : photoLabels[item.photoType ?? "occurrence_extra"]} - {item.clientName ?? "cliente nao identificado"}
+            </Text>
+            <Text style={styles.diagnosticText}>
+              {item.status === "syncing" ? "Enviando agora" : "Aguardando envio"} | Tentativas: {item.attempts}
+            </Text>
+          </View>
+        ))}
       </View>
     );
   }
@@ -760,7 +790,7 @@ function SyncDiagnostics(props: { diagnostics: ReturnType<typeof listQueueDiagno
       {visibleItems.slice(0, 6).map((item) => (
         <View key={item.id} style={styles.diagnosticItem}>
           <Text style={styles.diagnosticItemTitle}>
-            {item.kind === "visit" ? "Visita" : `Foto ${photoLabels[item.photoType ?? "occurrence_extra"]}`} - {item.clientName ?? "cliente nao identificado"}
+            {item.kind === "visit" ? "Visita" : photoLabels[item.photoType ?? "occurrence_extra"]} - {item.clientName ?? "cliente nao identificado"}
           </Text>
           <Text style={styles.diagnosticText}>Status: {item.status} | Tentativas: {item.attempts}</Text>
           <Text style={styles.diagnosticError}>{item.lastError ?? "Sem mensagem tecnica registrada."}</Text>
@@ -1091,6 +1121,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 16,
     gap: 6
+  },
+  diagnosticPending: {
+    backgroundColor: "#EAF4FF",
+    borderColor: "#8CB9E8",
+    borderWidth: 1,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 16,
+    gap: 10
   },
   diagnosticTitle: {
     color: "#12312C",
