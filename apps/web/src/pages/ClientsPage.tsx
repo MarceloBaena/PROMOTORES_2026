@@ -17,6 +17,11 @@ function promoterLabel(promoter: unknown) {
   return `${formattedCode} - ${profile.user?.name ?? "Sem nome"}`;
 }
 
+function textValue(value: unknown, fallback = "-") {
+  const text = String(value ?? "").trim();
+  return text.length > 0 ? text : fallback;
+}
+
 export function ClientsPage() {
   const { user } = useAuth();
   const [promoterOptions, setPromoterOptions] = useState<Array<{ value: string; label: string }>>([]);
@@ -68,9 +73,9 @@ export function ClientsPage() {
       fields={[
         {
           name: "code",
-          label: "Código",
-          placeholder: "Automático",
-          description: "Gerado automaticamente pelo sistema em sequência numérica.",
+          label: "Codigo",
+          placeholder: "Automatico",
+          description: "Gerado automaticamente pelo sistema em sequencia numerica.",
           readOnly: true,
           noSubmit: true
         },
@@ -98,8 +103,8 @@ export function ClientsPage() {
           description: "Promotor padrao que atendera este cliente em campo.",
           fullWidth: true
         },
-        { name: "address", label: "Endereço", fullWidth: true },
-        { name: "addressNumber", label: "Número" },
+        { name: "address", label: "Endereco", fullWidth: true },
+        { name: "addressNumber", label: "Numero" },
         { name: "district", label: "Bairro" },
         { name: "city", label: "Cidade" },
         { name: "state", label: "UF" },
@@ -107,7 +112,7 @@ export function ClientsPage() {
         { name: "longitude", label: "Longitude" },
         {
           name: "status",
-          label: "Situação",
+          label: "Situacao",
           type: "select",
           options: [
             { value: "ACTIVE", label: "Ativo" },
@@ -117,21 +122,64 @@ export function ClientsPage() {
         }
       ]}
       columns={[
-        { label: "Código", value: (item) => String(item.code ?? "-") },
-        { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
-        { label: "Nome", value: (item) => String(item.name ?? "-") },
-        { label: "Promotor", value: (item) => promoterLabel(item.defaultPromoter) },
         {
-          label: "Endereço",
+          label: "Cliente",
+          headerClassName: "w-[34%]",
+          className: "min-w-[260px]",
           value: (item) => {
-            const street = String(item.address ?? "-");
-            const number = item.addressNumber ? `, ${String(item.addressNumber)}` : "";
-            const district = item.district ? ` - ${String(item.district)}` : "";
-            return `${street}${number}${district}`;
+            const code = textValue(item.code, "Sem codigo");
+            const document = textValue(item.document, "Sem documento");
+            const company = companyLabel(item.company as CompanyOption | null | undefined);
+            const promoter = promoterLabel(item.defaultPromoter);
+
+            return (
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-forest">
+                    {code}
+                  </span>
+                  <strong className="text-base leading-tight text-ink">{textValue(item.name)}</strong>
+                </div>
+                <div className="text-xs font-semibold text-stone-500">Documento: {document}</div>
+                <div className="text-xs font-semibold text-stone-500">Empresa: {company}</div>
+                <div className="text-xs font-semibold text-stone-500">Promotor: {promoter}</div>
+              </div>
+            );
           }
         },
-        { label: "Cidade", value: (item) => `${String(item.city ?? "-")}/${String(item.state ?? "-")}` },
-        { label: "Situação", value: (item) => <StatusPill value={String(item.status ?? "")} /> }
+        {
+          label: "Endereco",
+          headerClassName: "w-[34%]",
+          className: "min-w-[240px]",
+          value: (item) => {
+            const street = textValue(item.address, "Sem endereco");
+            const number = item.addressNumber ? `, ${String(item.addressNumber)}` : "";
+            const district = item.district ? String(item.district) : "Sem bairro";
+
+            return (
+              <div className="space-y-1">
+                <strong className="block leading-snug text-ink">{street}{number}</strong>
+                <span className="block text-xs font-semibold text-stone-500">Bairro: {district}</span>
+              </div>
+            );
+          }
+        },
+        {
+          label: "Cidade/UF",
+          headerClassName: "w-[16%]",
+          className: "min-w-[150px]",
+          value: (item) => (
+            <div className="font-bold leading-snug text-ink">
+              {textValue(item.city)}/{textValue(item.state)}
+            </div>
+          )
+        },
+        {
+          label: "Situacao",
+          headerClassName: "w-[10%]",
+          className: "min-w-[110px]",
+          value: (item) => <StatusPill value={String(item.status ?? "")} />
+        }
       ]}
     />
   );

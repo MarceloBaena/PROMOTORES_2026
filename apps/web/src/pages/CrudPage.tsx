@@ -28,6 +28,8 @@ interface CrudPageProps {
   columns: Array<{
     label: string;
     value: (item: Record<string, unknown>) => ReactNode;
+    className?: string;
+    headerClassName?: string;
   }>;
   initialValues: Record<string, string>;
 }
@@ -178,14 +180,14 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
 
       {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="table-wrap">
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
                   {columns.map((column) => (
-                    <th key={column.label} className="px-4 py-3">{column.label}</th>
+                    <th key={column.label} className={column.headerClassName ?? ""}>{column.label}</th>
                   ))}
                   <th className="w-56 px-4 py-3">Ações</th>
                 </tr>
@@ -194,10 +196,10 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                 {items.map((item) => (
                   <tr key={String(item.id)} className="align-top">
                     {columns.map((column) => (
-                      <td key={column.label} className="px-4 py-3">{column.value(item)}</td>
+                      <td key={column.label} className={column.className ?? ""}>{column.value(item)}</td>
                     ))}
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
+                    <td>
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           title="Alterar"
@@ -208,7 +210,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                           }}
                         >
                           <Edit3 className="h-4 w-4" />
-                          Alterar
+                          <span className="hidden sm:inline">Alterar</span>
                         </button>
                         <button
                           type="button"
@@ -221,7 +223,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
-                          Excluir
+                          <span className="hidden sm:inline">Excluir</span>
                         </button>
                       </div>
                     </td>
