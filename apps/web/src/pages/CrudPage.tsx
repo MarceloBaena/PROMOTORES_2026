@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, Edit3, Plus, RefreshCcw, Trash2, X } from "lucide-react";
+import { Check, Edit3, Plus, RefreshCcw, Search, Trash2, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { apiJson } from "../lib/api";
@@ -40,9 +40,22 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [tableSearch, setTableSearch] = useState("");
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
 
   const actionLabel = useMemo(() => (editingId ? "Alterar" : "Incluir"), [editingId]);
+  const filteredItems = useMemo(() => {
+    const search = tableSearch.trim().toLowerCase();
+
+    if (!search) {
+      return items;
+    }
+
+    return items.filter((item) => JSON.stringify(item).toLowerCase().includes(search));
+  }, [items, tableSearch]);
+  const searchPlaceholder = title === "Clientes"
+    ? "Buscar cliente por codigo, nome, documento, endereco, bairro, cidade, empresa ou promotor"
+    : `Buscar em ${title.toLowerCase()}`;
   const formTitle = useMemo(() => {
     if (title === "Clientes") {
       return editingId ? "Alterar ficha do cliente" : "Incluir cliente";
@@ -182,6 +195,30 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="table-wrap">
+          <div className="border-b border-line/80 bg-white/80 p-4">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+              <input
+                className="input-control h-12 pl-11 pr-24"
+                type="search"
+                placeholder={searchPlaceholder}
+                value={tableSearch}
+                onChange={(event) => setTableSearch(event.target.value)}
+              />
+              {tableSearch ? (
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-[0.12em] text-forest"
+                  onClick={() => setTableSearch("")}
+                >
+                  Limpar
+                </button>
+              ) : null}
+            </label>
+            <div className="mt-2 text-xs font-semibold text-stone-500">
+              Exibindo {filteredItems.length} de {items.length} registro(s).
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
@@ -193,7 +230,7 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {filteredItems.map((item) => (
                   <tr key={String(item.id)} className="align-top">
                     {columns.map((column) => (
                       <td key={column.label} className={column.className ?? ""}>{column.value(item)}</td>
@@ -229,10 +266,10 @@ export function CrudPage({ title, endpoint, fields, columns, initialValues }: Cr
                     </td>
                   </tr>
                 ))}
-                {items.length === 0 ? (
+                {filteredItems.length === 0 ? (
                   <tr>
                     <td className="px-4 py-8 text-center text-stone-500" colSpan={columns.length + 1}>
-                      {loading ? "Carregando..." : "Nenhum registro encontrado."}
+                      {loading ? "Carregando..." : tableSearch ? "Nenhum registro encontrado para a busca." : "Nenhum registro encontrado."}
                     </td>
                   </tr>
                 ) : null}
