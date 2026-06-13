@@ -30,6 +30,13 @@ export const upload = multer({
   }
 });
 
+export const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024
+  }
+});
+
 export function publicUploadUrl(filename: string) {
   const { config } = loadConfig();
 

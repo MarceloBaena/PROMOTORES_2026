@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { FileUp } from "lucide-react";
+import { Download, FileUp } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { useAuth } from "../context/AuthContext";
@@ -76,6 +76,14 @@ export function ClientImportPage() {
             </div>
           </div>
           <div className="p-4">
+            <a
+              className="secondary-button mb-4 w-full justify-center"
+              href="/modelo-importacao-clientes.csv"
+              download="modelo-importacao-clientes.csv"
+            >
+              <Download className="h-4 w-4" />
+              Baixar modelo Excel/CSV
+            </a>
             <label className="mb-4 block">
               <span className="field-label">Empresa/Filial</span>
               <select

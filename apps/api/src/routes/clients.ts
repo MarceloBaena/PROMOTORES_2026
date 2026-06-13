@@ -6,7 +6,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
 import { AppError } from "../lib/errors";
 import { requireCompanyId, scopedCompanyWhere, assertSameCompany } from "../lib/tenant";
-import { upload } from "../services/uploads";
+import { memoryUpload } from "../services/uploads";
 
 export const clientsRouter = Router();
 
@@ -176,17 +176,20 @@ clientsRouter.delete(
 
 clientsRouter.post(
   "/import-csv",
-  upload.single("file"),
+  memoryUpload.single("file"),
   asyncHandler(async (req, res) => {
     if (!req.file) {
       throw new AppError(400, "CSV_FILE_REQUIRED", "CSV file is required.");
     }
 
-    const content = fs.readFileSync(req.file.path, "utf8");
+    const content = req.file.buffer?.toString("utf8") ?? fs.readFileSync(req.file.path, "utf8");
     const requestedCompanyId = typeof req.body.companyId === "string" ? req.body.companyId : undefined;
     const companyId = requireCompanyId(req, requestedCompanyId);
     const records = parse(content, {
+      bom: true,
       columns: true,
+      delimiter: [",", ";"],
+      relax_column_count: true,
       skip_empty_lines: true,
       trim: true
     }) as Array<Record<string, string>>;
