@@ -40,6 +40,8 @@ const statusLabels = {
   offline: "Desconectado"
 };
 
+const LIVE_MAP_REFRESH_INTERVAL_MS = 3 * 60 * 1000;
+
 function promoterCode(code: number) {
   return `PRO-${String(code).padStart(4, "0")}`;
 }
@@ -142,7 +144,7 @@ export function LiveMapPage() {
 
   useEffect(() => {
     void load();
-    const intervalId = window.setInterval(() => void load(), 10000);
+    const intervalId = window.setInterval(() => void load(), LIVE_MAP_REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
   }, []);
@@ -187,7 +189,7 @@ export function LiveMapPage() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Mapa operacional</h2>
-              <p className="panel-subtitle">Atualizacao automatica a cada 10 segundos.</p>
+              <p className="panel-subtitle">Atualizacao automatica a cada 3 minutos.</p>
             </div>
             <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200">
               <RadioTower className="h-4 w-4" />
