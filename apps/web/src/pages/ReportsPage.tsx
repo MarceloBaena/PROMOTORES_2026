@@ -3,8 +3,8 @@ import { PageHeader } from "../components/PageHeader";
 import { apiDownload, triggerDownload } from "../lib/api";
 
 const reports = [
-  { label: "Visitas em CSV", path: "/reports/visits.csv", fileName: "visitas.csv" },
-  { label: "Clientes em Excel", path: "/reports/clients.xls", fileName: "clientes.xls" },
+  { label: "Visitas em arquivo", path: "/reports/visits.csv", fileName: "visitas.csv" },
+  { label: "Clientes em planilha", path: "/reports/clients.xls", fileName: "clientes.xls" },
   { label: "Auditoria em PDF", path: "/reports/audit.pdf", fileName: "auditoria.pdf" }
 ];
 

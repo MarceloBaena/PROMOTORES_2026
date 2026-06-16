@@ -49,9 +49,16 @@ const GPS_CAPTURE_TIMEOUT_MS = 8000;
 
 const photoLabels: Record<PhotoType, string> = {
   checkin: "Check-in",
-  before: "Foto before",
-  after: "Foto after",
+  before: "Foto antes",
+  after: "Foto depois",
   occurrence_extra: "Ocorrencia"
+};
+
+const syncStatusLabels: Record<string, string> = {
+  pending: "Pendente",
+  syncing: "Sincronizando",
+  synced: "Sincronizado",
+  failed: "Falha"
 };
 
 function nowIso() {
@@ -82,7 +89,7 @@ function createOfflineDemoSnapshot(): MobileSnapshot {
     code: "9001",
     name: "CLIENTE TESTE MOBILE",
     document: null,
-    address: "Cliente salvo para teste offline",
+    address: "Cliente salvo para teste sem internet",
     city: "Varzea Grande",
     state: "MT",
     latitude: null,
@@ -137,7 +144,7 @@ async function getGps() {
   const permission = await Location.requestForegroundPermissionsAsync();
 
   if (permission.status !== "granted") {
-    addSyncLog("failed", "GPS sem permissao. A visita continua offline com excecao de auditoria registrada.");
+    addSyncLog("failed", "GPS sem permissao. A visita continua localmente com excecao de auditoria registrada.");
     return null;
   }
 
@@ -213,7 +220,7 @@ export default function App() {
     }
   }
 
-  function returnToHome(nextMessage = "Voltou ao menu principal. Toque em Sync para enviar os dados pendentes.") {
+  function returnToHome(nextMessage = "Voltou ao menu principal. Toque em Sincronizar para enviar os dados pendentes.") {
     setRouteItems(listRouteItems());
     setSyncSummary(getQueueSummary());
     setSyncDiagnostics(listQueueDiagnostics());
@@ -227,14 +234,14 @@ export default function App() {
 
   async function renewSession() {
     if (!session) {
-      throw new Error("Sessao local nao encontrada. Faca login novamente.");
+      throw new Error("Sessao local nao encontrada. Faca novo acesso.");
     }
 
     if (isOfflineDemoSession(session)) {
       setEmail(session.user.email);
       setPassword("");
       setScreen("login");
-      throw new Error("Voce esta em modo teste offline. Para sincronizar com a retaguarda, entre novamente com internet.");
+      throw new Error("Voce esta em modo teste sem internet. Para sincronizar com a retaguarda, entre novamente com internet.");
     }
 
     try {
@@ -246,7 +253,7 @@ export default function App() {
       setEmail(session.user.email);
       setPassword("");
       setScreen("login");
-      throw new Error("Sessao expirada. Faca login novamente com internet. A fila offline continua salva no aparelho.");
+      throw new Error("Sessao expirada. Faca novo acesso com internet. A fila local continua salva no aparelho.");
     }
   }
 
@@ -261,9 +268,9 @@ export default function App() {
         user: JSON.parse(stored.userJson) as LoginResponse["user"]
       });
       setScreen("home");
-      setMessage("Sessao local carregada. O app pode operar offline.");
+      setMessage("Sessao local carregada. O aplicativo pode operar sem internet.");
     } else {
-      setMessage("Faca o primeiro login com internet para baixar seu roteiro.");
+      setMessage("Faca o primeiro acesso com internet para baixar seu roteiro.");
     }
 
     setRouteItems(listRouteItems());
@@ -302,7 +309,7 @@ export default function App() {
     if (!normalizedEmail || !password) {
       const validationMessage = "Informe e-mail e senha do promotor para entrar.";
       setMessage(validationMessage);
-      Alert.alert("Login incompleto", validationMessage);
+      Alert.alert("Acesso incompleto", validationMessage);
       return;
     }
 
@@ -312,20 +319,20 @@ export default function App() {
       const result = await login(normalizedEmail, password);
 
       if (result.user.role !== "PROMOTOR") {
-        throw new Error("Este app e exclusivo para usuario PROMOTOR.");
+        throw new Error("Este aplicativo e exclusivo para usuario PROMOTOR.");
       }
 
       setMessage("Senha validada. Baixando roteiro do promotor...");
       saveSession(result);
       setSession(result);
       const snapshot = await downloadMobileSnapshot(result.accessToken);
-      setMessage("Roteiro recebido. Salvando dados offline no aparelho...");
+      setMessage("Roteiro recebido. Salvando dados locais no aparelho...");
       saveSnapshot(snapshot);
       setRouteItems(listRouteItems());
       setScreen("home");
-      setMessage(`Login feito. ${snapshot.routes.length} rota(s) e ${snapshot.clients.length} cliente(s) salvos para uso offline.`);
+      setMessage(`Entrada realizada. ${snapshot.routes.length} rota(s) e ${snapshot.clients.length} cliente(s) salvos para uso sem internet.`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Erro no login.";
+      const errorMessage = error instanceof Error ? error.message : "Erro no acesso.";
 
       if (
         normalizedEmail === TEST_PROMOTER_EMAIL &&
@@ -333,7 +340,7 @@ export default function App() {
         isNetworkConnectionError(errorMessage)
       ) {
         startOfflineDemoMode(
-          "Nao foi possivel conectar na API pelo aparelho. O modo teste offline foi ativado para validar o fluxo de atendimento. Para sincronizar com a retaguarda, entre novamente quando a internet/API estiver acessivel."
+          "Nao foi possivel conectar na API pelo aparelho. O modo teste sem internet foi ativado para validar o fluxo de atendimento. Para sincronizar com a retaguarda, entre novamente quando a internet/API estiver acessivel."
         );
         return;
       }
@@ -353,9 +360,9 @@ export default function App() {
     setSession(demoSession);
     setRouteItems(listRouteItems());
     setScreen("home");
-    setMessage(reason ?? "Modo teste offline ativado. O roteiro esta salvo no aparelho.");
+    setMessage(reason ?? "Modo teste sem internet ativado. O roteiro esta salvo no aparelho.");
     Alert.alert(
-      "Modo teste offline",
+      "Modo teste sem internet",
       "Roteiro local liberado para testar o atendimento. A sincronizacao com a retaguarda exige entrar novamente com internet."
     );
   }
@@ -418,7 +425,7 @@ export default function App() {
   function confirmClearLocalData() {
     Alert.alert(
       "Limpar dados do aparelho?",
-      "Use apenas quando a retaguarda foi zerada ou quando houver sujeira local. Isso apaga visitas, fotos e fila ainda nao sincronizadas deste aparelho, mas mantem o login.",
+      "Use apenas quando a retaguarda foi zerada ou quando houver sujeira local. Isso apaga visitas, fotos e fila ainda nao sincronizadas deste aparelho, mas mantem o acesso.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -544,7 +551,7 @@ export default function App() {
     }
 
     if (!requiredReady) {
-      Alert.alert("Evidencias obrigatorias", "Nao e possivel encerrar sem check-in, foto before e foto after.");
+      Alert.alert("Evidencias obrigatorias", "Nao e possivel encerrar sem check-in, foto antes e foto depois.");
       return;
     }
 
@@ -559,7 +566,7 @@ export default function App() {
 
     upsertVisit(nextVisit);
     enqueue("visit", nextVisit.localId);
-    returnToHome("Visita encerrada offline. Toque em Sync para enviar o atendimento.");
+    returnToHome("Visita encerrada localmente. Toque em Sincronizar para enviar o atendimento.");
   }
 
   async function runSync() {
@@ -600,9 +607,9 @@ export default function App() {
         <ScrollView contentContainerStyle={styles.loginPanel} keyboardShouldPersistTaps="handled">
           <Text style={styles.kicker}>PROMOTORES 2026</Text>
           <Text style={styles.title}>Operacao de campo</Text>
-          <Text style={styles.muted}>Faca o primeiro login com internet. Depois disso, roteiro, clientes, fotos e visitas ficam salvos no aparelho.</Text>
+          <Text style={styles.muted}>Faca o primeiro acesso com internet. Depois disso, roteiro, clientes, fotos e visitas ficam salvos no aparelho.</Text>
           <View style={styles.loginHint}>
-            <Text style={styles.loginHintTitle}>Usuario de teste do app</Text>
+            <Text style={styles.loginHintTitle}>Usuario de teste do aplicativo</Text>
             <Text style={styles.loginHintText}>promotor.teste@formula.local</Text>
             <Text style={styles.loginHintText}>Senha: Promotor@123</Text>
             <Text style={styles.loginHintApi}>API: {API_BASE_URL}</Text>
@@ -611,7 +618,7 @@ export default function App() {
           <TextInput style={styles.input} placeholder="senha" secureTextEntry value={password} onChangeText={setPassword} />
           <PrimaryButton label={busy ? "Entrando..." : "Entrar e baixar roteiro"} disabled={busy} onPress={handleLogin} />
           <SecondaryButton label="Testar conexao da API" disabled={busy} onPress={handleApiConnectionTest} />
-          <SecondaryButton label="Entrar em modo teste offline" disabled={busy} onPress={() => startOfflineDemoMode()} />
+          <SecondaryButton label="Entrar em modo teste sem internet" disabled={busy} onPress={() => startOfflineDemoMode()} />
           <Text style={[styles.statusText, message.toLowerCase().includes("erro") || message.toLowerCase().includes("nao foi") || message.toLowerCase().includes("invalid") ? styles.statusError : null]}>
             {message}
           </Text>
@@ -640,7 +647,7 @@ export default function App() {
 
             setPassword("");
             setScreen("login");
-            setMessage("Entre novamente para renovar a sessao. A fila offline continua salva.");
+            setMessage("Entre novamente para renovar a sessao. A fila local continua salva.");
           }}
         />
         <FlatList
@@ -648,7 +655,7 @@ export default function App() {
           keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => (
             <View style={styles.logRow}>
-              <Text style={item.status === "failed" ? styles.danger : styles.ok}>{item.status}</Text>
+              <Text style={item.status === "failed" ? styles.danger : styles.ok}>{syncStatusLabels[item.status] ?? item.status}</Text>
               <Text style={styles.logText}>{item.message}</Text>
             </View>
           )}
@@ -679,7 +686,7 @@ export default function App() {
               <Text style={styles.cardTitle}>Atendimento concluido</Text>
               <Text style={styles.muted}>Esta visita foi encerrada localmente. Volte ao menu principal para sincronizar ou conferir o roteiro.</Text>
               <View style={styles.actionStack}>
-                <PrimaryButton label="Voltar ao menu principal" onPress={() => returnToHome("Atendimento concluido. Toque em Sync para enviar a visita.")} />
+                <PrimaryButton label="Voltar ao menu principal" onPress={() => returnToHome("Atendimento concluido. Toque em Sincronizar para enviar a visita.")} />
                 <SecondaryButton label="Ir para sincronizacao" onPress={() => setScreen("sync")} />
               </View>
             </View>
@@ -719,14 +726,14 @@ export default function App() {
       <Header title="Roteiro do promotor" />
       <View style={styles.toolbar}>
         <SecondaryButton label="Atualizar roteiro" grow disabled={busy} onPress={refreshSnapshot} />
-        <SecondaryButton label="Sync" grow disabled={busy} onPress={() => setScreen("sync")} />
+        <SecondaryButton label="Sincronizar" grow disabled={busy} onPress={() => setScreen("sync")} />
       </View>
       <Text style={styles.statusText}>{message}</Text>
       <FlatList
         data={routeItems}
         contentContainerStyle={styles.content}
         keyExtractor={(item) => item.id}
-        ListEmptyComponent={<Text style={styles.empty}>Nenhum roteiro salvo. Faca login com internet ou toque em Atualizar roteiro.</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>Nenhum roteiro salvo. Faca o primeiro acesso com internet ou toque em Atualizar roteiro.</Text>}
         renderItem={({ item }) => {
           const visit = getVisitByRouteItem(item.id);
           return (
@@ -820,7 +827,7 @@ function SyncDiagnostics(props: { diagnostics: ReturnType<typeof listQueueDiagno
           <Text style={styles.diagnosticItemTitle}>
             {item.kind === "visit" ? "Visita" : photoLabels[item.photoType ?? "occurrence_extra"]} - {item.clientName ?? "cliente nao identificado"}
           </Text>
-          <Text style={styles.diagnosticText}>Status: {item.status} | Tentativas: {item.attempts}</Text>
+          <Text style={styles.diagnosticText}>Situacao: {syncStatusLabels[item.status] ?? item.status} | Tentativas: {item.attempts}</Text>
           <Text style={styles.diagnosticError}>{item.lastError ?? "Sem mensagem tecnica registrada."}</Text>
         </View>
       ))}
@@ -839,7 +846,7 @@ function syncDiagnosticSummary(error?: string | null) {
   }
 
   if (/missing|required photo|foto/i.test(message)) {
-    return "Existe visita tentando concluir sem todas as fotos obrigatorias sincronizadas. Confira check-in, foto before e foto after.";
+    return "Existe visita tentando concluir sem todas as fotos obrigatorias sincronizadas. Confira check-in, foto antes e foto depois.";
   }
 
   if (/network|internet|failed to fetch|conexao|connection/i.test(message)) {

@@ -158,6 +158,6 @@ export async function syncPending(accessToken: string, onProgress?: (progress: S
     }
   }
 
-  addSyncLog(failed > 0 ? "failed" : "synced", `Sync finalizada. Enviados: ${synced}. Falhas: ${failed}.`);
+  addSyncLog(failed > 0 ? "failed" : "synced", `Sincronizacao finalizada. Enviados: ${synced}. Falhas: ${failed}.`);
   return { synced, failed };
 }

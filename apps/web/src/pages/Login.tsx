@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 const loginFeatures = [
   { icon: MapPinned, label: "Roteiro publicado e monitorado" },
-  { icon: Smartphone, label: "App de campo conectado ao fluxo real" },
+  { icon: Smartphone, label: "Aplicativo de campo conectado ao fluxo real" },
   { icon: ShieldCheck, label: "Auditoria com evidências e situação" }
 ] as const;
 
@@ -43,7 +43,7 @@ export function Login() {
                 <Building2 className="h-5 w-5" />
               </div>
               <div>
-                <div className="font-display text-xl font-bold tracking-tight">Sales Promoters</div>
+                <div className="font-display text-xl font-bold tracking-tight">Promotores 2026</div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/55">Central de campo</div>
               </div>
             </div>
@@ -75,7 +75,7 @@ export function Login() {
                 <Building2 className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="font-display text-lg font-bold">Sales Promoters</h1>
+                <h1 className="font-display text-lg font-bold">Promotores 2026</h1>
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-500">Central</p>
               </div>
             </div>

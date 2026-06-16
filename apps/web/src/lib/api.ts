@@ -156,7 +156,7 @@ export async function login(email: string, password: string) {
   });
 
   if (!response.ok) {
-    let message = "Login invalido ou API indisponivel.";
+    let message = "Acesso invalido ou API indisponivel.";
     let code: string | undefined;
 
     try {

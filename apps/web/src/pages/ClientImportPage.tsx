@@ -35,7 +35,7 @@ export function ClientImportPage() {
     event.preventDefault();
 
     if (!file) {
-      setMessage("Selecione um arquivo CSV.");
+      setMessage("Selecione o arquivo da planilha.");
       return;
     }
 
@@ -67,7 +67,7 @@ export function ClientImportPage() {
 
   return (
     <section>
-      <PageHeader title="Importação CSV" />
+      <PageHeader title="Importação de planilha" />
       <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
         <form onSubmit={onSubmit} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
           <div className="panel-header">
@@ -82,7 +82,7 @@ export function ClientImportPage() {
               download="modelo-importacao-clientes.csv"
             >
               <Download className="h-4 w-4" />
-              Baixar modelo Excel/CSV
+              Baixar modelo de planilha
             </a>
             <label className="mb-4 block">
               <span className="field-label">Empresa/Filial</span>
@@ -99,7 +99,7 @@ export function ClientImportPage() {
               </select>
             </label>
             <label className="block">
-              <span className="field-label">Arquivo CSV</span>
+              <span className="field-label">Arquivo da planilha</span>
               <input
                 className="file-control"
                 type="file"

@@ -54,7 +54,7 @@ export async function sendLocationHeartbeat(input: SendLocationHeartbeatInput) {
 
   if (!response.ok) {
     const message = await response.text().catch(() => "");
-    throw new Error(message || `Location heartbeat failed with HTTP ${response.status}.`);
+    throw new Error(message || `Envio de localizacao falhou com HTTP ${response.status}.`);
   }
 
   return response.json() as Promise<LocationHeartbeatResponse>;
@@ -93,7 +93,7 @@ export function createForegroundLocationTracker(options: LocationTrackerOptions)
       options.onSuccess?.(response);
       return response;
     } catch (error) {
-      const normalizedError = error instanceof Error ? error : new Error("Location heartbeat failed.");
+      const normalizedError = error instanceof Error ? error : new Error("Envio de localizacao falhou.");
       options.onError?.(normalizedError);
       return null;
     }

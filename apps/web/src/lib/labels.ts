@@ -7,9 +7,11 @@ const statusLabels: Record<string, string> = {
   DRAFT: "Rascunho",
   PUBLISHED: "Publicado",
   CANCELLED: "Cancelado",
-  COMPLETED: "Concluída",
+  COMPLETED: "Concluida",
   FAILED: "Falha",
   SUCCESS: "Sucesso",
+  PARTIAL: "Parcial",
+  PREVIEW: "Previa",
   PENDING: "Pendente",
   SYNCED: "Sincronizado",
   SYNCING: "Sincronizando",
@@ -18,11 +20,11 @@ const statusLabels: Record<string, string> = {
   HIGH: "Alta",
   MEDIUM: "Media",
   LOW: "Baixa",
-  CRITICAL: "Crítica",
+  CRITICAL: "Critica",
   pending: "Pendente",
   in_progress: "Em atendimento",
-  completed: "Concluída",
-  not_completed: "Não concluída",
+  completed: "Concluida",
+  not_completed: "Nao concluida",
   failed: "Falha",
   synced: "Sincronizado",
   syncing: "Sincronizando"
@@ -36,12 +38,12 @@ const roleLabels: Record<string, string> = {
 
 const auditTypeLabels: Record<string, string> = {
   gps_missing: "GPS ausente",
-  outside_geofence: "Fora da área prevista",
-  missing_required_photo: "Foto obrigatória ausente",
-  too_fast_visit: "Visita rápida demais",
+  outside_geofence: "Fora da area prevista",
+  missing_required_photo: "Foto obrigatoria ausente",
+  too_fast_visit: "Visita rapida demais",
   too_long_visit: "Visita longa demais",
   inconsistent_finish: "Encerramento inconsistente",
-  sync_failure: "Falha de sincronização"
+  sync_failure: "Falha de sincronizacao"
 };
 
 export function statusLabel(value?: string | null) {
