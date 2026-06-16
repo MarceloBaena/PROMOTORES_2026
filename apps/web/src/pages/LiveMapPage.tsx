@@ -240,7 +240,7 @@ export function LiveMapPage() {
                 })
               : (
                 <div className="absolute inset-0 grid place-items-center px-6 text-center">
-                  <div className="max-w-md rounded-3xl border border-white/80 bg-white/86 p-7 shadow-xl backdrop-blur">
+                  <div className="max-w-md rounded-3xl border border-white/80 bg-white/90 p-7 shadow-xl backdrop-blur">
                     <LocateFixed className="mx-auto h-10 w-10 text-stone-400" />
                     <h3 className="mt-4 font-display text-2xl font-bold text-ink">Nenhuma posicao recebida</h3>
                     <p className="mt-2 text-sm font-semibold leading-6 text-stone-500">

@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  color: #17201c;
-  background: #f3f5f2;
+  color: #0f172a;
+  background: #f8fafc;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -20,9 +20,9 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 8% 8%, rgba(37, 111, 75, 0.13), transparent 28rem),
-    radial-gradient(circle at 92% 4%, rgba(54, 95, 120, 0.12), transparent 24rem),
-    linear-gradient(135deg, #f7f8f4 0%, #eef2ee 48%, #e9efed 100%);
+    radial-gradient(circle at 10% 4%, rgba(37, 99, 235, 0.14), transparent 30rem),
+    radial-gradient(circle at 88% 0%, rgba(16, 185, 129, 0.12), transparent 28rem),
+    linear-gradient(135deg, #f8fafc 0%, #eef6ff 42%, #f8fafc 100%);
 }
 
 button,
@@ -33,7 +33,7 @@ textarea {
 }
 
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-moss/35 focus:ring-offset-2 focus:ring-offset-field;
+  @apply focus:outline-none focus:ring-2 focus:ring-brand/35 focus:ring-offset-2 focus:ring-offset-field;
 }
 
 @layer components {
@@ -46,11 +46,11 @@ textarea {
   }
 
   .panel {
-    @apply rounded-2xl border border-white/70 bg-panel/95 shadow-[0_18px_45px_rgba(17,25,23,0.08)] ring-1 ring-line/70 backdrop-blur;
+    @apply rounded-[1.35rem] border border-white/80 bg-panel/95 shadow-[0_20px_60px_rgba(15,23,42,0.08)] ring-1 ring-line/70 backdrop-blur-xl;
   }
 
   .panel-header {
-    @apply flex min-h-14 items-center justify-between gap-3 border-b border-line/80 bg-gradient-to-r from-white to-muted/40 px-5 py-4;
+    @apply flex min-h-14 items-center justify-between gap-3 border-b border-line/80 bg-gradient-to-r from-white to-skywash/70 px-5 py-4;
   }
 
   .panel-title {
@@ -62,7 +62,7 @@ textarea {
   }
 
   .table-wrap {
-    @apply overflow-hidden rounded-2xl border border-white/70 bg-panel/95 shadow-[0_18px_45px_rgba(17,25,23,0.08)] ring-1 ring-line/70;
+    @apply overflow-hidden rounded-[1.35rem] border border-white/80 bg-panel/95 shadow-[0_20px_60px_rgba(15,23,42,0.08)] ring-1 ring-line/70;
   }
 
   .data-table {
@@ -70,7 +70,7 @@ textarea {
   }
 
   .data-table thead {
-    @apply bg-forest text-[11px] font-bold uppercase tracking-[0.12em] text-white/70;
+    @apply bg-navy text-[11px] font-bold uppercase tracking-[0.12em] text-white/70;
   }
 
   .data-table th {
@@ -82,7 +82,7 @@ textarea {
   }
 
   .data-table tbody tr {
-    @apply border-t border-line/70 transition hover:bg-skywash/60;
+    @apply border-t border-line/70 transition hover:bg-skywash/80;
   }
 
   .field-label {
@@ -90,7 +90,7 @@ textarea {
   }
 
   .input-control {
-    @apply focus-ring h-12 w-full rounded-xl border border-line bg-white px-3.5 text-sm font-semibold text-ink shadow-inner shadow-stone-100 placeholder:text-stone-400;
+    @apply focus-ring h-12 w-full rounded-xl border border-line bg-white px-3.5 text-sm font-semibold text-ink shadow-inner shadow-slate-100 placeholder:text-slateSoft;
   }
 
   .file-control {
@@ -98,11 +98,11 @@ textarea {
   }
 
   .primary-button {
-    @apply focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-moss to-forest px-5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(37,111,75,0.25)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(37,111,75,0.30)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0;
+    @apply focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-blue-700 px-5 text-sm font-bold text-white shadow-[0_16px_32px_rgba(37,99,235,0.24)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_44px_rgba(37,99,235,0.30)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0;
   }
 
   .secondary-button {
-    @apply focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-bold text-graphite shadow-sm transition hover:-translate-y-0.5 hover:bg-muted;
+    @apply focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-bold text-graphite shadow-sm transition hover:-translate-y-0.5 hover:border-brand/30 hover:bg-skywash;
   }
 
   .icon-button {
@@ -126,14 +126,29 @@ textarea {
   }
 
   .metric-card {
-    @apply relative overflow-hidden rounded-2xl border border-white/70 bg-panel/95 p-5 shadow-[0_18px_45px_rgba(17,25,23,0.08)] ring-1 ring-line/70 transition hover:-translate-y-1 hover:shadow-[0_22px_55px_rgba(17,25,23,0.12)];
+    @apply relative overflow-hidden rounded-[1.35rem] border border-white/80 bg-panel/95 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-line/70 transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(15,23,42,0.12)];
   }
 
   .metric-card::after {
-    @apply pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-moss/10 content-[''];
+    @apply pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand/10 content-[''];
   }
 
   .surface-card {
-    @apply rounded-2xl border border-white/70 bg-white/90 p-5 shadow-[0_16px_40px_rgba(17,25,23,0.07)] ring-1 ring-line/70 backdrop-blur;
+    @apply rounded-[1.35rem] border border-white/80 bg-white/90 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] ring-1 ring-line/70 backdrop-blur-xl;
+  }
+
+  .brand-chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-brand/15 bg-brandSoft px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-brand;
+  }
+
+  .execution-chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-execution/15 bg-executionSoft px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700;
+  }
+
+  .mini-map-grid {
+    background-image:
+      linear-gradient(rgba(37, 99, 235, 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(37, 99, 235, 0.12) 1px, transparent 1px);
+    background-size: 26px 26px;
   }
 }

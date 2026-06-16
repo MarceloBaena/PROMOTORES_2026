@@ -34,7 +34,7 @@ export function Login() {
       <div className="pointer-events-none absolute left-[-12rem] top-[-16rem] h-[34rem] w-[34rem] rounded-full bg-moss/15 blur-3xl" />
       <div className="pointer-events-none absolute bottom-[-18rem] right-[-10rem] h-[38rem] w-[38rem] rounded-full bg-steel/15 blur-3xl" />
       <div className="relative mx-auto flex w-full max-w-[1120px] items-center justify-center">
-        <div className="grid w-full overflow-hidden rounded-[2rem] border border-white/75 bg-white/92 shadow-[0_28px_90px_rgba(17,25,23,0.16)] ring-1 ring-line/70 backdrop-blur lg:grid-cols-[440px_minmax(0,1fr)]">
+        <div className="grid w-full overflow-hidden rounded-[2rem] border border-white/75 bg-white/90 shadow-[0_28px_90px_rgba(17,25,23,0.16)] ring-1 ring-line/70 backdrop-blur lg:grid-cols-[440px_minmax(0,1fr)]">
           <aside className="relative hidden overflow-hidden bg-forest p-8 text-white lg:block">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.16),transparent_18rem),linear-gradient(145deg,rgba(255,255,255,0.09),transparent_42%)]" />
             <div className="relative">
@@ -62,7 +62,7 @@ export function Login() {
                   <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/12">
                     <Icon className="h-4 w-4" />
                   </div>
-                  <span className="text-sm font-bold text-white/86">{label}</span>
+                  <span className="text-sm font-bold text-white/85">{label}</span>
                 </div>
               ))}
             </div>

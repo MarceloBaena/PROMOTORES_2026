@@ -601,13 +601,20 @@ export default function App() {
     }
   }
 
+  const completedHomeVisits = routeItems.filter((item) => getVisitByRouteItem(item.id)?.status === "completed").length;
+  const inProgressHomeVisits = routeItems.filter((item) => getVisitByRouteItem(item.id)?.status === "in_progress").length;
+  const pendingHomeVisits = Math.max(0, routeItems.length - completedHomeVisits - inProgressHomeVisits);
+
   if (screen === "login") {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.loginPanel} keyboardShouldPersistTaps="handled">
-          <Text style={styles.kicker}>PROMOTORES 2026</Text>
+          <View style={styles.brandBadge}>
+            <Text style={styles.brandBadgeIcon}>✓</Text>
+            <Text style={styles.brandBadgeText}>PROMOTORPRO</Text>
+          </View>
           <Text style={styles.title}>Operacao de campo</Text>
-          <Text style={styles.muted}>Faca o primeiro acesso com internet. Depois disso, roteiro, clientes, fotos e visitas ficam salvos no aparelho.</Text>
+          <Text style={styles.muted}>Primeiro acesso com internet. Depois disso, roteiro, clientes, fotos e visitas ficam salvos no aparelho.</Text>
           <View style={styles.loginHint}>
             <Text style={styles.loginHintTitle}>Usuario de teste do aplicativo</Text>
             <Text style={styles.loginHintText}>promotor.teste@formula.local</Text>
@@ -724,6 +731,22 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safe}>
       <Header title="Roteiro do promotor" />
+      <View style={styles.homeHero}>
+        <View>
+          <Text style={styles.heroKicker}>Execucao de hoje</Text>
+          <Text style={styles.heroTitle}>{routeItems.length} cliente(s) no roteiro</Text>
+          <Text style={styles.heroSubtitle}>Atenda, registre fotos e sincronize quando houver internet.</Text>
+        </View>
+        <View style={styles.heroBadge}>
+          <Text style={styles.heroBadgeText}>{syncSummary.pending ?? 0}</Text>
+          <Text style={styles.heroBadgeLabel}>na fila</Text>
+        </View>
+      </View>
+      <View style={styles.statsGrid}>
+        <StatTile label="Pendentes" value={pendingHomeVisits} tone="warning" />
+        <StatTile label="Em atendimento" value={inProgressHomeVisits} tone="brand" />
+        <StatTile label="Concluidas" value={completedHomeVisits} tone="success" />
+      </View>
       <View style={styles.toolbar}>
         <SecondaryButton label="Atualizar roteiro" grow disabled={busy} onPress={refreshSnapshot} />
         <SecondaryButton label="Sincronizar" grow disabled={busy} onPress={() => setScreen("sync")} />
@@ -776,6 +799,17 @@ function SecondaryButton(props: { label: string; grow?: boolean; disabled?: bool
     <TouchableOpacity style={[styles.secondaryButton, props.grow ? styles.buttonGrow : null, props.disabled ? styles.disabled : null]} disabled={props.disabled} onPress={props.onPress}>
       <Text style={styles.secondaryText}>{props.label}</Text>
     </TouchableOpacity>
+  );
+}
+
+function StatTile(props: { label: string; value: number; tone: "warning" | "brand" | "success" }) {
+  const toneStyle = props.tone === "success" ? styles.statSuccess : props.tone === "brand" ? styles.statBrand : styles.statWarning;
+
+  return (
+    <View style={[styles.statTile, toneStyle]}>
+      <Text style={styles.statValue}>{props.value}</Text>
+      <Text style={styles.statLabel}>{props.label}</Text>
+    </View>
   );
 }
 
@@ -877,7 +911,7 @@ function StatusPill(props: { status: string }) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#EEF3F1"
+    backgroundColor: "#F8FAFC"
   },
   content: {
     padding: 16,
@@ -889,43 +923,72 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 14
   },
+  brandBadge: {
+    alignSelf: "flex-start",
+    alignItems: "center",
+    backgroundColor: "#DBEAFE",
+    borderColor: "#BFDBFE",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  brandBadgeIcon: {
+    backgroundColor: "#10B981",
+    borderRadius: 999,
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+    height: 22,
+    lineHeight: 22,
+    textAlign: "center",
+    width: 22
+  },
+  brandBadgeText: {
+    color: "#2563EB",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 1
+  },
   loginHint: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#BFD8CE",
-    borderRadius: 18,
+    borderColor: "#DBEAFE",
+    borderRadius: 24,
     borderWidth: 1,
     gap: 4,
-    padding: 14
+    padding: 16
   },
   loginHintTitle: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 14,
     fontWeight: "900"
   },
   loginHintText: {
-    color: "#0E5A49",
+    color: "#2563EB",
     fontSize: 15,
     fontWeight: "800"
   },
   loginHintApi: {
-    color: "#66756F",
+    color: "#64748B",
     fontSize: 12,
     marginTop: 4
   },
   header: {
-    minHeight: 72,
-    backgroundColor: "#12312C",
+    minHeight: 76,
+    backgroundColor: "#0F172A",
     justifyContent: "center",
     paddingHorizontal: 18,
     paddingTop: 10
   },
   headerTitle: {
     color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "800"
+    fontSize: 24,
+    fontWeight: "900"
   },
   back: {
-    color: "#BFE5D8",
+    color: "#93C5FD",
     fontWeight: "800",
     marginBottom: 4
   },
@@ -936,32 +999,32 @@ const styles = StyleSheet.create({
     paddingBottom: 4
   },
   kicker: {
-    color: "#477166",
+    color: "#2563EB",
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 1
   },
   title: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 34,
     fontWeight: "900"
   },
   titleSmall: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 24,
     fontWeight: "900"
   },
   muted: {
-    color: "#66756F",
+    color: "#64748B",
     fontSize: 15,
     lineHeight: 21
   },
   input: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#D2DED9",
-    borderRadius: 16,
+    borderColor: "#E2E8F0",
+    borderRadius: 18,
     borderWidth: 1,
-    color: "#11231F",
+    color: "#0F172A",
     fontSize: 17,
     padding: 16
   },
@@ -970,8 +1033,8 @@ const styles = StyleSheet.create({
     textAlignVertical: "top"
   },
   primaryButton: {
-    backgroundColor: "#0E5A49",
-    borderRadius: 18,
+    backgroundColor: "#2563EB",
+    borderRadius: 20,
     padding: 18,
     alignItems: "center"
   },
@@ -982,9 +1045,9 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#C7D8D0",
+    borderColor: "#E2E8F0",
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 14,
     alignItems: "center"
   },
@@ -992,14 +1055,14 @@ const styles = StyleSheet.create({
     flex: 1
   },
   secondaryText: {
-    color: "#12312C",
+    color: "#0F172A",
     fontWeight: "900"
   },
   disabled: {
     opacity: 0.55
   },
   statusText: {
-    color: "#52645E",
+    color: "#64748B",
     paddingHorizontal: 16,
     paddingVertical: 8
   },
@@ -1019,18 +1082,22 @@ const styles = StyleSheet.create({
   },
   routeCard: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#D9E4DF",
+    borderColor: "#E2E8F0",
     borderWidth: 1,
-    borderRadius: 22,
+    borderRadius: 26,
     flexDirection: "row",
     gap: 14,
-    padding: 16
+    padding: 16,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 }
   },
   sequenceBadge: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: "#12312C",
+    backgroundColor: "#0F172A",
     alignItems: "center",
     justifyContent: "center"
   },
@@ -1044,29 +1111,33 @@ const styles = StyleSheet.create({
     gap: 6
   },
   routeName: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 18,
     fontWeight: "900"
   },
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderColor: "#E2E8F0",
+    borderRadius: 24,
+    borderWidth: 1,
     padding: 16,
     gap: 8
   },
   cardStrong: {
-    backgroundColor: "#DCEBE4",
-    borderRadius: 24,
+    backgroundColor: "#DBEAFE",
+    borderColor: "#BFDBFE",
+    borderRadius: 28,
+    borderWidth: 1,
     padding: 18,
     gap: 8
   },
   cardTitle: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 18,
     fontWeight: "900"
   },
   metric: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 26,
     fontWeight: "900"
   },
@@ -1075,7 +1146,7 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   ok: {
-    color: "#0E7A55",
+    color: "#10B981",
     fontWeight: "900"
   },
   pill: {
@@ -1089,12 +1160,12 @@ const styles = StyleSheet.create({
     paddingVertical: 5
   },
   pillOk: {
-    backgroundColor: "#CBEFDC",
-    color: "#0A633F"
+    backgroundColor: "#D1FAE5",
+    color: "#047857"
   },
   pillWarn: {
-    backgroundColor: "#FFE5B8",
-    color: "#8A5200"
+    backgroundColor: "#DBEAFE",
+    color: "#1D4ED8"
   },
   stepGrid: {
     gap: 10
@@ -1104,17 +1175,17 @@ const styles = StyleSheet.create({
   },
   photoButton: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#C9D9D2",
+    borderColor: "#E2E8F0",
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 22,
     padding: 18
   },
   photoDone: {
-    borderColor: "#0E7A55",
-    backgroundColor: "#E0F3EA"
+    borderColor: "#10B981",
+    backgroundColor: "#D1FAE5"
   },
   photoTitle: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 18,
     fontWeight: "900"
   },
@@ -1123,7 +1194,7 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   photoRow: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 15,
     paddingVertical: 4
   },
@@ -1168,7 +1239,7 @@ const styles = StyleSheet.create({
     gap: 10
   },
   diagnosticTitle: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 18,
     fontWeight: "900"
   },
@@ -1186,7 +1257,7 @@ const styles = StyleSheet.create({
     gap: 4
   },
   diagnosticItemTitle: {
-    color: "#12312C",
+    color: "#0F172A",
     fontSize: 14,
     fontWeight: "900"
   },
@@ -1194,5 +1265,84 @@ const styles = StyleSheet.create({
     color: "#9A3412",
     fontSize: 13,
     lineHeight: 18
+  },
+  homeHero: {
+    backgroundColor: "#0F172A",
+    borderRadius: 30,
+    flexDirection: "row",
+    gap: 16,
+    justifyContent: "space-between",
+    margin: 16,
+    marginBottom: 10,
+    padding: 18
+  },
+  heroKicker: {
+    color: "#93C5FD",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 1
+  },
+  heroTitle: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "900",
+    marginTop: 6
+  },
+  heroSubtitle: {
+    color: "#CBD5E1",
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
+    maxWidth: 260
+  },
+  heroBadge: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#1E293B",
+    borderColor: "#334155",
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  heroBadgeText: {
+    color: "#10B981",
+    fontSize: 24,
+    fontWeight: "900"
+  },
+  heroBadgeLabel: {
+    color: "#CBD5E1",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  statsGrid: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16
+  },
+  statTile: {
+    borderRadius: 22,
+    flex: 1,
+    padding: 14
+  },
+  statBrand: {
+    backgroundColor: "#DBEAFE"
+  },
+  statSuccess: {
+    backgroundColor: "#D1FAE5"
+  },
+  statWarning: {
+    backgroundColor: "#FEF3C7"
+  },
+  statValue: {
+    color: "#0F172A",
+    fontSize: 24,
+    fontWeight: "900"
+  },
+  statLabel: {
+    color: "#475569",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 3
   }
 });

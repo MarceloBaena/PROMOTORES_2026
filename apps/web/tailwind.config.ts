@@ -5,23 +5,32 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Aptos", "Bahnschrift", "Segoe UI Variable", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["Bahnschrift", "Aptos Display", "Aptos", "ui-sans-serif", "system-ui", "sans-serif"]
+        sans: ["Inter", "Manrope", "Segoe UI Variable", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Manrope", "Inter", "Segoe UI Variable", "ui-sans-serif", "system-ui", "sans-serif"]
       },
       colors: {
-        ink: "#111917",
-        graphite: "#2c3633",
-        field: "#eef2ee",
-        panel: "#ffffff",
-        muted: "#e8eee9",
-        line: "#d6ded8",
-        moss: "#256f4b",
-        forest: "#103f32",
-        steel: "#365f78",
-        skywash: "#e7f1f4",
-        saffron: "#b7791f",
-        berry: "#9f315c",
-        copper: "#a7662b"
+        ink: "#0F172A",
+        graphite: "#334155",
+        field: "#F8FAFC",
+        panel: "#FFFFFF",
+        muted: "#E2E8F0",
+        line: "#E2E8F0",
+        brand: "#2563EB",
+        brandSoft: "#DBEAFE",
+        execution: "#10B981",
+        executionSoft: "#D1FAE5",
+        navy: "#0F172A",
+        slateText: "#64748B",
+        slateSoft: "#94A3B8",
+        warning: "#F59E0B",
+        danger: "#EF4444",
+        moss: "#10B981",
+        forest: "#0F172A",
+        steel: "#2563EB",
+        skywash: "#EFF6FF",
+        saffron: "#F59E0B",
+        berry: "#EF4444",
+        copper: "#F59E0B"
       }
     }
   },

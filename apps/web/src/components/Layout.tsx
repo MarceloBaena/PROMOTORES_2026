@@ -1,7 +1,7 @@
 import {
   Activity,
   BarChart3,
-  Building2,
+  Bell,
   Building,
   ClipboardList,
   FileSpreadsheet,
@@ -16,19 +16,20 @@ import {
   Wifi
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
+import { BrandMark } from "./BrandMark";
 import { useAuth } from "../context/AuthContext";
 import { roleLabel } from "../lib/labels";
 
 const navSections = [
   {
-    label: "Operação",
+    label: "Operacao",
     items: [
       { to: "/", label: "Painel", icon: BarChart3 },
-      { to: "/roteirizacao", label: "Roteirização", icon: Route },
+      { to: "/roteirizacao", label: "Roteirizacao", icon: Route },
       { to: "/visitas", label: "Visitas", icon: Map },
       { to: "/mapa", label: "Mapa ao vivo", icon: MapPinned },
       { to: "/auditoria", label: "Auditoria", icon: Flag },
-      { to: "/relatorios", label: "Relatórios", icon: ClipboardList }
+      { to: "/relatorios", label: "Relatorios", icon: ClipboardList }
     ]
   },
   {
@@ -38,7 +39,7 @@ const navSections = [
       { to: "/clientes", label: "Clientes", icon: Store },
       { to: "/promotores", label: "Promotores", icon: Users },
       { to: "/supervisores", label: "Supervisores", icon: ShieldCheck },
-      { to: "/importacao", label: "Importação", icon: FileSpreadsheet }
+      { to: "/importacao", label: "Importacao", icon: FileSpreadsheet }
     ]
   }
 ];
@@ -55,33 +56,37 @@ export function Layout() {
 
   return (
     <div className="app-page">
-      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-white/10 bg-forest text-white shadow-[18px_0_50px_rgba(17,25,23,0.16)] lg:flex lg:flex-col">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.14),transparent_18rem),linear-gradient(180deg,rgba(255,255,255,0.06),transparent_36%)]" />
+      <aside className="fixed inset-y-0 left-0 hidden w-80 border-r border-white/10 bg-navy text-white shadow-[24px_0_70px_rgba(15,23,42,0.22)] lg:flex lg:flex-col">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_0%,rgba(37,99,235,0.30),transparent_18rem),radial-gradient(circle_at_80%_18%,rgba(16,185,129,0.18),transparent_16rem),linear-gradient(180deg,rgba(255,255,255,0.08),transparent_42%)]" />
         <div className="relative border-b border-white/10 px-5 py-5">
-          <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-forest shadow-lg shadow-black/15">
-              <Building2 className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="truncate font-display text-lg font-bold tracking-tight">Promotores 2026</div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/55">Central operacional</div>
-            </div>
-          </div>
-          <div className="mt-5 rounded-2xl border border-white/10 bg-white/10 p-3 shadow-inner shadow-black/10">
+          <BrandMark />
+
+          <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.07] p-4 shadow-inner shadow-black/10">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/55">Hoje</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-bold text-emerald-100 ring-1 ring-emerald-300/20">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-execution/15 px-2.5 py-1 text-[11px] font-bold text-emerald-100 ring-1 ring-execution/20">
                 <Wifi className="h-3.5 w-3.5" />
                 Conectado
               </span>
             </div>
             <div className="mt-2 font-display text-sm font-bold capitalize text-white">{today}</div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl bg-white/[0.08] p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Operacao</div>
+                <div className="mt-1 text-sm font-black text-white">Campo</div>
+              </div>
+              <div className="rounded-2xl bg-white/[0.08] p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Dados</div>
+                <div className="mt-1 text-sm font-black text-execution">Tempo real</div>
+              </div>
+            </div>
           </div>
         </div>
+
         <nav className="relative flex-1 space-y-6 overflow-y-auto px-4 py-5">
           {navSections.map((section) => (
             <div key={section.label}>
-              <div className="px-3 pb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white/38">{section.label}</div>
+              <div className="px-3 pb-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/38">{section.label}</div>
               <div className="space-y-1">
                 {section.items.map((item) => {
                   const Icon = item.icon;
@@ -92,8 +97,8 @@ export function Layout() {
                       className={({ isActive }) =>
                         `relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-bold transition ${
                           isActive
-                            ? "bg-white text-forest shadow-lg shadow-black/10 before:absolute before:left-0 before:top-2.5 before:h-6 before:w-1 before:rounded-r before:bg-moss"
-                            : "text-white/68 hover:bg-white/10 hover:text-white"
+                            ? "bg-white text-navy shadow-lg shadow-black/10 before:absolute before:left-0 before:top-2.5 before:h-6 before:w-1 before:rounded-r before:bg-brand"
+                            : "text-white/65 hover:bg-white/10 hover:text-white"
                         }`
                       }
                     >
@@ -106,10 +111,11 @@ export function Layout() {
             </div>
           ))}
         </nav>
+
         <div className="relative border-t border-white/10 p-4">
-          <div className="mb-3 rounded-2xl border border-white/10 bg-white/10 px-3 py-3">
+          <div className="mb-3 rounded-3xl border border-white/10 bg-white/[0.08] px-3 py-3">
             <div className="flex items-center gap-3">
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/15">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand/30 text-blue-100">
                 <Activity className="h-4 w-4" />
               </div>
               <div className="min-w-0">
@@ -130,22 +136,22 @@ export function Layout() {
         </div>
       </aside>
 
-      <div className="lg:pl-72">
-        <header className="sticky top-0 z-10 border-b border-white/70 bg-white/78 shadow-sm shadow-stone-900/5 backdrop-blur-xl">
+      <div className="lg:pl-80">
+        <header className="sticky top-0 z-10 border-b border-white/70 bg-white/90 shadow-sm shadow-slate-900/5 backdrop-blur-xl">
           <div className="flex min-h-16 items-center justify-between gap-4 px-4 sm:px-5 lg:px-7">
             <div className="hidden min-w-0 sm:block">
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-500">Ambiente de produção</div>
-              <div className="truncate font-display text-base font-bold text-ink">Painel de operação de campo</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slateText">Ambiente de producao</div>
+              <div className="truncate font-display text-base font-black text-ink">Central enterprise de execucao em campo</div>
             </div>
+
             <div className="flex min-w-0 items-center gap-3 sm:hidden">
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-forest text-white">
-                <Building2 className="h-5 w-5" />
-              </div>
+              <BrandMark compact />
               <div className="min-w-0">
-                <div className="truncate font-display text-base font-bold">Promotores</div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Operação</div>
+                <div className="truncate font-display text-base font-black">PromotorPro</div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slateText">Operacao</div>
               </div>
             </div>
+
             <nav className="hidden gap-1 overflow-x-auto sm:flex lg:hidden">
               {navItems.map((item) => {
                 const Icon = item.icon;
@@ -156,7 +162,7 @@ export function Layout() {
                     title={item.label}
                     className={({ isActive }) =>
                       `grid h-11 w-11 flex-none place-items-center rounded-xl border transition ${
-                        isActive ? "border-moss bg-moss text-white shadow-lg shadow-moss/20" : "border-line bg-white text-stone-600 hover:bg-field"
+                        isActive ? "border-brand bg-brand text-white shadow-lg shadow-brand/20" : "border-line bg-white text-slateText hover:bg-field"
                       }`
                     }
                   >
@@ -165,12 +171,17 @@ export function Layout() {
                 );
               })}
             </nav>
+
             <div className="hidden items-center gap-2 lg:flex">
-              <span className="rounded-full border border-line bg-field px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-stone-600">
+              <button type="button" className="icon-button" title="Notificacoes">
+                <Bell className="h-4 w-4" />
+              </button>
+              <span className="rounded-full border border-line bg-field px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-slateText">
                 {roleLabel(user?.role)}
               </span>
             </div>
           </div>
+
           <nav className="flex gap-2 overflow-x-auto px-4 pb-3 sm:hidden">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -180,7 +191,7 @@ export function Layout() {
                   to={item.to}
                   className={({ isActive }) =>
                     `inline-flex h-10 flex-none items-center gap-2 rounded-full border px-3 text-xs font-bold transition ${
-                      isActive ? "border-moss bg-moss text-white" : "border-line bg-white text-stone-600"
+                      isActive ? "border-brand bg-brand text-white" : "border-line bg-white text-slateText"
                     }`
                   }
                 >
@@ -191,6 +202,7 @@ export function Layout() {
             })}
           </nav>
         </header>
+
         <main className="page-shell">
           <Outlet />
         </main>

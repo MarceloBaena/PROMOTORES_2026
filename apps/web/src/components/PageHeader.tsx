@@ -2,13 +2,17 @@ import type { ReactNode } from "react";
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
-    <div className="mb-6 flex min-h-16 flex-col justify-center gap-4 rounded-2xl border border-white/70 bg-white/70 px-5 py-4 shadow-sm shadow-stone-900/5 ring-1 ring-line/60 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+    <div className="relative mb-6 overflow-hidden rounded-[1.6rem] border border-white/80 bg-white/90 px-5 py-5 shadow-[0_20px_70px_rgba(15,23,42,0.08)] ring-1 ring-line/60 backdrop-blur-xl sm:px-6">
+      <div className="pointer-events-none absolute right-[-5rem] top-[-6rem] h-56 w-56 rounded-full bg-brand/10 blur-2xl" />
+      <div className="pointer-events-none absolute bottom-[-7rem] left-[24%] h-48 w-48 rounded-full bg-execution/10 blur-2xl" />
+      <div className="relative flex min-h-16 flex-col justify-center gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-moss">Retaguarda operacional</p>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">{title}</h1>
-        {subtitle ? <p className="mt-1 max-w-2xl text-sm font-semibold text-stone-500">{subtitle}</p> : null}
+        <p className="brand-chip mb-3">PromotorPro enterprise</p>
+        <h1 className="font-display text-2xl font-black tracking-tight text-ink sm:text-4xl">{title}</h1>
+        {subtitle ? <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slateText">{subtitle}</p> : null}
       </div>
       {action ? <div className="flex flex-wrap items-center gap-2">{action}</div> : null}
+      </div>
     </div>
   );
 }
