@@ -2,8 +2,9 @@
   "expo": {
     "name": "Promotores 2026",
     "slug": "promotores-2026-mobile",
-    "version": "0.1.13",
+    "version": "0.1.14",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "promotores2026",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
@@ -11,7 +12,11 @@
     ],
     "android": {
       "package": "com.promotores2026.app",
-      "versionCode": 14,
+      "versionCode": 15,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      },
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
