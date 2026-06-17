@@ -1,5 +1,7 @@
 import { Router } from "express";
 import PDFDocument from "pdfkit";
+import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
 import { scopedCompanyWhere } from "../lib/tenant";
@@ -37,6 +39,176 @@ function excelXml(rows: unknown[][]) {
 </Workbook>`;
 }
 
+const productivityQuerySchema = z.object({
+  startDate: z.string().datetime().or(z.string().date()).optional(),
+  endDate: z.string().datetime().or(z.string().date()).optional()
+});
+
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function minutesBetween(start?: Date | null, end?: Date | null) {
+  if (!start || !end) {
+    return null;
+  }
+
+  const minutes = Math.round((end.getTime() - start.getTime()) / 60000);
+  return minutes >= 0 ? minutes : 0;
+}
+
+function average(total: number, count: number) {
+  return count > 0 ? Math.round(total / count) : 0;
+}
+
+async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere>[0]) {
+  const input = productivityQuerySchema.parse(req.query);
+  const now = new Date();
+  const defaultStart = new Date(now);
+  defaultStart.setDate(now.getDate() - 30);
+
+  const startDate = input.startDate ? startOfDay(new Date(input.startDate)) : startOfDay(defaultStart);
+  const endDate = input.endDate ? endOfDay(new Date(input.endDate)) : endOfDay(now);
+  const where: Prisma.VisitWhereInput = {
+    ...scopedCompanyWhere(req),
+    startedAt: {
+      gte: startDate,
+      lte: endDate
+    }
+  };
+
+  const visits = await prisma.visit.findMany({
+    where,
+    include: {
+      client: true,
+      promoter: { include: { user: true } },
+      route: true
+    },
+    orderBy: [
+      { promoterId: "asc" },
+      { startedAt: "asc" },
+      { createdAt: "asc" }
+    ]
+  });
+
+  const previousByPromoter = new Map<string, (typeof visits)[number]>();
+  const summaryByPromoter = new Map<
+    string,
+    {
+      promoterId: string | null;
+      promoterCode: number | null;
+      promoterName: string;
+      visits: number;
+      completedVisits: number;
+      serviceMinutesTotal: number;
+      serviceCount: number;
+      travelMinutesTotal: number;
+      travelCount: number;
+      firstStartAt: string | null;
+      lastFinishAt: string | null;
+    }
+  >();
+
+  const rows = visits.map((visit) => {
+    const promoterKey = visit.promoterId ?? "sem-promotor";
+    const previousVisit = previousByPromoter.get(promoterKey);
+    const serviceMinutes = minutesBetween(visit.startedAt, visit.finishedAt);
+    const travelMinutes = minutesBetween(previousVisit?.finishedAt, visit.startedAt);
+    const promoterName = visit.promoter?.user.name ?? "Sem promotor";
+    const promoterCode = visit.promoter?.code ?? null;
+    const summary = summaryByPromoter.get(promoterKey) ?? {
+      promoterId: visit.promoterId,
+      promoterCode,
+      promoterName,
+      visits: 0,
+      completedVisits: 0,
+      serviceMinutesTotal: 0,
+      serviceCount: 0,
+      travelMinutesTotal: 0,
+      travelCount: 0,
+      firstStartAt: null,
+      lastFinishAt: null
+    };
+
+    summary.visits += 1;
+    summary.completedVisits += visit.status === "completed" ? 1 : 0;
+
+    if (serviceMinutes !== null) {
+      summary.serviceMinutesTotal += serviceMinutes;
+      summary.serviceCount += 1;
+    }
+
+    if (travelMinutes !== null && previousVisit?.finishedAt) {
+      summary.travelMinutesTotal += travelMinutes;
+      summary.travelCount += 1;
+    }
+
+    summary.firstStartAt ??= visit.startedAt?.toISOString() ?? null;
+
+    if (visit.finishedAt) {
+      summary.lastFinishAt = visit.finishedAt.toISOString();
+    }
+
+    summaryByPromoter.set(promoterKey, summary);
+    previousByPromoter.set(promoterKey, visit);
+
+    return {
+      visitId: visit.id,
+      promoterId: visit.promoterId,
+      promoterCode,
+      promoterName,
+      clientId: visit.clientId,
+      clientCode: visit.client.code,
+      clientName: visit.client.name,
+      routeName: visit.route?.name ?? null,
+      status: visit.status,
+      startedAt: visit.startedAt?.toISOString() ?? null,
+      finishedAt: visit.finishedAt?.toISOString() ?? null,
+      serviceMinutes,
+      previousClientName: previousVisit?.client.name ?? null,
+      travelFromPreviousMinutes: previousVisit?.finishedAt ? travelMinutes : null
+    };
+  });
+
+  const promoters = Array.from(summaryByPromoter.values()).map((item) => ({
+    ...item,
+    averageServiceMinutes: average(item.serviceMinutesTotal, item.serviceCount),
+    averageTravelMinutes: average(item.travelMinutesTotal, item.travelCount)
+  }));
+
+  return {
+    period: {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    },
+    totals: {
+      promoters: promoters.length,
+      visits: rows.length,
+      completedVisits: rows.filter((row) => row.status === "completed").length,
+      serviceMinutesTotal: promoters.reduce((total, item) => total + item.serviceMinutesTotal, 0),
+      travelMinutesTotal: promoters.reduce((total, item) => total + item.travelMinutesTotal, 0),
+      averageServiceMinutes: average(
+        promoters.reduce((total, item) => total + item.serviceMinutesTotal, 0),
+        promoters.reduce((total, item) => total + item.serviceCount, 0)
+      ),
+      averageTravelMinutes: average(
+        promoters.reduce((total, item) => total + item.travelMinutesTotal, 0),
+        promoters.reduce((total, item) => total + item.travelCount, 0)
+      )
+    },
+    promoters,
+    visits: rows
+  };
+}
+
 reportsRouter.get(
   "/summary",
   asyncHandler(async (req, res) => {
@@ -63,6 +235,53 @@ reportsRouter.get(
         imports
       }
     });
+  })
+);
+
+reportsRouter.get(
+  "/productivity",
+  asyncHandler(async (req, res) => {
+    const report = await buildProductivityReport(req);
+    res.json({ data: report });
+  })
+);
+
+reportsRouter.get(
+  "/productivity.csv",
+  asyncHandler(async (req, res) => {
+    const report = await buildProductivityReport(req);
+    const rows = [
+      [
+        "promotor_codigo",
+        "promotor",
+        "cliente_codigo",
+        "cliente",
+        "rota",
+        "status",
+        "inicio",
+        "fim",
+        "minutos_no_cliente",
+        "cliente_anterior",
+        "minutos_deslocamento"
+      ],
+      ...report.visits.map((visit) => [
+        visit.promoterCode ? `PRO-${String(visit.promoterCode).padStart(4, "0")}` : "",
+        visit.promoterName,
+        visit.clientCode ?? "",
+        visit.clientName,
+        visit.routeName ?? "",
+        visit.status,
+        visit.startedAt ?? "",
+        visit.finishedAt ?? "",
+        visit.serviceMinutes ?? "",
+        visit.previousClientName ?? "",
+        visit.travelFromPreviousMinutes ?? ""
+      ])
+    ];
+
+    res.header("content-type", "text/csv; charset=utf-8");
+    res.attachment("produtividade-promotores.csv");
+    res.send(rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n"));
   })
 );
 
