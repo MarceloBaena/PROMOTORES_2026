@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, FlatList, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, FlatList, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
@@ -37,6 +37,7 @@ import {
 } from "./database";
 import { createForegroundLocationTracker } from "./locationHeartbeat";
 import { syncPending } from "./sync";
+import promotorProIcon from "../assets/icon.png";
 
 type Screen = "login" | "home" | "visit" | "sync";
 type RouteItem = ReturnType<typeof listRouteItems>[number];
@@ -609,9 +610,12 @@ export default function App() {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.loginPanel} keyboardShouldPersistTaps="handled">
-          <View style={styles.brandBadge}>
-            <Text style={styles.brandBadgeIcon}>✓</Text>
-            <Text style={styles.brandBadgeText}>PROMOTORPRO</Text>
+          <View style={styles.mobileBrand}>
+            <Image source={promotorProIcon} style={styles.mobileBrandIcon} />
+            <View>
+              <Text style={styles.mobileBrandTitle}>PromotorPro</Text>
+              <Text style={styles.mobileBrandSubtitle}>GESTAO • EXECUCAO • RESULTADOS</Text>
+            </View>
           </View>
           <Text style={styles.title}>Operacao de campo</Text>
           <Text style={styles.muted}>Primeiro acesso com internet. Depois disso, roteiro, clientes, fotos e visitas ficam salvos no aparelho.</Text>
@@ -781,7 +785,13 @@ function Header(props: { title: string; onBack?: () => void }) {
   return (
     <View style={styles.header}>
       {props.onBack ? <TouchableOpacity onPress={props.onBack}><Text style={styles.back}>Voltar</Text></TouchableOpacity> : null}
-      <Text style={styles.headerTitle}>{props.title}</Text>
+      <View style={styles.headerBrandRow}>
+        <Image source={promotorProIcon} style={styles.headerIcon} />
+        <View style={styles.headerTextBlock}>
+          <Text style={styles.headerBrandText}>PromotorPro</Text>
+          <Text style={styles.headerTitle}>{props.title}</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -923,34 +933,29 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 14
   },
-  brandBadge: {
-    alignSelf: "flex-start",
+  mobileBrand: {
     alignItems: "center",
-    backgroundColor: "#DBEAFE",
-    borderColor: "#BFDBFE",
-    borderRadius: 999,
-    borderWidth: 1,
     flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8
+    gap: 14,
+    marginBottom: 8
   },
-  brandBadgeIcon: {
-    backgroundColor: "#10B981",
-    borderRadius: 999,
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "900",
-    height: 22,
-    lineHeight: 22,
-    textAlign: "center",
-    width: 22
+  mobileBrandIcon: {
+    borderRadius: 22,
+    height: 74,
+    width: 74
   },
-  brandBadgeText: {
-    color: "#2563EB",
-    fontSize: 12,
+  mobileBrandTitle: {
+    color: "#0F172A",
+    fontSize: 28,
     fontWeight: "900",
-    letterSpacing: 1
+    letterSpacing: -1
+  },
+  mobileBrandSubtitle: {
+    color: "#64748B",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.6,
+    marginTop: 3
   },
   loginHint: {
     backgroundColor: "#FFFFFF",
@@ -981,6 +986,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 18,
     paddingTop: 10
+  },
+  headerBrandRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12
+  },
+  headerIcon: {
+    borderRadius: 14,
+    height: 44,
+    width: 44
+  },
+  headerTextBlock: {
+    flex: 1
+  },
+  headerBrandText: {
+    color: "#93C5FD",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    textTransform: "uppercase"
   },
   headerTitle: {
     color: "#FFFFFF",

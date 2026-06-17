@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Promotores 2026",
+    "name": "PromotorPro",
     "slug": "promotores-2026-mobile",
-    "version": "0.1.14",
+    "version": "0.1.15",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "promotores2026",
@@ -12,7 +12,7 @@
     ],
     "android": {
       "package": "com.promotores2026.app",
-      "versionCode": 15,
+      "versionCode": 16,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F172A"

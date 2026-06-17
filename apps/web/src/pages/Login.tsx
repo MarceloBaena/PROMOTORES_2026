@@ -1,34 +1,13 @@
 import { FormEvent, useState } from "react";
 import { CheckCircle2, LockKeyhole, LogIn, MapPinned, ShieldCheck, Smartphone } from "lucide-react";
+import { BrandMark } from "../components/BrandMark";
 import { useAuth } from "../context/AuthContext";
 
 const loginFeatures = [
   { icon: MapPinned, label: "Roteiro publicado e monitorado" },
   { icon: Smartphone, label: "Aplicativo de campo conectado ao fluxo real" },
-  { icon: ShieldCheck, label: "Auditoria com evidências e situação" }
+  { icon: ShieldCheck, label: "Auditoria com evidencias e situacao" }
 ] as const;
-
-function PromotorProLogo({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div
-        className={`grid shrink-0 place-items-center overflow-hidden bg-white shadow-xl ring-1 ring-white/70 ${
-          compact ? "h-12 w-12 rounded-2xl" : "h-16 w-16 rounded-[1.4rem]"
-        } ${dark ? "shadow-slate-900/10" : "shadow-black/20"}`}
-      >
-        <img src="/promotorpro-icon.svg" alt="PromotorPro" className="h-full w-full object-cover" />
-      </div>
-      <div>
-        <div className={`${compact ? "text-lg" : "text-2xl"} font-display font-black tracking-tight ${dark ? "text-ink" : "text-white"}`}>
-          PromotorPro
-        </div>
-        <div className={`text-[11px] font-black uppercase tracking-[0.22em] ${dark ? "text-slateText" : "text-white/60"}`}>
-          Gestão de campo
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function Login() {
   const { login, apiMessage } = useAuth();
@@ -45,7 +24,7 @@ export function Login() {
     try {
       await login(email, password);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Não foi possível entrar.");
+      setError(nextError instanceof Error ? nextError.message : "Nao foi possivel entrar.");
     } finally {
       setLoading(false);
     }
@@ -61,7 +40,7 @@ export function Login() {
           <aside className="relative hidden overflow-hidden bg-navy p-8 text-white lg:block">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(37,99,235,0.35),transparent_18rem),radial-gradient(circle_at_88%_82%,rgba(16,185,129,0.24),transparent_20rem),linear-gradient(145deg,rgba(255,255,255,0.10),transparent_42%)]" />
             <div className="relative">
-              <PromotorProLogo />
+              <BrandMark />
 
               <div className="mt-14">
                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-100/70">Sistema operacional</p>
@@ -69,7 +48,7 @@ export function Login() {
                   Controle de promotores, rotas e visitas em tempo real.
                 </h1>
                 <p className="mt-4 max-w-sm text-sm font-semibold leading-6 text-white/68">
-                  Painel interno para supervisão de campo, auditoria, roteirização e acompanhamento das evidências de visita.
+                  Painel interno para supervisao de campo, auditoria, roteirizacao e acompanhamento das evidencias de visita.
                 </p>
               </div>
 
@@ -87,8 +66,8 @@ export function Login() {
           </aside>
 
           <form onSubmit={onSubmit} className="p-6 sm:p-9 lg:p-12">
-            <div className="mb-6 lg:hidden">
-              <PromotorProLogo compact dark />
+            <div className="mb-7 flex lg:hidden">
+              <BrandMark dark />
             </div>
 
             <div className="mb-8">
@@ -142,7 +121,7 @@ export function Login() {
             </button>
 
             <p className="mt-5 text-center text-xs font-semibold text-stone-500">
-              Acesso restrito ao time autorizado da operação.
+              Acesso restrito ao time autorizado da operacao.
             </p>
           </form>
         </div>
