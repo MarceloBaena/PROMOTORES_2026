@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, RefreshCw, Route, Timer, TrendingUp, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Award,
+  Clock3,
+  Download,
+  Gauge,
+  ListChecks,
+  MapPinned,
+  RefreshCw,
+  Route,
+  Timer,
+  TrendingUp,
+  Users
+} from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { apiDownload, apiJson, triggerDownload } from "../lib/api";
@@ -48,6 +61,8 @@ interface ProductivityReport {
   }>;
 }
 
+const allPromotersKey = "todos";
+
 const reportFiles = [
   { label: "Visitas em arquivo", path: "/reports/visits.csv", fileName: "visitas.csv" },
   { label: "Clientes em planilha", path: "/reports/clients.xls", fileName: "clientes.xls" },
@@ -78,6 +93,17 @@ function formatDateTime(value?: string | null) {
   }).format(new Date(value));
 }
 
+function formatTime(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
 function formatMinutes(value?: number | null) {
   if (value === null || value === undefined) {
     return "-";
@@ -96,9 +122,19 @@ function promoterCode(value?: number | null) {
   return value ? `PRO-${String(value).padStart(4, "0")}` : "-";
 }
 
+function promoterKey(value: { promoterId?: string | null; promoterCode?: number | null; promoterName: string }) {
+  return value.promoterId ?? value.promoterCode?.toString() ?? value.promoterName;
+}
+
+function percent(value: number, total: number) {
+  return total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
 export function ReportsPage() {
   const [startDate, setStartDate] = useState(defaultStartDate);
   const [endDate, setEndDate] = useState(dateInputValue(new Date()));
+  const [selectedPromoterKey, setSelectedPromoterKey] = useState(allPromotersKey);
+  const [refreshSeed, setRefreshSeed] = useState(0);
   const [report, setReport] = useState<ProductivityReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +178,34 @@ export function ReportsPage() {
     return () => {
       active = false;
     };
-  }, [productivityPath]);
+  }, [productivityPath, refreshSeed]);
+
+  const rankedPromoters = useMemo(
+    () =>
+      [...(report?.promoters ?? [])].sort((first, second) => {
+        if (second.completedVisits !== first.completedVisits) {
+          return second.completedVisits - first.completedVisits;
+        }
+
+        return first.averageServiceMinutes - second.averageServiceMinutes;
+      }),
+    [report?.promoters]
+  );
+
+  const filteredVisits = useMemo(() => {
+    const visits = report?.visits ?? [];
+
+    if (selectedPromoterKey === allPromotersKey) {
+      return visits;
+    }
+
+    return visits.filter((visit) => promoterKey(visit) === selectedPromoterKey);
+  }, [report?.visits, selectedPromoterKey]);
+
+  const selectedPromoter = rankedPromoters.find((promoter) => promoterKey(promoter) === selectedPromoterKey) ?? null;
+  const completionRate = report?.totals.visits ? percent(report.totals.completedVisits, report.totals.visits) : 0;
+  const bestPromoter = rankedPromoters[0];
+  const selectedCompletedVisits = filteredVisits.filter((visit) => visit.status === "completed").length;
 
   async function download(path: string, fileName: string) {
     const blob = await apiDownload(path);
@@ -155,17 +218,15 @@ export function ReportsPage() {
     triggerDownload(blob, "produtividade-promotores.csv");
   }
 
-  const completionRate = report?.totals.visits ? Math.round((report.totals.completedVisits / report.totals.visits) * 100) : 0;
-
   return (
     <section>
       <PageHeader
-        title="Relatórios operacionais"
-        subtitle="Analise produtividade dos promotores, tempo dentro do cliente e deslocamento entre atendimentos."
+        title="Produtividade dos promotores"
+        subtitle="Acompanhe em tela quem produziu, quanto tempo ficou no cliente e quanto tempo gastou entre um atendimento e outro."
         action={
           <button type="button" className="primary-button" onClick={() => void downloadProductivity()} disabled={!report || loading}>
             <Download className="h-4 w-4" />
-            Exportar produtividade
+            Exportar Excel/CSV
           </button>
         }
       />
@@ -174,14 +235,13 @@ export function ReportsPage() {
 
       <div className="mb-5 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="surface-card">
-          <div className="mb-4">
-            <p className="brand-chip">Filtro do relatório</p>
-            <h2 className="mt-3 font-display text-xl font-black text-ink">Período analisado</h2>
-            <p className="mt-1 text-sm font-semibold text-slateText">
-              O deslocamento é calculado entre o fim de uma visita e o início da próxima do mesmo promotor.
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+          <p className="brand-chip">Painel em tela</p>
+          <h2 className="mt-3 font-display text-xl font-black text-ink">Filtros da operacao</h2>
+          <p className="mt-1 text-sm font-semibold leading-6 text-slateText">
+            Use o periodo e o promotor para enxergar a rotina sem precisar abrir planilha.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
             <label>
               <span className="field-label">Data inicial</span>
               <input className="input-control" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
@@ -190,119 +250,144 @@ export function ReportsPage() {
               <span className="field-label">Data final</span>
               <input className="input-control" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
             </label>
+            <label className="sm:col-span-2 xl:col-span-1">
+              <span className="field-label">Promotor</span>
+              <select className="input-control" value={selectedPromoterKey} onChange={(event) => setSelectedPromoterKey(event.target.value)}>
+                <option value={allPromotersKey}>Todos os promotores</option>
+                {rankedPromoters.map((promoter) => (
+                  <option key={promoterKey(promoter)} value={promoterKey(promoter)}>
+                    {promoterCode(promoter.promoterCode)} - {promoter.promoterName}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-          <button type="button" className="secondary-button mt-4 w-full" onClick={() => void apiJson<{ data: ProductivityReport }>(productivityPath).then((response) => setReport(response.data))}>
-            <RefreshCw className="h-4 w-4" />
-            Atualizar relatório
+
+          <button type="button" className="secondary-button mt-4 w-full" onClick={() => setRefreshSeed((current) => current + 1)} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Atualizar painel
           </button>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-          <ProductivityMetric icon={Users} label="Promotores analisados" value={report?.totals.promoters ?? 0} helper="Com visitas no período" />
-          <ProductivityMetric icon={TrendingUp} label="Conclusão" value={`${completionRate}%`} helper={`${report?.totals.completedVisits ?? 0} de ${report?.totals.visits ?? 0} visitas`} />
-          <ProductivityMetric icon={Timer} label="Média no cliente" value={formatMinutes(report?.totals.averageServiceMinutes ?? 0)} helper="Tempo de atendimento" />
-          <ProductivityMetric icon={Route} label="Média deslocamento" value={formatMinutes(report?.totals.averageTravelMinutes ?? 0)} helper="Entre clientes" />
+        <div className="relative overflow-hidden rounded-[1.6rem] bg-navy p-6 text-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+          <div className="pointer-events-none absolute right-[-7rem] top-[-9rem] h-80 w-80 rounded-full bg-brand/45 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-[-8rem] left-[28%] h-72 w-72 rounded-full bg-execution/25 blur-3xl" />
+          <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div>
+              <p className="execution-chip border-white/10 bg-white/10 text-emerald-100">Visao executiva</p>
+              <h2 className="mt-4 max-w-3xl font-display text-3xl font-black leading-tight tracking-tight sm:text-5xl">
+                Produtividade clara para decidir rapido.
+              </h2>
+              <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-white/68">
+                Veja o volume de visitas, a taxa de conclusao, o tempo dentro do cliente e o deslocamento da equipe no mesmo painel.
+              </p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                <HeroStat label="Visitas" value={report?.totals.visits ?? 0} />
+                <HeroStat label="Concluidas" value={report?.totals.completedVisits ?? 0} />
+                <HeroStat label="Conclusao" value={`${completionRate}%`} />
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/10 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/44">Destaque</p>
+                  <h3 className="mt-1 font-display text-xl font-black">{bestPromoter?.promoterName ?? "Sem dados"}</h3>
+                </div>
+                <Award className="h-7 w-7 text-execution" />
+              </div>
+              <div className="mt-5 space-y-4">
+                <HeroProgress label="Execucao" value={completionRate} />
+                <div className="grid grid-cols-2 gap-3">
+                  <SmallDarkStat label="No cliente" value={formatMinutes(report?.totals.averageServiceMinutes ?? 0)} />
+                  <SmallDarkStat label="Deslocamento" value={formatMinutes(report?.totals.averageTravelMinutes ?? 0)} />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="table-wrap">
-          <div className="panel-header">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+        <ProductivityMetric icon={Users} label="Promotores analisados" value={report?.totals.promoters ?? 0} helper="Equipe com visitas no periodo" />
+        <ProductivityMetric icon={TrendingUp} label="Taxa de conclusao" value={`${completionRate}%`} helper={`${report?.totals.completedVisits ?? 0} de ${report?.totals.visits ?? 0} visitas`} />
+        <ProductivityMetric icon={Timer} label="Media no cliente" value={formatMinutes(report?.totals.averageServiceMinutes ?? 0)} helper="Tempo medio de atendimento" />
+        <ProductivityMetric icon={Route} label="Media deslocamento" value={formatMinutes(report?.totals.averageTravelMinutes ?? 0)} helper="Entre fim e inicio de visitas" />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[430px_minmax(0,1fr)]">
+        <div className="surface-card">
+          <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h2 className="panel-title">Resumo por promotor</h2>
-              <p className="panel-subtitle">Tempo total e média operacional no período selecionado.</p>
+              <p className="brand-chip">Ranking operacional</p>
+              <h2 className="mt-3 font-display text-2xl font-black tracking-tight text-ink">Promotores</h2>
+              <p className="mt-1 text-sm font-semibold text-slateText">Clique em um promotor para filtrar os atendimentos.</p>
             </div>
+            <Gauge className="h-6 w-6 text-brand" />
           </div>
-          <div className="overflow-x-auto">
-            <table className="data-table min-w-[720px]">
-              <thead>
-                <tr>
-                  <th>Promotor</th>
-                  <th>Visitas</th>
-                  <th>Concluídas</th>
-                  <th>Média cliente</th>
-                  <th>Média deslocamento</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(report?.promoters ?? []).map((promoter) => (
-                  <tr key={promoter.promoterId ?? promoter.promoterName}>
-                    <td>
-                      <div className="font-black">{promoter.promoterName}</div>
-                      <div className="text-xs font-bold text-slateText">{promoterCode(promoter.promoterCode)}</div>
-                    </td>
-                    <td>{promoter.visits}</td>
-                    <td>{promoter.completedVisits}</td>
-                    <td>{formatMinutes(promoter.averageServiceMinutes)}</td>
-                    <td>{formatMinutes(promoter.averageTravelMinutes)}</td>
-                  </tr>
-                ))}
-                {!loading && (report?.promoters.length ?? 0) === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-slateText">
-                      Nenhuma visita encontrada no período.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              className={`w-full rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 ${
+                selectedPromoterKey === allPromotersKey ? "border-brand bg-brandSoft shadow-lg shadow-blue-900/10" : "border-line bg-white"
+              }`}
+              onClick={() => setSelectedPromoterKey(allPromotersKey)}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-black text-ink">Todos os promotores</div>
+                  <div className="text-xs font-bold text-slateText">{report?.totals.visits ?? 0} visita(s) no periodo</div>
+                </div>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-brand ring-1 ring-brand/15">Geral</span>
+              </div>
+            </button>
+
+            {rankedPromoters.map((promoter, index) => (
+              <PromoterScoreCard
+                key={promoterKey(promoter)}
+                promoter={promoter}
+                rank={index + 1}
+                active={selectedPromoterKey === promoterKey(promoter)}
+                onClick={() => setSelectedPromoterKey(promoterKey(promoter))}
+              />
+            ))}
+
+            {!loading && rankedPromoters.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-line bg-field p-6 text-center text-sm font-bold text-slateText">
+                Nenhum promotor com visita no periodo.
+              </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="table-wrap">
-          <div className="panel-header">
+        <div className="surface-card">
+          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h2 className="panel-title">Detalhe de produtividade</h2>
-              <p className="panel-subtitle">Sequência real de atendimentos, deslocamento e tempo no cliente.</p>
+              <p className="execution-chip">Linha do tempo</p>
+              <h2 className="mt-3 font-display text-2xl font-black tracking-tight text-ink">
+                {selectedPromoter ? selectedPromoter.promoterName : "Atendimentos do periodo"}
+              </h2>
+              <p className="mt-1 text-sm font-semibold text-slateText">
+                {filteredVisits.length} visita(s), {selectedCompletedVisits} concluida(s).
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
+              <MiniInfo label="No cliente" value={formatMinutes(selectedPromoter?.averageServiceMinutes ?? report?.totals.averageServiceMinutes ?? 0)} />
+              <MiniInfo label="Deslocamento" value={formatMinutes(selectedPromoter?.averageTravelMinutes ?? report?.totals.averageTravelMinutes ?? 0)} />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="data-table min-w-[980px]">
-              <thead>
-                <tr>
-                  <th>Promotor</th>
-                  <th>Cliente</th>
-                  <th>Situação</th>
-                  <th>Início</th>
-                  <th>Fim</th>
-                  <th>No cliente</th>
-                  <th>Deslocamento</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(report?.visits ?? []).map((visit) => (
-                  <tr key={visit.visitId}>
-                    <td>
-                      <div className="font-black">{visit.promoterName}</div>
-                      <div className="text-xs font-bold text-slateText">{promoterCode(visit.promoterCode)}</div>
-                    </td>
-                    <td>
-                      <div className="font-black">{visit.clientName}</div>
-                      <div className="text-xs font-bold text-slateText">{visit.routeName ?? "Sem rota vinculada"}</div>
-                    </td>
-                    <td>
-                      <StatusPill value={visit.status} />
-                    </td>
-                    <td>{formatDateTime(visit.startedAt)}</td>
-                    <td>{formatDateTime(visit.finishedAt)}</td>
-                    <td>{formatMinutes(visit.serviceMinutes)}</td>
-                    <td>
-                      <div className="font-black">{formatMinutes(visit.travelFromPreviousMinutes)}</div>
-                      <div className="text-xs font-bold text-slateText">
-                        {visit.previousClientName ? `Desde ${visit.previousClientName}` : "Primeira visita do promotor"}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!loading && (report?.visits.length ?? 0) === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-8 text-center text-slateText">
-                      Nenhum atendimento encontrado para calcular produtividade.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+
+          <div className="grid gap-3 2xl:grid-cols-2">
+            {filteredVisits.map((visit, index) => (
+              <VisitTimelineCard key={visit.visitId} visit={visit} index={index + 1} />
+            ))}
+
+            {!loading && filteredVisits.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-line bg-field p-8 text-center text-sm font-bold text-slateText 2xl:col-span-2">
+                Nenhum atendimento encontrado para o filtro selecionado.
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -310,17 +395,64 @@ export function ReportsPage() {
       <div className="table-wrap mt-5">
         <div className="panel-header">
           <div>
+            <h2 className="panel-title">Detalhe tecnico para conferencia</h2>
+            <p className="panel-subtitle">Base completa do painel, mantendo a leitura operacional em tela.</p>
+          </div>
+          <button type="button" className="secondary-button h-10" onClick={() => void downloadProductivity()} disabled={!report || loading}>
+            <Download className="h-4 w-4" />
+            Exportar
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table min-w-[980px]">
+            <thead>
+              <tr>
+                <th>Promotor</th>
+                <th>Cliente</th>
+                <th>Situacao</th>
+                <th>Inicio</th>
+                <th>Fim</th>
+                <th>No cliente</th>
+                <th>Deslocamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredVisits.map((visit) => (
+                <tr key={visit.visitId}>
+                  <td>
+                    <div className="font-black">{visit.promoterName}</div>
+                    <div className="text-xs font-bold text-slateText">{promoterCode(visit.promoterCode)}</div>
+                  </td>
+                  <td>
+                    <div className="font-black">{visit.clientName}</div>
+                    <div className="text-xs font-bold text-slateText">{visit.routeName ?? "Sem rota vinculada"}</div>
+                  </td>
+                  <td><StatusPill value={visit.status} /></td>
+                  <td>{formatDateTime(visit.startedAt)}</td>
+                  <td>{formatDateTime(visit.finishedAt)}</td>
+                  <td>{formatMinutes(visit.serviceMinutes)}</td>
+                  <td>{formatMinutes(visit.travelFromPreviousMinutes)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="table-wrap mt-5">
+        <div className="panel-header">
+          <div>
             <h2 className="panel-title">Arquivos complementares</h2>
-            <p className="panel-subtitle">Exportações tradicionais para conferência e auditoria.</p>
+            <p className="panel-subtitle">Exportacoes tradicionais para conferencia e auditoria.</p>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Relatório</th>
+                <th>Relatorio</th>
                 <th>Arquivo</th>
-                <th className="w-28">Ação</th>
+                <th className="w-28">Acao</th>
               </tr>
             </thead>
             <tbody>
@@ -342,9 +474,50 @@ export function ReportsPage() {
 
       {loading ? <div className="mt-4 text-sm font-bold text-slateText">Carregando produtividade...</div> : null}
       <div className="mt-3 text-xs font-bold text-slateText">
-        Regra: {statusLabel("completed")} conta como visita concluída. Tempo no cliente usa início e fim do atendimento. Deslocamento usa o fim da visita anterior e o início da próxima visita do mesmo promotor.
+        Regra: {statusLabel("completed")} conta como visita concluida. Tempo no cliente usa inicio e fim do atendimento. Deslocamento usa o fim da visita anterior e o inicio da proxima visita do mesmo promotor.
       </div>
     </section>
+  );
+}
+
+function HeroStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
+      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-white/48">{label}</div>
+      <div className="mt-2 font-display text-3xl font-black text-white">{value}</div>
+    </div>
+  );
+}
+
+function HeroProgress({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-[0.14em] text-white/54">
+        <span>{label}</span>
+        <span>{value}%</span>
+      </div>
+      <div className="h-2 rounded-full bg-white/10">
+        <div className="h-2 rounded-full bg-gradient-to-r from-execution to-sky-300" style={{ width: `${Math.min(100, value)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function SmallDarkStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/10 p-3">
+      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-white/44">{label}</div>
+      <div className="mt-1 font-display text-lg font-black text-white">{value}</div>
+    </div>
+  );
+}
+
+function MiniInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-field px-4 py-3">
+      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slateText">{label}</div>
+      <div className="mt-1 font-display text-lg font-black text-ink">{value}</div>
+    </div>
   );
 }
 
@@ -354,7 +527,7 @@ function ProductivityMetric({
   value,
   helper
 }: {
-  icon: typeof Users;
+  icon: LucideIcon;
   label: string;
   value: string | number;
   helper: string;
@@ -371,6 +544,105 @@ function ProductivityMetric({
         </span>
       </div>
       <p className="relative z-[1] mt-3 text-xs font-bold text-slateText">{helper}</p>
+    </div>
+  );
+}
+
+function PromoterScoreCard({
+  promoter,
+  rank,
+  active,
+  onClick
+}: {
+  promoter: ProductivityReport["promoters"][number];
+  rank: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const executionRate = percent(promoter.completedVisits, promoter.visits);
+
+  return (
+    <button
+      type="button"
+      className={`w-full rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 ${
+        active ? "border-brand bg-brandSoft shadow-lg shadow-blue-900/10" : "border-line bg-white hover:bg-skywash"
+      }`}
+      onClick={onClick}
+    >
+      <div className="flex items-start gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-navy font-display text-lg font-black text-white">
+          {rank}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="font-black text-ink">{promoter.promoterName}</div>
+              <div className="text-xs font-bold text-slateText">{promoterCode(promoter.promoterCode)}</div>
+            </div>
+            <span className="rounded-full bg-executionSoft px-3 py-1 text-xs font-black text-emerald-700">{executionRate}%</span>
+          </div>
+          <div className="mt-3 h-2 rounded-full bg-muted">
+            <div className="h-2 rounded-full bg-gradient-to-r from-brand to-execution" style={{ width: `${executionRate}%` }} />
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <PromoterMiniStat label="Visitas" value={promoter.visits} />
+            <PromoterMiniStat label="Cliente" value={formatMinutes(promoter.averageServiceMinutes)} />
+            <PromoterMiniStat label="Rota" value={formatMinutes(promoter.averageTravelMinutes)} />
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function PromoterMiniStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl bg-field px-2 py-2">
+      <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slateText">{label}</div>
+      <div className="mt-1 text-xs font-black text-ink">{value}</div>
+    </div>
+  );
+}
+
+function VisitTimelineCard({ visit, index }: { visit: ProductivityReport["visits"][number]; index: number }) {
+  return (
+    <article className="rounded-3xl border border-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5">
+      <div className="flex items-start gap-3">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-navy font-display text-lg font-black text-white">
+          {index}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="font-display text-lg font-black leading-tight text-ink">{visit.clientName}</h3>
+              <p className="mt-1 text-xs font-bold text-slateText">{visit.routeName ?? "Sem rota vinculada"}</p>
+            </div>
+            <StatusPill value={visit.status} />
+          </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <TimelineInfo icon={Clock3} label="Horario" value={`${formatTime(visit.startedAt)} - ${formatTime(visit.finishedAt)}`} />
+            <TimelineInfo icon={Timer} label="No cliente" value={formatMinutes(visit.serviceMinutes)} />
+            <TimelineInfo icon={MapPinned} label="Deslocamento" value={formatMinutes(visit.travelFromPreviousMinutes)} />
+          </div>
+
+          <div className="mt-3 rounded-2xl bg-field px-3 py-2 text-xs font-bold text-slateText">
+            {visit.previousClientName ? `Veio de: ${visit.previousClientName}` : "Primeira visita registrada para este promotor no periodo."}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function TimelineInfo({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-field p-3">
+      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <div className="mt-1 font-display text-base font-black text-ink">{value}</div>
     </div>
   );
 }
