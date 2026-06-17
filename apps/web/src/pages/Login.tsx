@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Building2, CheckCircle2, LockKeyhole, LogIn, MapPinned, ShieldCheck, Smartphone } from "lucide-react";
+import { CheckCircle2, LockKeyhole, LogIn, MapPinned, ShieldCheck, Smartphone } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const loginFeatures = [
@@ -7,6 +7,28 @@ const loginFeatures = [
   { icon: Smartphone, label: "Aplicativo de campo conectado ao fluxo real" },
   { icon: ShieldCheck, label: "Auditoria com evidências e situação" }
 ] as const;
+
+function PromotorProLogo({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className={`grid shrink-0 place-items-center overflow-hidden bg-white shadow-xl ring-1 ring-white/70 ${
+          compact ? "h-12 w-12 rounded-2xl" : "h-16 w-16 rounded-[1.4rem]"
+        } ${dark ? "shadow-slate-900/10" : "shadow-black/20"}`}
+      >
+        <img src="/promotorpro-icon.svg" alt="PromotorPro" className="h-full w-full object-cover" />
+      </div>
+      <div>
+        <div className={`${compact ? "text-lg" : "text-2xl"} font-display font-black tracking-tight ${dark ? "text-ink" : "text-white"}`}>
+          PromotorPro
+        </div>
+        <div className={`text-[11px] font-black uppercase tracking-[0.22em] ${dark ? "text-slateText" : "text-white/60"}`}>
+          Gestão de campo
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function Login() {
   const { login, apiMessage } = useAuth();
@@ -31,68 +53,58 @@ export function Login() {
 
   return (
     <main className="relative grid min-h-screen overflow-hidden px-4 py-8 text-ink">
-      <div className="pointer-events-none absolute left-[-12rem] top-[-16rem] h-[34rem] w-[34rem] rounded-full bg-moss/15 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-[-18rem] right-[-10rem] h-[38rem] w-[38rem] rounded-full bg-steel/15 blur-3xl" />
+      <div className="pointer-events-none absolute left-[-12rem] top-[-16rem] h-[34rem] w-[34rem] rounded-full bg-brand/15 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-[-18rem] right-[-10rem] h-[38rem] w-[38rem] rounded-full bg-execution/15 blur-3xl" />
+
       <div className="relative mx-auto flex w-full max-w-[1120px] items-center justify-center">
-        <div className="grid w-full overflow-hidden rounded-[2rem] border border-white/75 bg-white/90 shadow-[0_28px_90px_rgba(17,25,23,0.16)] ring-1 ring-line/70 backdrop-blur lg:grid-cols-[440px_minmax(0,1fr)]">
-          <aside className="relative hidden overflow-hidden bg-forest p-8 text-white lg:block">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.16),transparent_18rem),linear-gradient(145deg,rgba(255,255,255,0.09),transparent_42%)]" />
+        <div className="grid w-full overflow-hidden rounded-[2rem] border border-white/75 bg-white/90 shadow-[0_28px_90px_rgba(15,23,42,0.16)] ring-1 ring-line/70 backdrop-blur lg:grid-cols-[440px_minmax(0,1fr)]">
+          <aside className="relative hidden overflow-hidden bg-navy p-8 text-white lg:block">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(37,99,235,0.35),transparent_18rem),radial-gradient(circle_at_88%_82%,rgba(16,185,129,0.24),transparent_20rem),linear-gradient(145deg,rgba(255,255,255,0.10),transparent_42%)]" />
             <div className="relative">
-            <div className="flex items-center gap-3">
-              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-forest shadow-xl shadow-black/20">
-                <Building2 className="h-5 w-5" />
+              <PromotorProLogo />
+
+              <div className="mt-14">
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-100/70">Sistema operacional</p>
+                <h1 className="mt-3 font-display text-4xl font-black leading-tight tracking-tight">
+                  Controle de promotores, rotas e visitas em tempo real.
+                </h1>
+                <p className="mt-4 max-w-sm text-sm font-semibold leading-6 text-white/68">
+                  Painel interno para supervisão de campo, auditoria, roteirização e acompanhamento das evidências de visita.
+                </p>
               </div>
-              <div>
-                <div className="font-display text-xl font-bold tracking-tight">Promotores 2026</div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/55">Central de campo</div>
-              </div>
-            </div>
-            <div className="mt-14">
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-100/70">Sistema operacional</p>
-              <h1 className="mt-3 font-display text-4xl font-bold leading-tight tracking-tight">
-                Controle de promotores, rotas e visitas em tempo real.
-              </h1>
-              <p className="mt-4 max-w-sm text-sm font-medium leading-6 text-white/65">
-                Painel interno para supervisão de campo, auditoria, roteirização e acompanhamento das evidências de visita.
-              </p>
-            </div>
-            <div className="mt-10 grid gap-3">
-              {loginFeatures.map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/12">
-                    <Icon className="h-4 w-4" />
+
+              <div className="mt-10 grid gap-3">
+                {loginFeatures.map(({ icon: Icon, label }) => (
+                  <div key={label} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
+                    <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/12">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-bold text-white/85">{label}</span>
                   </div>
-                  <span className="text-sm font-bold text-white/85">{label}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
             </div>
           </aside>
 
           <form onSubmit={onSubmit} className="p-6 sm:p-9 lg:p-12">
-            <div className="mb-6 flex items-center gap-3 lg:hidden">
-              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-forest text-white">
-                <Building2 className="h-5 w-5" />
-              </div>
-              <div>
-                <h1 className="font-display text-lg font-bold">Promotores 2026</h1>
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-500">Central</p>
-              </div>
+            <div className="mb-6 lg:hidden">
+              <PromotorProLogo compact dark />
             </div>
 
             <div className="mb-8">
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-field px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-stone-600">
-                <CheckCircle2 className="h-4 w-4 text-moss" />
+                <CheckCircle2 className="h-4 w-4 text-execution" />
                 Ambiente seguro
               </div>
+
               <div className="flex items-center gap-3">
-              <div className="grid h-12 w-12 place-items-center rounded-2xl border border-line bg-field text-graphite">
-                <LockKeyhole className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="font-display text-3xl font-bold tracking-tight">Acesso ao sistema</h2>
-                <p className="mt-1 text-sm font-semibold text-stone-500">Use suas credenciais operacionais</p>
-              </div>
+                <div className="grid h-12 w-12 place-items-center rounded-2xl border border-line bg-field text-graphite">
+                  <LockKeyhole className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-display text-3xl font-black tracking-tight">Acesso ao sistema</h2>
+                  <p className="mt-1 text-sm font-semibold text-stone-500">Use suas credenciais operacionais</p>
+                </div>
               </div>
             </div>
 
@@ -128,6 +140,7 @@ export function Login() {
               <LogIn className="h-4 w-4" />
               {loading ? "Entrando..." : "Entrar"}
             </button>
+
             <p className="mt-5 text-center text-xs font-semibold text-stone-500">
               Acesso restrito ao time autorizado da operação.
             </p>
