@@ -1,7 +1,17 @@
-import { DEFAULT_USERS } from "@sales-promoters/shared";
 import type { RoleCode } from "@sales-promoters/shared";
 import { prisma } from "../lib/prisma";
 import { hashPassword } from "./auth-service";
+
+const DEFAULT_ACCESS_USERS = {
+  admin: {
+    email: "admin@salespromoters.local",
+    password: "Admin@123"
+  },
+  supervisor: {
+    email: "supervisor@salespromoters.local",
+    password: "Supervisor@123"
+  }
+} as const;
 
 const roleNames: Record<RoleCode, string> = {
   ADMIN: "Administrador",
@@ -83,18 +93,18 @@ export async function bootstrapAccess(options: BootstrapOptions) {
   });
 
   const admin = await ensureUser({
-    email: DEFAULT_USERS.admin.email,
+    email: DEFAULT_ACCESS_USERS.admin.email,
     name: "Admin Sales Promoters",
-    password: DEFAULT_USERS.admin.password,
+    password: DEFAULT_ACCESS_USERS.admin.password,
     roleCode: "ADMIN",
     resetPasswords: options.resetPasswords,
     companyId: null
   });
 
   const supervisor = await ensureUser({
-    email: DEFAULT_USERS.supervisor.email,
+    email: DEFAULT_ACCESS_USERS.supervisor.email,
     name: "Supervisor Sales Promoters",
-    password: DEFAULT_USERS.supervisor.password,
+    password: DEFAULT_ACCESS_USERS.supervisor.password,
     roleCode: "SUPERVISOR",
     resetPasswords: options.resetPasswords,
     companyId: defaultCompany.id

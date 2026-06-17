@@ -48,7 +48,17 @@ const base64PhotoSchema = photoSchema.extend({
   base64Image: z.string().min(100)
 });
 
-function visitCreatePayload(input: z.infer<typeof visitSchema>, companyId: string, promoterId?: string | null): Prisma.VisitUncheckedCreateInput {
+type SanitizedVisitInput = Omit<z.infer<typeof visitSchema>, "routeId" | "routeItemId"> & {
+  routeId?: string | null;
+  routeItemId?: string | null;
+};
+
+type SanitizedVisitUpdateInput = Omit<Partial<z.infer<typeof visitSchema>>, "routeId" | "routeItemId"> & {
+  routeId?: string | null;
+  routeItemId?: string | null;
+};
+
+function visitCreatePayload(input: SanitizedVisitInput, companyId: string, promoterId?: string | null): Prisma.VisitUncheckedCreateInput {
   return {
     clientGeneratedId: input.clientGeneratedId,
     companyId,
@@ -65,7 +75,7 @@ function visitCreatePayload(input: z.infer<typeof visitSchema>, companyId: strin
   };
 }
 
-function visitUpdatePayload(input: Partial<z.infer<typeof visitSchema>>, companyId?: string | null): Prisma.VisitUncheckedUpdateInput {
+function visitUpdatePayload(input: SanitizedVisitUpdateInput, companyId?: string | null): Prisma.VisitUncheckedUpdateInput {
   return {
     clientGeneratedId: input.clientGeneratedId,
     companyId,
@@ -85,6 +95,53 @@ function visitUpdatePayload(input: Partial<z.infer<typeof visitSchema>>, company
 function dataUrl(contentType: string, base64Image: string) {
   const [, payload = base64Image] = base64Image.split(",");
   return `data:${contentType};base64,${payload.replace(/\s/g, "")}`;
+}
+
+async function sanitizeVisitRelations(input: SanitizedVisitUpdateInput, companyId: string) {
+  const [client, route, routeItem, inputPromoter] = await Promise.all([
+    input.clientId ? prisma.client.findUnique({ where: { id: input.clientId }, select: { companyId: true } }) : null,
+    input.routeId ? prisma.route.findUnique({ where: { id: input.routeId }, select: { id: true, companyId: true } }) : null,
+    input.routeItemId
+      ? prisma.routeItem.findUnique({ where: { id: input.routeItemId }, select: { id: true, routeId: true, route: { select: { companyId: true } } } })
+      : null,
+    input.promoterId ? prisma.promoter.findUnique({ where: { id: input.promoterId }, select: { companyId: true } }) : null
+  ]);
+
+  if (input.clientId && !client) {
+    throw new AppError(404, "CLIENT_NOT_FOUND", "Cliente da visita nao foi encontrado.");
+  }
+
+  if (client && client.companyId !== companyId) {
+    throw new AppError(400, "VISIT_COMPANY_MISMATCH", "Cliente, rota e visita precisam pertencer a mesma empresa/filial.");
+  }
+
+  let routeId: string | null | undefined = input.routeId;
+  let routeItemId: string | null | undefined = input.routeItemId;
+
+  if (input.routeId && !route) {
+    routeId = null;
+    logger.warn({ routeId: input.routeId, clientId: input.clientId }, "mobile visit received with stale route id");
+  } else if (route && route.companyId !== companyId) {
+    throw new AppError(400, "VISIT_COMPANY_MISMATCH", "Cliente, rota e visita precisam pertencer a mesma empresa/filial.");
+  }
+
+  if (input.routeItemId && !routeItem) {
+    routeItemId = null;
+    logger.warn({ routeItemId: input.routeItemId, clientId: input.clientId }, "mobile visit received with stale route item id");
+  } else if (routeItem) {
+    if (routeItem.route.companyId !== companyId) {
+      throw new AppError(400, "VISIT_COMPANY_MISMATCH", "Cliente, rota e visita precisam pertencer a mesma empresa/filial.");
+    }
+
+    routeItemId = routeItem.id;
+    routeId = routeItem.routeId;
+  }
+
+  if (inputPromoter && inputPromoter.companyId !== companyId) {
+    throw new AppError(400, "PROMOTER_COMPANY_MISMATCH", "Promotor pertence a outra empresa/filial.");
+  }
+
+  return { routeId, routeItemId };
 }
 
 visitsRouter.get(
@@ -140,26 +197,10 @@ visitsRouter.post(
       ? await prisma.promoter.findUnique({ where: { userId: req.user.id } })
       : null;
     const companyId = requireCompanyId(req, input.companyId ?? promoter?.companyId);
-
-    const [client, route, routeItem, inputPromoter] = await Promise.all([
-      prisma.client.findUnique({ where: { id: input.clientId }, select: { companyId: true } }),
-      input.routeId ? prisma.route.findUnique({ where: { id: input.routeId }, select: { companyId: true } }) : null,
-      input.routeItemId
-        ? prisma.routeItem.findUnique({ where: { id: input.routeItemId }, select: { route: { select: { companyId: true } } } })
-        : null,
-      input.promoterId ? prisma.promoter.findUnique({ where: { id: input.promoterId }, select: { companyId: true } }) : null
-    ]);
-
-    if (client?.companyId !== companyId || route?.companyId && route.companyId !== companyId || routeItem?.route.companyId && routeItem.route.companyId !== companyId) {
-      throw new AppError(400, "VISIT_COMPANY_MISMATCH", "Cliente, rota e visita precisam pertencer a mesma empresa/filial.");
-    }
-
-    if (inputPromoter && inputPromoter.companyId !== companyId) {
-      throw new AppError(400, "PROMOTER_COMPANY_MISMATCH", "Promotor pertence a outra empresa/filial.");
-    }
+    const relations = await sanitizeVisitRelations(input, companyId);
 
     const visit = await prisma.visit.create({
-      data: visitCreatePayload(input, companyId, promoter?.id),
+      data: visitCreatePayload({ ...input, ...relations }, companyId, promoter?.id),
       include: {
         client: true,
         promoter: { include: { user: true } },
@@ -188,6 +229,7 @@ visitsRouter.put(
 
     assertSameCompany(req, existing.companyId);
     const companyId = resolveCompanyId(req, input.companyId ?? existing.companyId);
+    const relations = companyId ? await sanitizeVisitRelations(input, companyId) : { routeId: input.routeId, routeItemId: input.routeItemId };
 
     if (input.status === "completed") {
       const photos = await prisma.visitPhoto.findMany({
@@ -205,7 +247,7 @@ visitsRouter.put(
     const visit = await prisma.$transaction(async (tx) => {
       const updated = await tx.visit.update({
         where: { id: req.params.id },
-        data: visitUpdatePayload(input, companyId),
+        data: visitUpdatePayload({ ...input, ...relations }, companyId),
         include: {
           client: true,
           promoter: { include: { user: true } },
