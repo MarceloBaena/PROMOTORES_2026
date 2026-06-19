@@ -1,66 +1,46 @@
-<svg width="1500" height="430" viewBox="0 0 1500 430" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="1180" height="290" viewBox="0 0 1180 290" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="blue" x1="60" y1="78" x2="420" y2="350" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#18B8FF"/>
-      <stop offset="0.52" stop-color="#146DF2"/>
-      <stop offset="1" stop-color="#070B8D"/>
+    <linearGradient id="blue" x1="28" y1="30" x2="236" y2="230" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="0.52" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#172554"/>
     </linearGradient>
-    <linearGradient id="green" x1="250" y1="172" x2="365" y2="238" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#12D977"/>
-      <stop offset="1" stop-color="#08B966"/>
+    <linearGradient id="green" x1="132" y1="92" x2="220" y2="150" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#10B981"/>
     </linearGradient>
-    <linearGradient id="pro" x1="1150" y1="110" x2="1450" y2="260" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#43A5FF"/>
-      <stop offset="1" stop-color="#1677FF"/>
+    <linearGradient id="pro" x1="790" y1="70" x2="940" y2="150" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#2563EB"/>
     </linearGradient>
   </defs>
 
   <g stroke-linecap="round" stroke-linejoin="round">
-    <path d="M70 160H172L214 118H292" stroke="#18B8FF" stroke-width="24"/>
-    <circle cx="70" cy="160" r="22" stroke="#18B8FF" stroke-width="15"/>
-    <circle cx="70" cy="160" r="7" fill="#EFF6FF"/>
-    <path d="M70 216H180L229 167H320" stroke="#168CFF" stroke-width="24"/>
-    <circle cx="70" cy="216" r="22" stroke="#168CFF" stroke-width="15"/>
-    <circle cx="70" cy="216" r="7" fill="#EFF6FF"/>
-    <path d="M70 272H164L220 216H292" stroke="#147DF8" stroke-width="24"/>
-    <circle cx="70" cy="272" r="22" stroke="#147DF8" stroke-width="15"/>
-    <circle cx="70" cy="272" r="7" fill="#EFF6FF"/>
+    <path d="M34 92H94L120 66H170" stroke="#38BDF8" stroke-width="16"/>
+    <path d="M34 130H104L134 100H178" stroke="#22A8F5" stroke-width="16"/>
+    <path d="M34 168H94L128 134H168" stroke="#2563EB" stroke-width="16"/>
+    <circle cx="34" cy="92" r="17" stroke="#38BDF8" stroke-width="10"/>
+    <circle cx="34" cy="130" r="17" stroke="#22A8F5" stroke-width="10"/>
+    <circle cx="34" cy="168" r="17" stroke="#2563EB" stroke-width="10"/>
+    <circle cx="34" cy="92" r="5" fill="#F8FAFC"/>
+    <circle cx="34" cy="130" r="5" fill="#F8FAFC"/>
+    <circle cx="34" cy="168" r="5" fill="#F8FAFC"/>
   </g>
 
-  <path
-    d="M328 76C425 76 502 153 502 250C502 322 461 382 411 428C368 467 342 505 339 553C336 601 296 636 249 636C201 636 162 597 166 549C171 484 204 428 255 377C296 336 318 298 318 250C318 199 277 158 226 158C182 158 145 188 134 228H72C85 143 151 76 229 76H328Z"
-    fill="url(#blue)"
-    transform="translate(0 -58)"
-  />
-  <path
-    d="M326 113C404 118 463 177 463 251C463 302 434 349 393 389C341 441 314 491 311 551C309 581 284 605 249 605C217 605 193 580 196 550C202 472 243 404 292 354C327 319 347 285 347 251C347 181 295 128 226 128C167 128 118 167 99 222"
-    stroke="#16A8FF"
-    stroke-width="27"
-    stroke-linecap="round"
-    transform="translate(0 -58)"
-  />
-  <circle cx="276" cy="194" r="92" fill="#FFFFFF"/>
-  <circle cx="276" cy="194" r="96" stroke="#061944" stroke-width="8" opacity="0.42"/>
-  <path d="M213 214L261 262L360 163" stroke="url(#green)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M266 334C279 308 292 287 308 269" stroke="white" stroke-width="13" stroke-linecap="round" stroke-dasharray="22 20" opacity="0.96"/>
-  <circle cx="258" cy="392" r="24" fill="#FFFFFF"/>
-  <circle cx="258" cy="392" r="10" fill="#1668F2"/>
+  <circle cx="178" cy="118" r="68" stroke="url(#blue)" stroke-width="34" stroke-linecap="round" stroke-dasharray="340 145" transform="rotate(-22 178 118)"/>
+  <path d="M166 184C146 218 144 246 160 262C174 286 208 286 226 266C240 250 238 230 242 212C246 192 256 176 274 158" stroke="#10246B" stroke-width="31" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M176 218C182 206 188 198 196 190" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" stroke-dasharray="11 10"/>
+  <circle cx="176" cy="246" r="14" fill="#F8FAFC"/>
+  <circle cx="176" cy="246" r="5" fill="#2563EB"/>
+  <circle cx="178" cy="118" r="50" fill="#FFFFFF"/>
+  <circle cx="178" cy="118" r="54" stroke="#0F172A" stroke-width="5" opacity="0.35"/>
+  <path d="M144 124L168 148L218 98" stroke="url(#green)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <text x="555" y="230" fill="#F8FAFC" font-family="Inter, Manrope, Arial, sans-serif" font-size="148" font-weight="900" letter-spacing="-8">
-    Promotor
-  </text>
-  <text x="1160" y="230" fill="url(#pro)" font-family="Inter, Manrope, Arial, sans-serif" font-size="148" font-weight="900" letter-spacing="-8">
-    Pro
-  </text>
-  <text x="560" y="318" fill="#CBD5E1" font-family="Inter, Manrope, Arial, sans-serif" font-size="42" font-weight="800" letter-spacing="18">
-    GESTÃO
-  </text>
-  <circle cx="810" cy="302" r="7" fill="#10B981"/>
-  <text x="860" y="318" fill="#CBD5E1" font-family="Inter, Manrope, Arial, sans-serif" font-size="42" font-weight="800" letter-spacing="18">
-    EXECUÇÃO
-  </text>
-  <circle cx="1198" cy="302" r="7" fill="#10B981"/>
-  <text x="1248" y="318" fill="#CBD5E1" font-family="Inter, Manrope, Arial, sans-serif" font-size="42" font-weight="800" letter-spacing="18">
-    RESULTADOS
-  </text>
+  <text x="315" y="132" fill="#F8FAFC" font-family="Inter, Manrope, Arial, sans-serif" font-size="86" font-weight="900" letter-spacing="-4">Promotor</text>
+  <text x="780" y="132" fill="url(#pro)" font-family="Inter, Manrope, Arial, sans-serif" font-size="86" font-weight="900" letter-spacing="-4">Pro</text>
+  <text x="318" y="188" fill="#CBD5E1" font-family="Inter, Manrope, Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="9">GESTAO</text>
+  <circle cx="478" cy="180" r="5" fill="#10B981"/>
+  <text x="512" y="188" fill="#CBD5E1" font-family="Inter, Manrope, Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="9">EXECUCAO</text>
+  <circle cx="744" cy="180" r="5" fill="#10B981"/>
+  <text x="778" y="188" fill="#CBD5E1" font-family="Inter, Manrope, Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="9">RESULTADOS</text>
 </svg>

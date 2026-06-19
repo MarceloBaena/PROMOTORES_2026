@@ -614,7 +614,7 @@ export default function App() {
             <Image source={promotorProIcon} style={styles.mobileBrandIcon} />
             <View>
               <Text style={styles.mobileBrandTitle}>PromotorPro</Text>
-              <Text style={styles.mobileBrandSubtitle}>GESTAO • EXECUCAO • RESULTADOS</Text>
+              <Text style={styles.mobileBrandSubtitle}>GESTAO / EXECUCAO / RESULTADOS</Text>
             </View>
           </View>
           <Text style={styles.title}>Operacao de campo</Text>
@@ -941,8 +941,9 @@ const styles = StyleSheet.create({
   },
   mobileBrandIcon: {
     borderRadius: 22,
-    height: 74,
-    width: 74
+    height: 72,
+    resizeMode: "contain",
+    width: 72
   },
   mobileBrandTitle: {
     color: "#0F172A",
@@ -995,6 +996,7 @@ const styles = StyleSheet.create({
   headerIcon: {
     borderRadius: 14,
     height: 44,
+    resizeMode: "contain",
     width: 44
   },
   headerTextBlock: {
