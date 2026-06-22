@@ -126,7 +126,7 @@ export function createApp() {
 
   app.use("/auth", authLimiter, authRouter);
   app.use("/companies", authenticate, authorizeRoles("ADMIN"), companiesRouter);
-  app.use("/supervisors", authenticate, authorizeRoles("ADMIN"), supervisorsRouter);
+  app.use("/supervisors", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), supervisorsRouter);
   app.use("/promoters", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), promotersRouter);
   app.use("/clients", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), clientsRouter);
   app.use("/routes", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), routePlansRouter);
