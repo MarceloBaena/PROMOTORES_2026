@@ -97,6 +97,31 @@ function dataUrl(contentType: string, base64Image: string) {
   return `data:${contentType};base64,${payload.replace(/\s/g, "")}`;
 }
 
+async function completeRouteWhenAllItemsDone(tx: Prisma.TransactionClient, routeItemId: string) {
+  const routeItem = await tx.routeItem.findUnique({
+    where: { id: routeItemId },
+    select: { routeId: true }
+  });
+
+  if (!routeItem) {
+    return;
+  }
+
+  const pendingItems = await tx.routeItem.count({
+    where: {
+      routeId: routeItem.routeId,
+      status: { not: "COMPLETED" }
+    }
+  });
+
+  if (pendingItems === 0) {
+    await tx.route.update({
+      where: { id: routeItem.routeId },
+      data: { status: "COMPLETED" }
+    });
+  }
+}
+
 async function sanitizeVisitRelations(input: SanitizedVisitUpdateInput, companyId: string) {
   const [client, route, routeItem, inputPromoter] = await Promise.all([
     input.clientId ? prisma.client.findUnique({ where: { id: input.clientId }, select: { companyId: true } }) : null,
@@ -262,6 +287,7 @@ visitsRouter.put(
           where: { id: updated.routeItemId },
           data: { status: "COMPLETED" }
         });
+        await completeRouteWhenAllItemsDone(tx, updated.routeItemId);
       }
 
       logger.info({ visitId: updated.id, routeItemId: updated.routeItemId, status: updated.status }, "visit synchronized");

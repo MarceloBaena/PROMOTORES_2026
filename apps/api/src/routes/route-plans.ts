@@ -18,6 +18,29 @@ const routeSchema = z.object({
   clientIds: z.array(z.string().uuid()).default([])
 });
 
+function routeIsCompletedByItems(route: { items: Array<{ status: string }> }) {
+  return route.items.length > 0 && route.items.every((item) => item.status === "COMPLETED");
+}
+
+async function reconcileCompletedRoute(tx: Prisma.TransactionClient, routeId: string) {
+  const route = await tx.route.findUnique({
+    where: { id: routeId },
+    select: {
+      status: true,
+      items: { select: { status: true } }
+    }
+  });
+
+  if (!route || route.status === "COMPLETED" || !routeIsCompletedByItems(route)) {
+    return;
+  }
+
+  await tx.route.update({
+    where: { id: routeId },
+    data: { status: "COMPLETED" }
+  });
+}
+
 async function deactivatePreviousPublishedRoutes(
   tx: Prisma.TransactionClient,
   input: { companyId: string; promoterId?: string | null; exceptRouteId?: string }
@@ -26,15 +49,39 @@ async function deactivatePreviousPublishedRoutes(
     return;
   }
 
-  await tx.route.updateMany({
+  const publishedRoutes = await tx.route.findMany({
     where: {
       companyId: input.companyId,
       promoterId: input.promoterId,
       status: "PUBLISHED",
       ...(input.exceptRouteId ? { id: { not: input.exceptRouteId } } : {})
     },
-    data: { status: "CANCELLED" }
+    select: {
+      id: true,
+      items: { select: { status: true } }
+    }
   });
+
+  const completedRouteIds = publishedRoutes
+    .filter(routeIsCompletedByItems)
+    .map((route) => route.id);
+  const unfinishedRouteIds = publishedRoutes
+    .filter((route) => !completedRouteIds.includes(route.id))
+    .map((route) => route.id);
+
+  if (completedRouteIds.length > 0) {
+    await tx.route.updateMany({
+      where: { id: { in: completedRouteIds } },
+      data: { status: "COMPLETED" }
+    });
+  }
+
+  if (unfinishedRouteIds.length > 0) {
+    await tx.route.updateMany({
+      where: { id: { in: unfinishedRouteIds } },
+      data: { status: "CANCELLED" }
+    });
+  }
 }
 
 routePlansRouter.get(
@@ -51,7 +98,12 @@ routePlansRouter.get(
       }
     });
 
-    res.json({ data: routes });
+    const normalizedRoutes = routes.map((route) => ({
+      ...route,
+      status: routeIsCompletedByItems(route) ? "COMPLETED" : route.status
+    }));
+
+    res.json({ data: normalizedRoutes });
   })
 );
 
@@ -138,13 +190,20 @@ routePlansRouter.put(
         });
       }
 
-      return tx.route.update({
+      const route = await tx.route.update({
         where: { id: req.params.id },
         data: { status: input.status },
         include: {
           items: { include: { client: true }, orderBy: { sequence: "asc" } }
         }
       });
+
+      await reconcileCompletedRoute(tx, route.id);
+
+      return {
+        ...route,
+        status: routeIsCompletedByItems(route) ? "COMPLETED" : route.status
+      };
     });
 
     res.json({ data: route });
