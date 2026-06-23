@@ -227,8 +227,23 @@ export function VisitsPage() {
                 </tr>
               </thead>
               <tbody>
-                {visits.map((visit) => (
-                  <tr key={visit.id} className={visit.id === selectedVisit?.id ? "bg-skywash/80" : undefined}>
+                {visits.map((visit) => {
+                  const isSelected = visit.id === selectedVisit?.id;
+
+                  return (
+                  <tr
+                    key={visit.id}
+                    className={`${isSelected ? "bg-skywash/80" : "hover:bg-muted/50"} cursor-pointer transition-colors`}
+                    tabIndex={0}
+                    aria-selected={isSelected}
+                    onClick={() => setSelectedVisitId(visit.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedVisitId(visit.id);
+                      }
+                    }}
+                  >
                     <td className="font-bold">
                       <div>{visit.client.name}</div>
                       <div className="mt-1 text-xs font-semibold text-stone-500">{visit.route?.name ?? "Sem rota vinculada"}</div>
@@ -243,12 +258,21 @@ export function VisitsPage() {
                     </td>
                     <td>{formatDate(visit.createdAt)}</td>
                     <td>
-                      <button className="icon-button text-moss" type="button" title="Ver detalhes" onClick={() => setSelectedVisitId(visit.id)}>
+                      <button
+                        className="icon-button text-moss"
+                        type="button"
+                        title="Ver detalhes"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedVisitId(visit.id);
+                        }}
+                      >
                         <Eye className="h-4 w-4" />
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {visits.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-stone-500">
