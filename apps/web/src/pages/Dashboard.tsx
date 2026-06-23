@@ -150,7 +150,7 @@ export function Dashboard() {
             <div key={item.label} className="metric-card">
               <div className="relative z-[1] flex items-start justify-between gap-3">
                 <div>
-                  <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">{item.label}</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.1em] text-slateText sm:text-[11px]">{item.label}</span>
                   <div className="mt-3 font-display text-3xl font-black tabular-nums tracking-tight text-ink">{item.value}</div>
                 </div>
                 <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${item.tone}`}>
@@ -163,12 +163,12 @@ export function Dashboard() {
         })}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="surface-card overflow-hidden bg-navy p-0 text-white">
           <div className="relative p-5 sm:p-6">
             <div className="pointer-events-none absolute right-[-7rem] top-[-8rem] h-80 w-80 rounded-full bg-brand/35 blur-3xl" />
             <div className="pointer-events-none absolute bottom-[-8rem] left-[30%] h-72 w-72 rounded-full bg-execution/20 blur-3xl" />
-            <div className="relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="relative grid gap-5 xl:grid-cols-[minmax(0,1fr)_260px]">
               <div>
                 <div className="flex flex-wrap items-center gap-3">
                   <p className="execution-chip border-white/10 bg-white/10 text-emerald-100">Controle do dia</p>
@@ -183,7 +183,7 @@ export function Dashboard() {
                   Veja rapidamente quem esta trabalhando, quantos clientes foram liberados e o que realmente exige acao.
                 </p>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="mt-5 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))]">
                   <CommandStat label="Base ativa" value={summary?.clients ?? 0} />
                   <CommandStat label="Promotores" value={fieldWork.activePromoters} />
                   <CommandStat label="Liberados" value={fieldWork.releasedClientsToday} />
@@ -215,7 +215,7 @@ export function Dashboard() {
                   </div>
                   <Navigation className="h-5 w-5 text-execution" />
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                   <RouteStep label="Rotas do dia" value={routeDay.total} active={routeDay.total > 0} />
                   <RouteStep label="Clientes liberados" value={fieldWork.releasedClientsToday} active={fieldWork.releasedClientsToday > 0} />
                   <RouteStep label="Clientes atendidos" value={fieldWork.attendedClientsToday} active={fieldWork.attendedClientsToday > 0} />
@@ -230,7 +230,7 @@ export function Dashboard() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slateText">Excecoes</p>
-              <h3 className="mt-2 font-display text-2xl font-black tracking-tight text-ink">O que precisa de acao</h3>
+              <h3 className="mt-2 font-display text-xl font-black tracking-tight text-ink sm:text-2xl">O que precisa de acao</h3>
             </div>
             <AlertTriangle className={`h-6 w-6 ${realAttentionCount > 0 ? "text-danger" : "text-execution"}`} />
           </div>
@@ -245,7 +245,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="mt-4 grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="panel overflow-hidden">
           <div className="panel-header">
             <div>
@@ -253,7 +253,7 @@ export function Dashboard() {
               <p className="panel-subtitle">Dados reais do roteiro publicado e dos atendimentos recebidos pelo aplicativo.</p>
             </div>
           </div>
-          <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 p-5 [grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))]">
             <OperationalTile icon={Store} label="Base ativa" value={summary?.clients ?? 0} description="Clientes cadastrados e ativos" />
             <OperationalTile icon={Route} label="Rotas cadastradas" value={summary?.routes ?? 0} description="Historico de roteirizacoes" />
             <OperationalTile icon={CheckCircle2} label="Check-ins hoje" value={summary?.checkinsToday ?? 0} description="Evidencias iniciadas no app" />
@@ -293,21 +293,21 @@ export function Dashboard() {
 
 function CommandStat({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/10 p-3">
-      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-white/48">{label}</div>
-      <div className={`mt-1 font-display text-2xl font-black ${danger ? "text-warning" : "text-white"}`}>{value}</div>
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-3">
+      <div className="break-words text-[10px] font-black uppercase leading-4 tracking-[0.1em] text-white/48">{label}</div>
+      <div className={`mt-1 font-display text-xl font-black leading-none sm:text-2xl ${danger ? "text-warning" : "text-white"}`}>{value}</div>
     </div>
   );
 }
 
 function RouteStep({ label, value, active }: { label: string; value: number; active: boolean }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-white/5 p-3">
+    <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white/5 p-3">
       <span className={`grid h-8 w-8 place-items-center rounded-full ${active ? "bg-execution text-white" : "bg-white/10 text-white/40"}`}>
         <Route className="h-4 w-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-black text-white">{label}</div>
+        <div className="truncate text-sm font-black text-white">{label}</div>
         <div className="text-xs font-semibold text-white/48">{value} registro(s)</div>
       </div>
     </div>
@@ -323,8 +323,8 @@ function PriorityRow({ label, value, tone }: { label: string; value: number; ton
   }[tone];
 
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-line bg-white px-4 py-3">
-      <span className="text-sm font-black text-graphite">{label}</span>
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3">
+      <span className="min-w-0 break-words text-sm font-black text-graphite">{label}</span>
       <span className={`rounded-full px-3 py-1 font-display text-lg font-black ${toneClass}`}>{value}</span>
     </div>
   );
@@ -344,10 +344,10 @@ function OperationalTile({
   danger?: boolean;
 }) {
   return (
-    <div className="rounded-3xl border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
+    <div className="min-w-0 rounded-3xl border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">{label}</p>
+        <div className="min-w-0">
+          <p className="break-words text-[10px] font-black uppercase leading-4 tracking-[0.1em] text-slateText sm:text-[11px]">{label}</p>
           <p className="mt-2 font-display text-2xl font-black text-ink">{value}</p>
         </div>
         <span className={`grid h-10 w-10 place-items-center rounded-2xl ${danger ? "bg-red-50 text-danger" : "bg-brandSoft text-brand"}`}>
