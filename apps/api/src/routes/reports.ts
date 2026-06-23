@@ -315,6 +315,33 @@ reportsRouter.get(
         }
       ]
     };
+    const staleCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const releasedRouteItemWhere: Prisma.RouteItemWhereInput = {
+      route: {
+        ...todayRouteWhere,
+        status: { in: ["PUBLISHED", "COMPLETED"] }
+      }
+    };
+    const noServiceOver48Where: Prisma.RouteItemWhereInput = {
+      status: "PLANNED",
+      route: {
+        ...companyWhere,
+        status: "PUBLISHED",
+        scheduledDate: {
+          lte: staleCutoff
+        }
+      }
+    };
+    const openUnder48Where: Prisma.RouteItemWhereInput = {
+      status: "PLANNED",
+      route: {
+        ...companyWhere,
+        status: "PUBLISHED",
+        scheduledDate: {
+          gt: staleCutoff
+        }
+      }
+    };
     const clients = await prisma.client.count({ where: { ...companyWhere, status: "ACTIVE" } });
     const promoters = await prisma.promoter.count({ where: { ...companyWhere, status: "ACTIVE" } });
     const supervisors = await prisma.supervisor.count({ where: { ...companyWhere, status: "ACTIVE" } });
@@ -323,10 +350,16 @@ reportsRouter.get(
     const visits = await prisma.visit.groupBy({ by: ["status"], where: companyWhere, _count: { id: true } });
     const visitsToday = await prisma.visit.groupBy({ by: ["status"], where: todayVisitWhere, _count: { id: true } });
     const checkinsToday = await prisma.visitPhoto.count({ where: { type: "checkin", visit: todayVisitWhere } });
+    const releasedClientsToday = await prisma.routeItem.count({ where: releasedRouteItemWhere });
+    const attendedClientsToday = await prisma.routeItem.count({ where: { ...releasedRouteItemWhere, status: "COMPLETED" } });
+    const noServiceOver48 = await prisma.routeItem.count({ where: noServiceOver48Where });
+    const openUnder48 = await prisma.routeItem.count({ where: openUnder48Where });
     const auditFlags = await prisma.auditFlag.count({ where: { resolved: false, visit: companyWhere } });
     const imports = await prisma.clientImportLog.findMany({ where: companyWhere, orderBy: { createdAt: "desc" }, take: 5 });
     const routeStatusToday = countByStatus(routesToday);
     const visitStatusToday = countByStatus(visitsToday);
+    const executionRate =
+      releasedClientsToday > 0 ? Math.round((attendedClientsToday / releasedClientsToday) * 100) : 0;
 
     res.json({
       data: {
@@ -342,6 +375,16 @@ reportsRouter.get(
           total: routesToday.reduce((total, item) => total + item._count.id, 0),
           date: today.start.toISOString(),
           timeZone: today.timeZone
+        },
+        fieldWork: {
+          activePromoters: promoters,
+          releasedClientsToday,
+          attendedClientsToday,
+          inServiceNow: visitStatusToday.in_progress ?? 0,
+          openUnder48,
+          noServiceOver48,
+          executionRate,
+          staleRuleHours: 48
         },
         auditFlags,
         visits: countByStatus(visits),

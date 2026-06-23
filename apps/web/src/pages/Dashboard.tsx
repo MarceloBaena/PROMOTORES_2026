@@ -1,21 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  ArrowUpRight,
-  Camera,
   CheckCircle2,
+  Clock3,
   ClipboardCheck,
   MapPinned,
   Navigation,
   RadioTower,
   Route,
   Store,
-  UserRoundCheck,
   Users
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
-import { StatusPill } from "../components/StatusPill";
 import { apiJson } from "../lib/api";
 
 interface Summary {
@@ -32,6 +30,16 @@ interface Summary {
     date: string;
     timeZone: string;
   };
+  fieldWork: {
+    activePromoters: number;
+    releasedClientsToday: number;
+    attendedClientsToday: number;
+    inServiceNow: number;
+    openUnder48: number;
+    noServiceOver48: number;
+    executionRate: number;
+    staleRuleHours: number;
+  };
   auditFlags: number;
   visits: Record<string, number>;
   visitsToday: Record<string, number>;
@@ -47,8 +55,17 @@ interface Summary {
   }>;
 }
 
-const chartBars = [52, 68, 44, 76, 58, 88, 64];
-const weekLabels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
+const emptyRouteDay = { planned: 0, inProgress: 0, completed: 0, cancelled: 0, total: 0 };
+const emptyFieldWork = {
+  activePromoters: 0,
+  releasedClientsToday: 0,
+  attendedClientsToday: 0,
+  inServiceNow: 0,
+  openUnder48: 0,
+  noServiceOver48: 0,
+  executionRate: 0,
+  staleRuleHours: 48
+};
 
 export function Dashboard() {
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -60,67 +77,63 @@ export function Dashboard() {
       .catch((nextError: Error) => setError(nextError.message));
   }, []);
 
-  const todayVisits = summary?.visitsToday ?? {};
-  const completedVisits = todayVisits.completed ?? 0;
-  const inProgressVisits = todayVisits.in_progress ?? 0;
-  const pendingVisits = todayVisits.pending ?? 0;
-  const totalOperationalVisits = completedVisits + inProgressVisits + pendingVisits;
-  const executionRate = totalOperationalVisits > 0 ? Math.round((completedVisits / totalOperationalVisits) * 100) : 0;
-  const routeDay = summary?.routesToday ?? { planned: 0, inProgress: 0, completed: 0, cancelled: 0, total: 0 };
+  const routeDay = summary?.routesToday ?? emptyRouteDay;
+  const fieldWork = summary?.fieldWork ?? emptyFieldWork;
+  const realAttentionCount = fieldWork.noServiceOver48 + (summary?.auditFlags ?? 0);
 
   const kpis = useMemo(
     () => [
       {
-        label: "Promotores ativos",
-        value: summary?.promoters ?? 0,
-        helper: "Equipe apta para campo",
+        label: "Promotores",
+        value: fieldWork.activePromoters,
+        helper: "Ativos e aptos para atendimento",
         icon: Users,
         tone: "text-brand bg-brandSoft"
       },
       {
-        label: "Visitas hoje",
-        value: totalOperationalVisits,
-        helper: "Pendentes, em andamento e concluidas",
+        label: "Clientes liberados",
+        value: fieldWork.releasedClientsToday,
+        helper: "Clientes publicados em roteiro hoje",
         icon: ClipboardCheck,
         tone: "text-execution bg-executionSoft"
       },
       {
-        label: "Check-ins realizados",
-        value: summary?.checkinsToday ?? 0,
-        helper: "Atendimentos com evidencia",
+        label: "Clientes atendidos",
+        value: fieldWork.attendedClientsToday,
+        helper: "Concluidos pelo app no roteiro",
         icon: CheckCircle2,
         tone: "text-emerald-700 bg-emerald-50"
       },
       {
-        label: "Clientes atendidos",
-        value: completedVisits,
-        helper: `${summary?.clients ?? 0} clientes na base`,
-        icon: Store,
+        label: "Em atendimento",
+        value: fieldWork.inServiceNow,
+        helper: "Visitas abertas neste momento",
+        icon: Clock3,
         tone: "text-blue-700 bg-blue-50"
       },
       {
-        label: "Taxa de execucao",
-        value: `${executionRate}%`,
-        helper: "Conclusao sobre visitas registradas",
-        icon: RadioTower,
-        tone: "text-indigo-700 bg-indigo-50"
+        label: "Sem atendimento",
+        value: fieldWork.noServiceOver48,
+        helper: `Apenas apos ${fieldWork.staleRuleHours}h sem conclusao`,
+        icon: AlertTriangle,
+        tone: fieldWork.noServiceOver48 > 0 ? "text-danger bg-red-50" : "text-slateText bg-slate-100"
       },
       {
-        label: "Pendencias",
-        value: (summary?.auditFlags ?? 0) + pendingVisits,
-        helper: "Alertas e visitas pendentes",
-        icon: AlertTriangle,
-        tone: "text-amber-700 bg-amber-50"
+        label: "Execucao",
+        value: `${fieldWork.executionRate}%`,
+        helper: "Atendidos sobre liberados",
+        icon: RadioTower,
+        tone: "text-indigo-700 bg-indigo-50"
       }
     ],
-    [completedVisits, executionRate, pendingVisits, summary?.auditFlags, summary?.checkinsToday, summary?.clients, summary?.promoters, totalOperationalVisits]
+    [fieldWork]
   );
 
   return (
     <section>
       <PageHeader
         title="Painel executivo de campo"
-        subtitle="Acompanhe execucao, promotores, rotas, evidencias e alertas em uma visao unificada de operacao."
+        subtitle="Resumo simples da operacao: promotores, clientes liberados, atendimentos e excecoes reais."
         action={
           <Link to="/mapa" className="primary-button">
             <MapPinned className="h-4 w-4" />
@@ -155,34 +168,35 @@ export function Dashboard() {
           <div className="relative p-6 sm:p-7">
             <div className="pointer-events-none absolute right-[-7rem] top-[-8rem] h-80 w-80 rounded-full bg-brand/35 blur-3xl" />
             <div className="pointer-events-none absolute bottom-[-8rem] left-[30%] h-72 w-72 rounded-full bg-execution/20 blur-3xl" />
-            <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
               <div>
-                <p className="execution-chip border-white/10 bg-white/10 text-emerald-100">Centro de comando</p>
+                <p className="execution-chip border-white/10 bg-white/10 text-emerald-100">Controle do dia</p>
                 <h2 className="mt-4 max-w-3xl font-display text-3xl font-black leading-tight tracking-tight sm:text-5xl">
-                  Execucao, rota e evidencias no mesmo cockpit operacional.
+                  Operacao enxuta: quem esta em campo, quem foi liberado e quem ja foi atendido.
                 </h2>
                 <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-white/68">
-                  Priorize visitas criticas, acompanhe promotores ativos e aja rapido quando houver pendencias de auditoria ou sincronizacao.
+                  Clientes em aberto so viram problema depois de 48 horas sem conclusao. Antes disso, o painel mostra apenas a rotina em andamento.
                 </p>
                 <div className="mt-7 grid gap-3 sm:grid-cols-3">
-                  <CommandStat label="Rotas publicadas" value={summary?.routes ?? 0} />
+                  <CommandStat label="Clientes na base" value={summary?.clients ?? 0} />
                   <CommandStat label="Supervisores" value={summary?.supervisors ?? 0} />
-                  <CommandStat label="Alertas" value={summary?.auditFlags ?? 0} danger={Boolean(summary?.auditFlags)} />
+                  <CommandStat label="Atencao real" value={realAttentionCount} danger={realAttentionCount > 0} />
                 </div>
               </div>
 
               <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/44">Cobertura</p>
-                    <h3 className="mt-1 font-display text-lg font-black">Rota do dia</h3>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/44">Roteiro</p>
+                    <h3 className="mt-1 font-display text-lg font-black">Hoje</h3>
                   </div>
                   <Navigation className="h-5 w-5 text-execution" />
                 </div>
                 <div className="space-y-3">
-                  <RouteStep label="Planejado" value={routeDay.planned} active={routeDay.planned > 0} />
-                  <RouteStep label="Em atendimento" value={routeDay.inProgress} active={routeDay.inProgress > 0} />
-                  <RouteStep label="Concluido" value={routeDay.completed} active={routeDay.completed > 0} />
+                  <RouteStep label="Rotas do dia" value={routeDay.total} active={routeDay.total > 0} />
+                  <RouteStep label="Clientes liberados" value={fieldWork.releasedClientsToday} active={fieldWork.releasedClientsToday > 0} />
+                  <RouteStep label="Clientes atendidos" value={fieldWork.attendedClientsToday} active={fieldWork.attendedClientsToday > 0} />
+                  <RouteStep label="Dentro do prazo" value={fieldWork.openUnder48} active={fieldWork.openUnder48 > 0} />
                 </div>
               </div>
             </div>
@@ -192,18 +206,18 @@ export function Dashboard() {
         <div className="surface-card">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slateText">Prioridade operacional</p>
-              <h3 className="mt-2 font-display text-2xl font-black tracking-tight text-ink">Acompanhar evidencias</h3>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slateText">Excecoes</p>
+              <h3 className="mt-2 font-display text-2xl font-black tracking-tight text-ink">O que precisa de acao</h3>
             </div>
-            <Camera className="h-6 w-6 text-brand" />
+            <AlertTriangle className={`h-6 w-6 ${realAttentionCount > 0 ? "text-danger" : "text-execution"}`} />
           </div>
           <p className="mt-3 text-sm font-semibold leading-6 text-slateText">
-            Revise fotos, GPS e auditorias antes de publicar novas rotas. O foco e reduzir retrabalho no campo.
+            O painel nao trata cliente pendente como erro antes do prazo operacional. A regra atual considera sem atendimento somente apos 48 horas.
           </p>
           <div className="mt-5 space-y-3">
-            <PriorityRow label="Alertas abertos" value={summary?.auditFlags ?? 0} tone="danger" />
-            <PriorityRow label="Importacoes recentes" value={summary?.imports.length ?? 0} tone="brand" />
-            <PriorityRow label="Visitas pendentes" value={pendingVisits} tone="warning" />
+            <PriorityRow label="Sem atendimento 48h+" value={fieldWork.noServiceOver48} tone={fieldWork.noServiceOver48 > 0 ? "danger" : "neutral"} />
+            <PriorityRow label="Auditorias abertas" value={summary?.auditFlags ?? 0} tone={(summary?.auditFlags ?? 0) > 0 ? "warning" : "neutral"} />
+            <PriorityRow label="Em atendimento agora" value={fieldWork.inServiceNow} tone="brand" />
           </div>
         </div>
       </div>
@@ -212,31 +226,15 @@ export function Dashboard() {
         <div className="panel overflow-hidden">
           <div className="panel-header">
             <div>
-              <h2 className="panel-title">Visitas por dia</h2>
-              <p className="panel-subtitle">Leitura visual para acompanhamento executivo da rotina.</p>
+              <h2 className="panel-title">Resumo operacional</h2>
+              <p className="panel-subtitle">Dados reais do roteiro publicado e dos atendimentos recebidos pelo aplicativo.</p>
             </div>
-            <ArrowUpRight className="h-5 w-5 text-execution" />
           </div>
-          <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_220px]">
-            <div className="flex h-64 items-end gap-3 rounded-3xl border border-line bg-field/70 p-4">
-              {chartBars.map((height, index) => (
-                <div key={weekLabels[index]} className="flex flex-1 flex-col items-center gap-2">
-                  <div className="flex h-44 w-full items-end rounded-full bg-white p-1 shadow-inner shadow-slate-100">
-                    <div
-                      className="w-full rounded-full bg-gradient-to-t from-brand to-execution shadow-[0_10px_24px_rgba(37,99,235,0.20)]"
-                      style={{ height: `${Math.max(16, height)}%` }}
-                    />
-                  </div>
-                  <span className="text-[11px] font-black uppercase tracking-[0.08em] text-slateText">{weekLabels[index]}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-3">
-              <PerformanceCard label="Performance por promotor" value={executionRate} />
-              <PerformanceCard label="Performance por supervisor" value={summary?.supervisors ? Math.min(100, executionRate + 8) : 0} />
-              <PerformanceCard label="Cobertura de rota" value={summary?.routes ? Math.min(100, executionRate + 12) : 0} />
-            </div>
+          <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-4">
+            <OperationalTile icon={Store} label="Base ativa" value={summary?.clients ?? 0} description="Clientes cadastrados e ativos" />
+            <OperationalTile icon={Route} label="Rotas cadastradas" value={summary?.routes ?? 0} description="Historico de roteirizacoes" />
+            <OperationalTile icon={CheckCircle2} label="Check-ins hoje" value={summary?.checkinsToday ?? 0} description="Evidencias iniciadas no app" />
+            <OperationalTile icon={AlertTriangle} label="Canceladas hoje" value={routeDay.cancelled} description="Rotas canceladas no dia" danger={routeDay.cancelled > 0} />
           </div>
         </div>
 
@@ -244,68 +242,26 @@ export function Dashboard() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Mapa em tempo real</h2>
-              <p className="panel-subtitle">Promotores ativos, ultimo check-in e rotas.</p>
+              <p className="panel-subtitle">Acompanhe promotores durante a jornada ativa.</p>
             </div>
             <Link to="/mapa" className="secondary-button h-10">
               Ver mapa
             </Link>
           </div>
-          <div className="mini-map-grid relative h-[21.5rem] overflow-hidden bg-skywash">
+          <div className="mini-map-grid relative h-[18rem] overflow-hidden bg-skywash">
             <div className="absolute left-[18%] top-[26%] h-3 w-3 rounded-full bg-execution shadow-[0_0_0_10px_rgba(16,185,129,0.18)]" />
             <div className="absolute left-[58%] top-[36%] h-3 w-3 rounded-full bg-brand shadow-[0_0_0_10px_rgba(37,99,235,0.16)]" />
             <div className="absolute left-[72%] top-[68%] h-3 w-3 rounded-full bg-warning shadow-[0_0_0_10px_rgba(245,158,11,0.18)]" />
-            <div className="absolute left-[19%] top-[28%] h-[2px] w-[42%] rotate-[8deg] bg-brand/30" />
-            <div className="absolute left-[58%] top-[39%] h-[2px] w-[24%] rotate-[48deg] bg-execution/40" />
             <div className="absolute bottom-5 left-5 right-5 rounded-3xl border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-900/10 backdrop-blur">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">Operacao ao vivo</p>
-                  <p className="mt-1 text-sm font-black text-ink">{summary?.promoters ?? 0} promotor(es) na base</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">Equipe em campo</p>
+                  <p className="mt-1 text-sm font-black text-ink">{fieldWork.activePromoters} promotor(es) ativo(s)</p>
                 </div>
                 <MapPinned className="h-6 w-6 text-brand" />
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="table-wrap mt-5">
-        <div className="panel-header">
-          <div>
-            <h2 className="panel-title">Importacoes recentes</h2>
-            <p className="panel-subtitle">Historico de cargas de planilha e consistencia dos dados importados.</p>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="px-4 py-3">Arquivo</th>
-                <th className="px-4 py-3">Situacao</th>
-                <th className="px-4 py-3">Linhas</th>
-                <th className="px-4 py-3">Importadas</th>
-                <th className="px-4 py-3">Falhas</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(summary?.imports ?? []).map((item) => (
-                <tr key={item.id}>
-                  <td className="px-4 py-3 font-medium">{item.fileName}</td>
-                  <td className="px-4 py-3"><StatusPill value={item.status} /></td>
-                  <td className="px-4 py-3">{item.totalRows}</td>
-                  <td className="px-4 py-3">{item.importedRows}</td>
-                  <td className="px-4 py-3">{item.failedRows}</td>
-                </tr>
-              ))}
-              {(summary?.imports?.length ?? 0) === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slateText">
-                    {summary ? "Sem importacoes registradas." : "Carregando..."}
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
         </div>
       </div>
     </section>
@@ -335,11 +291,12 @@ function RouteStep({ label, value, active }: { label: string; value: number; act
   );
 }
 
-function PriorityRow({ label, value, tone }: { label: string; value: number; tone: "danger" | "brand" | "warning" }) {
+function PriorityRow({ label, value, tone }: { label: string; value: number; tone: "danger" | "brand" | "warning" | "neutral" }) {
   const toneClass = {
     danger: "text-danger bg-red-50",
     brand: "text-brand bg-blue-50",
-    warning: "text-warning bg-amber-50"
+    warning: "text-warning bg-amber-50",
+    neutral: "text-slateText bg-slate-100"
   }[tone];
 
   return (
@@ -350,16 +307,31 @@ function PriorityRow({ label, value, tone }: { label: string; value: number; ton
   );
 }
 
-function PerformanceCard({ label, value }: { label: string; value: number }) {
+function OperationalTile({
+  icon: Icon,
+  label,
+  value,
+  description,
+  danger = false
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: number;
+  description: string;
+  danger?: boolean;
+}) {
   return (
-    <div className="rounded-3xl border border-line bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-black uppercase tracking-[0.12em] text-slateText">{label}</span>
-        <span className="font-display text-xl font-black text-ink">{value}%</span>
+    <div className="rounded-3xl border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">{label}</p>
+          <p className="mt-2 font-display text-2xl font-black text-ink">{value}</p>
+        </div>
+        <span className={`grid h-10 w-10 place-items-center rounded-2xl ${danger ? "bg-red-50 text-danger" : "bg-brandSoft text-brand"}`}>
+          <Icon className="h-5 w-5" />
+        </span>
       </div>
-      <div className="mt-3 h-2 rounded-full bg-muted">
-        <div className="h-2 rounded-full bg-gradient-to-r from-brand to-execution" style={{ width: `${value}%` }} />
-      </div>
+      <p className="mt-3 text-xs font-bold leading-5 text-slateText">{description}</p>
     </div>
   );
 }
