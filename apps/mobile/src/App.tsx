@@ -133,6 +133,11 @@ function isOfflineDemoSession(session: LoginResponse | null) {
   return session?.accessToken === OFFLINE_DEMO_ACCESS_TOKEN || session?.refreshToken === OFFLINE_DEMO_REFRESH_TOKEN;
 }
 
+function isOpenRouteItem(item: RouteItem) {
+  const status = String(item.status ?? "").toUpperCase();
+  return !["COMPLETED", "CANCELLED", "SKIPPED"].includes(status);
+}
+
 function isNetworkConnectionError(message: string) {
   return /nao foi possivel conectar|tempo esgotado|network request failed|failed to fetch|conexao|internet|timeout/i.test(message);
 }
@@ -282,27 +287,36 @@ export default function App() {
   useEffect(() => {
     trackerRef.current?.stop();
 
-    if (!session || activeVisit?.status !== "in_progress") {
+    const hasActiveVisit = activeVisit?.status === "in_progress";
+    const hasOpenRoute = routeItems.some(isOpenRouteItem);
+
+    if (!session || isOfflineDemoSession(session) || (!hasActiveVisit && !hasOpenRoute)) {
       return;
     }
 
     trackerRef.current = createForegroundLocationTracker({
       apiBaseUrl: API_BASE_URL,
       getAccessToken: () => session.accessToken,
-      getVisitId: () => activeVisit.serverId ?? undefined,
+      getVisitId: () => (hasActiveVisit ? activeVisit?.serverId ?? undefined : undefined),
       getCoordinates: async () => {
         const gps = await getGps();
         return gps ? { latitude: gps.latitude, longitude: gps.longitude, accuracyMeters: gps.accuracyMeters } : null;
       },
-      isOperationallyActive: () => activeVisit.status === "in_progress",
-      intervalMs: 45000,
+      isOperationallyActive: () => hasActiveVisit || routeItems.some(isOpenRouteItem),
+      intervalMs: 30000,
       onError: (error) => addSyncLog("failed", `Mapa ao vivo nao atualizado: ${error.message}`),
-      onSuccess: () => addSyncLog("synced", "Mapa ao vivo atualizado durante atendimento ativo.")
+      onSuccess: () =>
+        addSyncLog(
+          "synced",
+          hasActiveVisit
+            ? "Mapa ao vivo atualizado durante atendimento ativo."
+            : "Mapa ao vivo atualizado com roteiro ativo."
+        )
     });
     trackerRef.current.start();
 
     return () => trackerRef.current?.stop();
-  }, [activeVisit, session]);
+  }, [activeVisit, routeItems, session]);
 
   async function handleLogin() {
     const normalizedEmail = email.trim().toLowerCase();

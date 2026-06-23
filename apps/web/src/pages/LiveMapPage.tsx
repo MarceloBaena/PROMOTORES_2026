@@ -17,6 +17,12 @@ interface LivePromoter {
     routeName?: string | null;
     startedAt?: string | null;
   } | null;
+  activeRoute?: {
+    id: string;
+    name: string;
+    scheduledDate?: string | null;
+    nextClientName?: string | null;
+  } | null;
   location?: {
     latitude: number | null;
     longitude: number | null;
@@ -40,7 +46,7 @@ const statusLabels = {
   offline: "Desconectado"
 };
 
-const LIVE_MAP_REFRESH_INTERVAL_MS = 3 * 60 * 1000;
+const LIVE_MAP_REFRESH_INTERVAL_MS = 15 * 1000;
 
 function promoterCode(code: number) {
   return `PRO-${String(code).padStart(4, "0")}`;
@@ -153,6 +159,7 @@ export function LiveMapPage() {
   const locatedItems = items.filter((item) => item.location?.latitude !== null && item.location?.longitude !== null);
   const onlineCount = items.filter((item) => item.status === "online").length;
   const activeCount = items.filter((item) => item.activeVisit).length;
+  const routeCount = items.filter((item) => item.activeRoute).length;
 
   return (
     <section>
@@ -169,7 +176,7 @@ export function LiveMapPage() {
 
       {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="metric-card">
           <div className="relative z-[1] text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Promotores conectados</div>
           <div className="relative z-[1] mt-3 font-display text-3xl font-bold">{onlineCount}</div>
@@ -179,8 +186,13 @@ export function LiveMapPage() {
           <div className="relative z-[1] mt-3 font-display text-3xl font-bold">{activeCount}</div>
         </div>
         <div className="metric-card">
+          <div className="relative z-[1] text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Com roteiro ativo</div>
+          <div className="relative z-[1] mt-3 font-display text-3xl font-bold">{routeCount}</div>
+        </div>
+        <div className="metric-card">
           <div className="relative z-[1] text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Última atualização</div>
           <div className="relative z-[1] mt-3 font-display text-xl font-bold">{lastRefresh ? formatTime(lastRefresh.toISOString()) : "-"}</div>
+          <div className="relative z-[1] mt-1 text-xs font-bold text-stone-500">A cada 15 segundos</div>
         </div>
       </div>
 
@@ -189,7 +201,7 @@ export function LiveMapPage() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Mapa operacional</h2>
-              <p className="panel-subtitle">Atualizacao automatica a cada 3 minutos.</p>
+              <p className="panel-subtitle">Atualizacao automatica a cada 15 segundos.</p>
             </div>
             <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200">
               <RadioTower className="h-4 w-4" />
@@ -204,7 +216,7 @@ export function LiveMapPage() {
               <div className="text-[11px] font-black uppercase tracking-[0.16em] text-stone-500">Camada</div>
               <div className="mt-1 flex items-center gap-2 text-sm font-bold text-ink">
                 <MapPinned className="h-4 w-4 text-moss" />
-                Promotores em atendimento
+                Promotores em roteiro ou atendimento
               </div>
             </div>
 
@@ -274,7 +286,16 @@ export function LiveMapPage() {
                 </div>
 
                 <div className="mt-4 rounded-2xl bg-field p-3 text-sm">
-                  <div className="font-bold text-graphite">{item.activeVisit?.clientName ?? "Sem visita em andamento"}</div>
+                  <div className="font-bold text-graphite">
+                    {item.activeVisit?.clientName ?? item.activeRoute?.nextClientName ?? "Roteiro ativo sem visita iniciada"}
+                  </div>
+                  <div className="mt-1 text-xs font-semibold text-stone-500">
+                    {item.activeVisit
+                      ? `Atendimento: ${item.activeVisit.routeName ?? "rota sem nome"}`
+                      : item.activeRoute
+                        ? `Roteiro: ${item.activeRoute.name}`
+                        : "Sem roteiro ativo"}
+                  </div>
                   <div className="mt-1 text-xs font-semibold text-stone-500">
                     Último sinal: {minutesAgo(item.location?.capturedAt)} - {formatTime(item.location?.capturedAt)}
                   </div>

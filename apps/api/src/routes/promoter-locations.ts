@@ -59,9 +59,23 @@ promoterLocationsRouter.get(
       throw new AppError(403, "LIVE_MAP_FORBIDDEN", "Only admins and supervisors can view the live map.");
     }
 
+    const today = dayBounds(new Date());
+    const supervisorScope =
+      req.user.role === "SUPERVISOR"
+        ? await prisma.supervisor.findFirst({
+            where: { ...scopedCompanyWhere(req), userId: req.user.id },
+            select: { id: true }
+          })
+        : null;
+
+    if (req.user.role === "SUPERVISOR" && !supervisorScope) {
+      throw new AppError(403, "SUPERVISOR_PROFILE_NOT_FOUND", "Supervisor autenticado nao possui cadastro operacional.");
+    }
+
     const promoters = await prisma.promoter.findMany({
       where: {
         ...scopedCompanyWhere(req),
+        ...(supervisorScope ? { supervisorId: supervisorScope.id } : {}),
         status: "ACTIVE",
         user: { status: "ACTIVE" }
       },
@@ -78,6 +92,25 @@ promoterLocationsRouter.get(
           orderBy: { updatedAt: "desc" },
           take: 1,
           include: { client: true, route: true }
+        },
+        routes: {
+          where: {
+            status: "PUBLISHED",
+            scheduledDate: {
+              gte: today.start,
+              lte: today.end
+            }
+          },
+          orderBy: { scheduledDate: "desc" },
+          take: 1,
+          include: {
+            items: {
+              where: { status: "PLANNED" },
+              orderBy: { sequence: "asc" },
+              take: 1,
+              include: { client: true }
+            }
+          }
         }
       }
     });
@@ -86,6 +119,8 @@ promoterLocationsRouter.get(
       data: promoters.map((promoter) => {
         const latestLocation = promoter.locations[0];
         const activeVisit = promoter.visits[0];
+        const activeRoute = promoter.routes[0];
+        const nextRouteItem = activeRoute?.items[0];
 
         return {
           promoter: {
@@ -101,6 +136,14 @@ promoterLocationsRouter.get(
                 clientName: activeVisit.client.name,
                 routeName: activeVisit.route?.name ?? null,
                 startedAt: activeVisit.startedAt
+              }
+            : null,
+          activeRoute: activeRoute
+            ? {
+                id: activeRoute.id,
+                name: activeRoute.name,
+                scheduledDate: activeRoute.scheduledDate,
+                nextClientName: nextRouteItem?.client.name ?? null
               }
             : null,
           location: latestLocation
