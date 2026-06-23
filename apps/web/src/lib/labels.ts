@@ -37,6 +37,13 @@ const roleLabels: Record<string, string> = {
 };
 
 const auditTypeLabels: Record<string, string> = {
+  GPS_MISSING: "GPS ausente",
+  OUTSIDE_GEOFENCE: "Fora da area prevista",
+  MISSING_REQUIRED_PHOTO: "Foto obrigatoria ausente",
+  TOO_FAST_VISIT: "Visita rapida demais",
+  TOO_LONG_VISIT: "Visita longa demais",
+  INCONSISTENT_FINISH: "Encerramento inconsistente",
+  SYNC_FAILURE: "Falha de sincronizacao",
   gps_missing: "GPS ausente",
   outside_geofence: "Fora da area prevista",
   missing_required_photo: "Foto obrigatoria ausente",
