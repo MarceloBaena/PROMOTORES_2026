@@ -165,22 +165,45 @@ export function Dashboard() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="surface-card overflow-hidden bg-navy p-0 text-white">
-          <div className="relative p-6 sm:p-7">
+          <div className="relative p-5 sm:p-6">
             <div className="pointer-events-none absolute right-[-7rem] top-[-8rem] h-80 w-80 rounded-full bg-brand/35 blur-3xl" />
             <div className="pointer-events-none absolute bottom-[-8rem] left-[30%] h-72 w-72 rounded-full bg-execution/20 blur-3xl" />
-            <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
               <div>
-                <p className="execution-chip border-white/10 bg-white/10 text-emerald-100">Controle do dia</p>
-                <h2 className="mt-4 max-w-3xl font-display text-3xl font-black leading-tight tracking-tight sm:text-5xl">
-                  Operacao enxuta: quem esta em campo, quem foi liberado e quem ja foi atendido.
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="execution-chip border-white/10 bg-white/10 text-emerald-100">Controle do dia</p>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-white/55">
+                    Regra 48h ativa
+                  </span>
+                </div>
+                <h2 className="mt-4 font-display text-2xl font-black leading-tight tracking-tight sm:text-3xl">
+                  Resumo da operacao em campo
                 </h2>
-                <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-white/68">
-                  Clientes em aberto so viram problema depois de 48 horas sem conclusao. Antes disso, o painel mostra apenas a rotina em andamento.
+                <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-white/68">
+                  Veja rapidamente quem esta trabalhando, quantos clientes foram liberados e o que realmente exige acao.
                 </p>
-                <div className="mt-7 grid gap-3 sm:grid-cols-3">
-                  <CommandStat label="Clientes na base" value={summary?.clients ?? 0} />
-                  <CommandStat label="Supervisores" value={summary?.supervisors ?? 0} />
-                  <CommandStat label="Atencao real" value={realAttentionCount} danger={realAttentionCount > 0} />
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <CommandStat label="Base ativa" value={summary?.clients ?? 0} />
+                  <CommandStat label="Promotores" value={fieldWork.activePromoters} />
+                  <CommandStat label="Liberados" value={fieldWork.releasedClientsToday} />
+                  <CommandStat label="Atendidos" value={fieldWork.attendedClientsToday} />
+                </div>
+
+                <div className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <span className="text-xs font-black uppercase tracking-[0.14em] text-white/55">Execucao do dia</span>
+                    <span className="font-display text-xl font-black text-white">{fieldWork.executionRate}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/10">
+                    <div
+                      className="h-2 rounded-full bg-gradient-to-r from-brand to-execution"
+                      style={{ width: `${Math.min(100, Math.max(0, fieldWork.executionRate))}%` }}
+                    />
+                  </div>
+                  <p className="mt-3 text-xs font-semibold leading-5 text-white/55">
+                    Clientes pendentes so entram em atencao quando passam de {fieldWork.staleRuleHours} horas sem conclusao.
+                  </p>
                 </div>
               </div>
 
@@ -192,7 +215,7 @@ export function Dashboard() {
                   </div>
                   <Navigation className="h-5 w-5 text-execution" />
                 </div>
-                <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
                   <RouteStep label="Rotas do dia" value={routeDay.total} active={routeDay.total > 0} />
                   <RouteStep label="Clientes liberados" value={fieldWork.releasedClientsToday} active={fieldWork.releasedClientsToday > 0} />
                   <RouteStep label="Clientes atendidos" value={fieldWork.attendedClientsToday} active={fieldWork.attendedClientsToday > 0} />
@@ -270,16 +293,16 @@ export function Dashboard() {
 
 function CommandStat({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
-      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-white/48">{label}</div>
-      <div className={`mt-2 font-display text-3xl font-black ${danger ? "text-warning" : "text-white"}`}>{value}</div>
+    <div className="rounded-2xl border border-white/10 bg-white/10 p-3">
+      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-white/48">{label}</div>
+      <div className={`mt-1 font-display text-2xl font-black ${danger ? "text-warning" : "text-white"}`}>{value}</div>
     </div>
   );
 }
 
 function RouteStep({ label, value, active }: { label: string; value: number; active: boolean }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 rounded-2xl bg-white/5 p-3">
       <span className={`grid h-8 w-8 place-items-center rounded-full ${active ? "bg-execution text-white" : "bg-white/10 text-white/40"}`}>
         <Route className="h-4 w-4" />
       </span>
