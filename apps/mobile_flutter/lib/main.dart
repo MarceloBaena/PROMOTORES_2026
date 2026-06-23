@@ -1,0 +1,2587 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
+
+const apiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'https://promotores-2026-api.vercel.app',
+);
+
+const testPromoterEmail = 'promotor.teste@formula.local';
+const testPromoterPassword = 'Promotor@123';
+const brandBlue = Color(0xFF2563EB);
+const brandNavy = Color(0xFF0F172A);
+const brandGreen = Color(0xFF10B981);
+const surface = Color(0xFFF8FAFC);
+const line = Color(0xFFE2E8F0);
+const _keepValue = Object();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final repository = AppRepository();
+  await repository.init();
+  runApp(PromotorProApp(repository: repository));
+}
+
+class PromotorProApp extends StatefulWidget {
+  const PromotorProApp({super.key, required this.repository});
+
+  final AppRepository repository;
+
+  @override
+  State<PromotorProApp> createState() => _PromotorProAppState();
+}
+
+class _PromotorProAppState extends State<PromotorProApp> {
+  Session? session;
+  List<RouteItemView> routeItems = [];
+  QueueSummary queueSummary = const QueueSummary(pending: 0, failed: 0);
+  String message = 'Inicializando aplicativo...';
+  bool busy = false;
+  Timer? heartbeatTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialState();
+  }
+
+  @override
+  void dispose() {
+    heartbeatTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadInitialState() async {
+    final storedSession = await widget.repository.getSession();
+    final items = await widget.repository.listRouteItems();
+    final summary = await widget.repository.getQueueSummary();
+    if (!mounted) return;
+    setState(() {
+      session = storedSession;
+      routeItems = items;
+      queueSummary = summary;
+      message = storedSession == null
+          ? 'Faca o primeiro login com internet para baixar seu roteiro.'
+          : 'Sessao local carregada. O app pode trabalhar offline.';
+    });
+    _restartHeartbeat();
+  }
+
+  Future<void> _reload({String? nextMessage}) async {
+    final items = await widget.repository.listRouteItems();
+    final summary = await widget.repository.getQueueSummary();
+    if (!mounted) return;
+    setState(() {
+      routeItems = items;
+      queueSummary = summary;
+      if (nextMessage != null) message = nextMessage;
+    });
+    _restartHeartbeat();
+  }
+
+  void _restartHeartbeat() {
+    heartbeatTimer?.cancel();
+    final currentSession = session;
+    if (currentSession == null || !routeItems.any((item) => !item.isDone)) {
+      return;
+    }
+
+    Future<void> send() async {
+      try {
+        await widget.repository.sendHeartbeat(currentSession.accessToken);
+      } catch (_) {
+        // Heartbeat must never block the field workflow.
+      }
+    }
+
+    unawaited(send());
+    heartbeatTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(send()),
+    );
+  }
+
+  Future<void> _handleLogin(String email, String password) async {
+    setState(() {
+      busy = true;
+      message = 'Validando usuario e baixando roteiro...';
+    });
+
+    try {
+      final result = await widget.repository.login(email, password);
+      if (result.user.role != 'PROMOTOR') {
+        throw Exception('Este aplicativo e exclusivo para usuario PROMOTOR.');
+      }
+
+      final snapshot = await widget.repository.downloadSnapshot(
+        result.accessToken,
+      );
+      await widget.repository.saveSession(result);
+      await widget.repository.saveSnapshot(snapshot);
+      if (!mounted) return;
+      setState(() {
+        session = result;
+        message =
+            'Roteiro salvo no aparelho: ${snapshot.routes.length} rota(s), ${snapshot.clients.length} cliente(s).';
+      });
+      await _reload();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => message = normalizedError(error));
+      _showError('Nao foi possivel entrar', normalizedError(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _refreshRoute() async {
+    final currentSession = session;
+    if (currentSession == null) return;
+
+    setState(() {
+      busy = true;
+      message = 'Atualizando roteiro...';
+    });
+
+    try {
+      final snapshot = await widget.repository.downloadSnapshot(
+        currentSession.accessToken,
+      );
+      await widget.repository.saveSnapshot(snapshot);
+      await _reload(
+        nextMessage:
+            'Roteiro atualizado: ${snapshot.routes.length} rota(s), ${snapshot.clients.length} cliente(s).',
+      );
+    } catch (error) {
+      setState(() => message = normalizedError(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _syncNow() async {
+    final currentSession = session;
+    if (currentSession == null) return;
+    setState(() {
+      busy = true;
+      message = 'Sincronizando fila local...';
+    });
+
+    try {
+      final result = await widget.repository.syncPending(
+        currentSession.accessToken,
+      );
+      await _refreshRoute();
+      await _reload(
+        nextMessage:
+            'Sync concluida. Enviados: ${result.synced}. Falhas: ${result.failed}.',
+      );
+    } catch (error) {
+      await _reload(nextMessage: normalizedError(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  void _showError(String title, String text) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(text),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'PromotorPro',
+      theme: ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: surface,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: brandBlue,
+          primary: brandBlue,
+        ),
+        fontFamily: 'Roboto',
+      ),
+      home: session == null
+          ? LoginPage(busy: busy, message: message, onLogin: _handleLogin)
+          : HomePage(
+              session: session!,
+              routeItems: routeItems,
+              queueSummary: queueSummary,
+              message: message,
+              busy: busy,
+              onRefresh: _refreshRoute,
+              onSync: _syncNow,
+              onOpenSync: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SyncPage(
+                    repository: widget.repository,
+                    onSync: _syncNow,
+                    onChanged: _reload,
+                  ),
+                ),
+              ),
+              onOpenVisit: (item) async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        VisitPage(repository: widget.repository, item: item),
+                  ),
+                );
+                await _reload();
+              },
+              onLogout: () async {
+                heartbeatTimer?.cancel();
+                await widget.repository.clearSessionOnly();
+                if (!mounted) return;
+                setState(() {
+                  session = null;
+                  message = 'Sessao encerrada neste aparelho.';
+                });
+              },
+            ),
+    );
+  }
+}
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({
+    super.key,
+    required this.busy,
+    required this.message,
+    required this.onLogin,
+  });
+
+  final bool busy;
+  final String message;
+  final Future<void> Function(String email, String password) onLogin;
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final emailController = TextEditingController(text: testPromoterEmail);
+  final passwordController = TextEditingController(text: testPromoterPassword);
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShell(
+      child: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          const SizedBox(height: 40),
+          const BrandHeader(
+            title: 'Operacao de campo',
+            subtitle: 'PromotorPro Flutter',
+          ),
+          const SizedBox(height: 28),
+          InfoCard(
+            title: 'Primeiro acesso',
+            body:
+                'Entre com internet para baixar roteiro e clientes. Depois o atendimento funciona offline.',
+          ),
+          const SizedBox(height: 18),
+          TextField(
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'E-mail do promotor',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Senha',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          PrimaryButton(
+            label: widget.busy ? 'Entrando...' : 'Entrar e baixar roteiro',
+            onPressed: widget.busy
+                ? null
+                : () => widget.onLogin(
+                    emailController.text,
+                    passwordController.text,
+                  ),
+          ),
+          const SizedBox(height: 14),
+          MessageBox(message: widget.message),
+        ],
+      ),
+    );
+  }
+}
+
+class HomePage extends StatelessWidget {
+  const HomePage({
+    super.key,
+    required this.session,
+    required this.routeItems,
+    required this.queueSummary,
+    required this.message,
+    required this.busy,
+    required this.onRefresh,
+    required this.onSync,
+    required this.onOpenSync,
+    required this.onOpenVisit,
+    required this.onLogout,
+  });
+
+  final Session session;
+  final List<RouteItemView> routeItems;
+  final QueueSummary queueSummary;
+  final String message;
+  final bool busy;
+  final VoidCallback onRefresh;
+  final VoidCallback onSync;
+  final VoidCallback onOpenSync;
+  final void Function(RouteItemView item) onOpenVisit;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    final pendingItems = routeItems.where((item) => !item.isDone).toList();
+    final completedItems = routeItems.where((item) => item.isDone).length;
+    return AppShell(
+      child: Column(
+        children: [
+          AppTopBar(title: 'Roteiro do promotor', onLogout: onLogout),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async => onRefresh(),
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  DashboardGrid(
+                    cards: [
+                      MetricData(
+                        'Clientes liberados',
+                        routeItems.length.toString(),
+                        Icons.storefront,
+                      ),
+                      MetricData(
+                        'Pendentes',
+                        pendingItems.length.toString(),
+                        Icons.route,
+                      ),
+                      MetricData(
+                        'Atendidos',
+                        completedItems.toString(),
+                        Icons.verified,
+                      ),
+                      MetricData(
+                        'Fila sync',
+                        '${queueSummary.pending}',
+                        Icons.sync,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SecondaryButton(
+                          label: 'Atualizar roteiro',
+                          onPressed: busy ? null : onRefresh,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: PrimaryButton(
+                          label: busy ? 'Aguarde...' : 'Sync',
+                          onPressed: busy ? null : onSync,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SecondaryButton(
+                    label: 'Ver fila de sincronizacao',
+                    onPressed: onOpenSync,
+                  ),
+                  const SizedBox(height: 14),
+                  MessageBox(message: message),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Clientes para atendimento',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (pendingItems.isEmpty)
+                    const EmptyState(
+                      title: 'Nenhum cliente pendente',
+                      body:
+                          'Quando uma rota for publicada para este promotor, os clientes aparecem aqui.',
+                    )
+                  else
+                    ...pendingItems.map(
+                      (item) => RouteItemCard(
+                        item: item,
+                        onTap: () => onOpenVisit(item),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class VisitPage extends StatefulWidget {
+  const VisitPage({super.key, required this.repository, required this.item});
+
+  final AppRepository repository;
+  final RouteItemView item;
+
+  @override
+  State<VisitPage> createState() => _VisitPageState();
+}
+
+class _VisitPageState extends State<VisitPage> {
+  LocalVisit? visit;
+  List<LocalPhoto> photos = [];
+  final notesController = TextEditingController();
+  bool busy = false;
+  String message = 'Pronto para iniciar atendimento.';
+
+  bool get hasCheckin => photos.any((photo) => photo.type == 'checkin');
+  bool get hasBefore => photos.any((photo) => photo.type == 'before');
+  bool get hasAfter => photos.any((photo) => photo.type == 'after');
+  bool get requiredReady => hasCheckin && hasBefore && hasAfter;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final currentVisit = await widget.repository.getVisitByRouteItem(
+      widget.item.id,
+    );
+    final currentPhotos = currentVisit == null
+        ? <LocalPhoto>[]
+        : await widget.repository.listPhotos(currentVisit.localId);
+    if (!mounted) return;
+    setState(() {
+      visit = currentVisit;
+      photos = currentPhotos;
+      notesController.text = currentVisit?.notes ?? '';
+      message = currentVisit == null
+          ? 'Inicie o atendimento para liberar as evidencias.'
+          : 'Atendimento salvo localmente.';
+    });
+  }
+
+  Future<void> _startVisit() async {
+    setState(() => busy = true);
+    try {
+      final created = await widget.repository.startVisit(widget.item);
+      await _load();
+      setState(
+        () =>
+            message = 'Atendimento iniciado offline. Agora capture o check-in.',
+      );
+      unawaited(widget.repository.sendHeartbeatFromVisit(created));
+    } catch (error) {
+      setState(() => message = normalizedError(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _capture(String type) async {
+    final currentVisit = visit;
+    if (currentVisit == null) {
+      setState(() => message = 'Inicie o atendimento antes de capturar fotos.');
+      return;
+    }
+
+    setState(() => busy = true);
+    try {
+      await widget.repository.capturePhoto(currentVisit, type);
+      await _load();
+      setState(
+        () => message =
+            '${photoLabel(type)} salva localmente com data, hora e GPS quando disponivel.',
+      );
+    } catch (error) {
+      setState(() => message = normalizedError(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _finish() async {
+    final currentVisit = visit;
+    if (currentVisit == null) return;
+    if (!requiredReady) {
+      setState(
+        () => message =
+            'Obrigatorio capturar check-in, foto antes e foto depois antes de encerrar.',
+      );
+      return;
+    }
+
+    setState(() => busy = true);
+    try {
+      await widget.repository.finishVisit(currentVisit, notesController.text);
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (error) {
+      setState(() => message = normalizedError(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShell(
+      child: Column(
+        children: [
+          AppTopBar(title: 'Atendimento', showBack: true),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                ClientHero(
+                  item: widget.item,
+                  status: visit?.status ?? 'pendente',
+                ),
+                const SizedBox(height: 14),
+                if (visit == null)
+                  PrimaryButton(
+                    label: busy ? 'Iniciando...' : 'Iniciar atendimento',
+                    onPressed: busy ? null : _startVisit,
+                  )
+                else ...[
+                  EvidenceButton(
+                    label: 'Check-in com foto',
+                    ok: hasCheckin,
+                    onPressed: busy ? null : () => _capture('checkin'),
+                  ),
+                  EvidenceButton(
+                    label: 'Foto antes',
+                    ok: hasBefore,
+                    onPressed: busy ? null : () => _capture('before'),
+                  ),
+                  EvidenceButton(
+                    label: 'Foto depois',
+                    ok: hasAfter,
+                    onPressed: busy ? null : () => _capture('after'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    minLines: 3,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      labelText: 'Observacoes da execucao',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  PrimaryButton(
+                    label: 'Encerrar visita',
+                    onPressed: busy ? null : _finish,
+                  ),
+                ],
+                const SizedBox(height: 14),
+                MessageBox(message: message),
+                const SizedBox(height: 14),
+                Text(
+                  'Evidencias locais',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (photos.isEmpty) const Text('Nenhuma foto capturada ainda.'),
+                ...photos.map((photo) => PhotoTile(photo: photo)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SyncPage extends StatefulWidget {
+  const SyncPage({
+    super.key,
+    required this.repository,
+    required this.onSync,
+    required this.onChanged,
+  });
+
+  final AppRepository repository;
+  final Future<void> Function() onSync;
+  final Future<void> Function({String? nextMessage}) onChanged;
+
+  @override
+  State<SyncPage> createState() => _SyncPageState();
+}
+
+class _SyncPageState extends State<SyncPage> {
+  List<QueueDiagnostic> diagnostics = [];
+  List<SyncLog> logs = [];
+  QueueSummary summary = const QueueSummary(pending: 0, failed: 0);
+  bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final nextDiagnostics = await widget.repository.listQueueDiagnostics();
+    final nextLogs = await widget.repository.listSyncLogs();
+    final nextSummary = await widget.repository.getQueueSummary();
+    if (!mounted) return;
+    setState(() {
+      diagnostics = nextDiagnostics;
+      logs = nextLogs;
+      summary = nextSummary;
+    });
+  }
+
+  Future<void> _sync() async {
+    setState(() => busy = true);
+    await widget.onSync();
+    await _load();
+    if (mounted) setState(() => busy = false);
+  }
+
+  Future<void> _clearLocalData() async {
+    await widget.repository.clearLocalOperationalData();
+    await widget.onChanged(
+      nextMessage: 'Dados locais operacionais limpos neste aparelho.',
+    );
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShell(
+      child: Column(
+        children: [
+          AppTopBar(title: 'Sincronizacao', showBack: true),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                InfoCard(
+                  title: 'Fila local persistente',
+                  body:
+                      '${summary.pending} pendente(s)\n${summary.failed} falha(s)',
+                ),
+                const SizedBox(height: 12),
+                PrimaryButton(
+                  label: busy ? 'Sincronizando...' : 'Sincronizar agora',
+                  onPressed: busy ? null : _sync,
+                ),
+                const SizedBox(height: 10),
+                SecondaryButton(
+                  label: 'Limpar dados locais deste aparelho',
+                  onPressed: _clearLocalData,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Critica do sincronismo',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                if (diagnostics.isEmpty)
+                  const InfoCard(
+                    title: 'Sem criticas',
+                    body: 'Nao ha itens presos na fila local neste momento.',
+                  )
+                else
+                  ...diagnostics.map((item) => DiagnosticCard(item: item)),
+                const SizedBox(height: 14),
+                Text(
+                  'Logs locais',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...logs.map(
+                  (log) => ListTile(
+                    dense: true,
+                    title: Text(
+                      syncLabel(log.status),
+                      style: TextStyle(
+                        color: log.status == 'failed' ? Colors.red : brandGreen,
+                      ),
+                    ),
+                    subtitle: Text(log.message),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AppRepository {
+  final api = ApiClient(apiBaseUrl);
+  final db = LocalDatabase();
+  SharedPreferences? prefs;
+
+  Future<void> init() async {
+    prefs = await SharedPreferences.getInstance();
+    await db.open();
+  }
+
+  Future<Session?> getSession() async {
+    final raw = prefs?.getString('session');
+    return raw == null
+        ? null
+        : Session.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+  }
+
+  Future<void> saveSession(Session session) async {
+    await prefs?.setString('session', jsonEncode(session.toJson()));
+  }
+
+  Future<void> clearSessionOnly() async {
+    await prefs?.remove('session');
+  }
+
+  Future<Session> login(String email, String password) =>
+      api.login(email, password);
+  Future<MobileSnapshot> downloadSnapshot(String accessToken) =>
+      api.downloadSnapshot(accessToken);
+  Future<void> saveSnapshot(MobileSnapshot snapshot) =>
+      db.saveSnapshot(snapshot);
+  Future<List<RouteItemView>> listRouteItems() => db.listRouteItems();
+  Future<LocalVisit?> getVisitByRouteItem(String routeItemId) =>
+      db.getVisitByRouteItem(routeItemId);
+  Future<List<LocalPhoto>> listPhotos(String visitLocalId) =>
+      db.listPhotos(visitLocalId);
+  Future<QueueSummary> getQueueSummary() => db.getQueueSummary();
+  Future<List<QueueDiagnostic>> listQueueDiagnostics() =>
+      db.listQueueDiagnostics();
+  Future<List<SyncLog>> listSyncLogs() => db.listSyncLogs();
+  Future<void> clearLocalOperationalData() => db.clearLocalOperationalData();
+
+  Future<LocalVisit> startVisit(RouteItemView item) async {
+    final gps = await getGpsOrNull();
+    final visit = LocalVisit(
+      localId: const Uuid().v4(),
+      clientId: item.clientId,
+      routeId: item.routeId,
+      routeItemId: item.id,
+      status: 'in_progress',
+      startedAt: DateTime.now().toUtc().toIso8601String(),
+      finishedAt: null,
+      gpsLatitude: gps?.latitude,
+      gpsLongitude: gps?.longitude,
+      notes: null,
+      syncStatus: 'pending',
+      updatedAt: DateTime.now().toUtc().toIso8601String(),
+    );
+    await db.upsertVisit(visit);
+    await db.enqueue('visit', visit.localId);
+    await db.addSyncLog(
+      'pending',
+      'Atendimento iniciado offline para ${item.clientName}.',
+    );
+    return visit;
+  }
+
+  Future<void> capturePhoto(LocalVisit visit, String type) async {
+    final picker = ImagePicker();
+    final result = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 72,
+      maxWidth: 1600,
+    );
+    if (result == null) {
+      throw Exception('Captura cancelada.');
+    }
+
+    final gps = await getGpsOrNull();
+    final directory = await getApplicationDocumentsDirectory();
+    final photosDir = Directory(p.join(directory.path, 'promotorpro_photos'));
+    if (!await photosDir.exists()) {
+      await photosDir.create(recursive: true);
+    }
+
+    final localId = const Uuid().v4();
+    final targetPath = p.join(photosDir.path, '$localId.jpg');
+    await File(result.path).copy(targetPath);
+    final photo = LocalPhoto(
+      localId: localId,
+      visitLocalId: visit.localId,
+      type: type,
+      uri: targetPath,
+      capturedAt: DateTime.now().toUtc().toIso8601String(),
+      gpsLatitude: gps?.latitude,
+      gpsLongitude: gps?.longitude,
+      syncStatus: 'pending',
+    );
+    await db.addPhoto(photo);
+    await db.enqueue('photo', photo.localId);
+    await db.addSyncLog(
+      gps == null ? 'failed' : 'pending',
+      gps == null
+          ? 'Foto salva sem GPS disponivel.'
+          : '${photoLabel(type)} salva com GPS.',
+    );
+  }
+
+  Future<void> finishVisit(LocalVisit visit, String notes) async {
+    final photos = await db.listPhotos(visit.localId);
+    final types = photos.map((photo) => photo.type).toSet();
+    if (!types.contains('checkin') ||
+        !types.contains('before') ||
+        !types.contains('after')) {
+      throw Exception(
+        'Nao e permitido encerrar sem check-in, foto antes e foto depois.',
+      );
+    }
+
+    await db.upsertVisit(
+      visit.copyWith(
+        status: 'completed',
+        finishedAt: DateTime.now().toUtc().toIso8601String(),
+        notes: notes.trim(),
+        syncStatus: 'pending',
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+    await db.enqueue('visit', visit.localId);
+    await db.markRouteItemCompleted(visit.routeItemId);
+    await db.addSyncLog(
+      'pending',
+      'Visita encerrada offline. Sincronize quando tiver internet.',
+    );
+  }
+
+  Future<SyncResult> syncPending(String accessToken) async {
+    final queue = await db.getPendingQueue();
+    var synced = 0;
+    var failed = 0;
+
+    for (final item in queue) {
+      try {
+        await db.setQueueStatus(item.id, 'syncing');
+        if (item.kind == 'visit') {
+          await _syncVisit(accessToken, item.entityLocalId);
+        } else {
+          await _syncPhoto(accessToken, item.entityLocalId);
+        }
+        await db.removeQueueItem(item.id);
+        synced += 1;
+      } catch (error) {
+        failed += 1;
+        await db.setQueueStatus(item.id, 'failed', normalizedError(error));
+        await db.addSyncLog('failed', normalizedError(error));
+      }
+    }
+
+    await db.addSyncLog(
+      failed > 0 ? 'failed' : 'synced',
+      'Sincronizacao finalizada. Enviados: $synced. Falhas: $failed.',
+    );
+    return SyncResult(synced: synced, failed: failed);
+  }
+
+  Future<void> _syncVisit(String accessToken, String localId) async {
+    final visit = await db.getVisit(localId);
+    if (visit == null) return;
+    await db.updateVisitSyncStatus(localId, 'syncing');
+
+    if (visit.status != 'completed') {
+      final serverId = await api.sendVisit(accessToken, visit);
+      await db.updateVisitServerId(localId, serverId, 'synced');
+      return;
+    }
+
+    final photos = await db.listPhotos(visit.localId);
+    final types = photos.map((photo) => photo.type).toSet();
+    if (!types.contains('checkin') ||
+        !types.contains('before') ||
+        !types.contains('after')) {
+      throw Exception(
+        'Visita concluida localmente sem todas as fotos obrigatorias.',
+      );
+    }
+
+    final serverVisitId =
+        visit.serverId ??
+        await api.sendVisit(
+          accessToken,
+          visit.copyWith(status: 'in_progress', finishedAt: null),
+        );
+    await db.updateVisitServerId(localId, serverVisitId, 'pending');
+
+    for (final photo in photos) {
+      await _uploadPhoto(accessToken, serverVisitId, photo);
+    }
+
+    final refreshed = await db.getVisit(localId) ?? visit;
+    final finalServerId = await api.sendVisit(
+      accessToken,
+      refreshed.copyWith(serverId: serverVisitId, status: 'completed'),
+    );
+    await db.updateVisitServerId(localId, finalServerId, 'synced');
+  }
+
+  Future<void> _syncPhoto(String accessToken, String localId) async {
+    final photo = await db.getPhoto(localId);
+    if (photo == null ||
+        photo.serverId != null ||
+        photo.syncStatus == 'synced') {
+      return;
+    }
+    final visit = await db.getVisit(photo.visitLocalId);
+    if (visit == null) throw Exception('Visita da foto nao encontrada.');
+    final serverVisitId =
+        visit.serverId ??
+        await api.sendVisit(
+          accessToken,
+          visit.copyWith(status: 'in_progress', finishedAt: null),
+        );
+    await db.updateVisitServerId(visit.localId, serverVisitId, 'pending');
+    await _uploadPhoto(accessToken, serverVisitId, photo);
+  }
+
+  Future<void> _uploadPhoto(
+    String accessToken,
+    String visitId,
+    LocalPhoto photo,
+  ) async {
+    if (photo.serverId != null || photo.syncStatus == 'synced') return;
+    await db.updatePhotoSyncStatus(photo.localId, 'syncing');
+    final serverPhotoId = await api.uploadPhoto(accessToken, visitId, photo);
+    await db.updatePhotoServerId(photo.localId, serverPhotoId, 'synced');
+  }
+
+  Future<void> sendHeartbeat(String accessToken) async {
+    final gps = await getGpsOrNull();
+    if (gps == null) return;
+    await api.sendHeartbeat(accessToken, gps);
+  }
+
+  Future<void> sendHeartbeatFromVisit(LocalVisit visit) async {
+    final session = await getSession();
+    final gps = await getGpsOrNull();
+    if (session == null || gps == null) return;
+    await api.sendHeartbeat(session.accessToken, gps, visitId: visit.serverId);
+  }
+}
+
+class ApiClient {
+  ApiClient(this.baseUrl);
+
+  final String baseUrl;
+  final http.Client _client = http.Client();
+
+  Future<http.Response> _request(
+    String path, {
+    String method = 'GET',
+    String? accessToken,
+    Map<String, dynamic>? body,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = <String, String>{
+      'content-type': 'application/json',
+      if (accessToken != null) 'authorization': 'Bearer $accessToken',
+    };
+
+    try {
+      final request = switch (method) {
+        'POST' => _client.post(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        ),
+        'PUT' => _client.put(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        ),
+        _ => _client.get(uri, headers: headers),
+      };
+      final response = await request.timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(parseApiError(response));
+      }
+      return response;
+    } on TimeoutException {
+      throw Exception('Tempo esgotado ao conectar na API.');
+    } on SocketException {
+      throw Exception(
+        'Nao foi possivel conectar na API. Verifique internet ou dados moveis.',
+      );
+    }
+  }
+
+  Future<Session> login(String email, String password) async {
+    final response = await _request(
+      '/auth/login',
+      method: 'POST',
+      body: {'email': email.trim().toLowerCase(), 'password': password},
+    );
+    return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<MobileSnapshot> downloadSnapshot(String accessToken) async {
+    final response = await _request(
+      '/mobile/snapshot',
+      accessToken: accessToken,
+      timeout: const Duration(seconds: 60),
+    );
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return MobileSnapshot.fromJson(body['data'] as Map<String, dynamic>);
+  }
+
+  Future<String> sendVisit(String accessToken, LocalVisit visit) async {
+    final payload = {
+      'clientGeneratedId': visit.localId,
+      'routeId': visit.routeId,
+      'routeItemId': visit.routeItemId,
+      'clientId': visit.clientId,
+      'status': visit.status,
+      'startedAt': visit.startedAt,
+      'finishedAt': visit.finishedAt,
+      'gpsLatitude': visit.gpsLatitude,
+      'gpsLongitude': visit.gpsLongitude,
+      'notes': visit.notes,
+    };
+    final response = await _request(
+      visit.serverId == null ? '/visits' : '/visits/${visit.serverId}',
+      method: visit.serverId == null ? 'POST' : 'PUT',
+      accessToken: accessToken,
+      body: payload,
+      timeout: const Duration(seconds: 90),
+    );
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['data'] as Map<String, dynamic>)['id'] as String;
+  }
+
+  Future<String> uploadPhoto(
+    String accessToken,
+    String visitId,
+    LocalPhoto photo,
+  ) async {
+    final bytes = await File(photo.uri).readAsBytes();
+    final response = await _request(
+      '/visits/$visitId/photos/base64',
+      method: 'POST',
+      accessToken: accessToken,
+      body: {
+        'type': photo.type,
+        'clientGeneratedId': photo.localId,
+        'capturedAt': photo.capturedAt,
+        'gpsLatitude': photo.gpsLatitude,
+        'gpsLongitude': photo.gpsLongitude,
+        'contentType': 'image/jpeg',
+        'base64Image': base64Encode(bytes),
+      },
+      timeout: const Duration(seconds: 120),
+    );
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['data'] as Map<String, dynamic>)['id'] as String;
+  }
+
+  Future<void> sendHeartbeat(
+    String accessToken,
+    GpsPoint gps, {
+    String? visitId,
+  }) async {
+    final body = <String, dynamic>{
+      'latitude': gps.latitude,
+      'longitude': gps.longitude,
+      'accuracyMeters': gps.accuracyMeters,
+      'capturedAt': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (visitId != null) {
+      body['visitId'] = visitId;
+    }
+
+    await _request(
+      '/locations/heartbeat',
+      method: 'POST',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+}
+
+class LocalDatabase {
+  Database? _db;
+
+  Future<Database> get database async {
+    final instance = _db;
+    if (instance != null) return instance;
+    return open();
+  }
+
+  Future<Database> open() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final path = p.join(directory.path, 'promotorpro_flutter.db');
+    _db = await openDatabase(
+      path,
+      version: 1,
+      onCreate: (db, version) async {
+        await db.execute(
+          'CREATE TABLE clients (id TEXT PRIMARY KEY, code TEXT, name TEXT NOT NULL, address TEXT, city TEXT, state TEXT, payload_json TEXT NOT NULL)',
+        );
+        await db.execute(
+          'CREATE TABLE routes (id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT NOT NULL, scheduled_date TEXT, payload_json TEXT NOT NULL)',
+        );
+        await db.execute(
+          'CREATE TABLE route_items (id TEXT PRIMARY KEY, route_id TEXT NOT NULL, client_id TEXT NOT NULL, sequence INTEGER NOT NULL, status TEXT NOT NULL, payload_json TEXT NOT NULL)',
+        );
+        await db.execute(
+          'CREATE TABLE visits (local_id TEXT PRIMARY KEY, server_id TEXT, route_id TEXT, route_item_id TEXT, client_id TEXT NOT NULL, status TEXT NOT NULL, started_at TEXT, finished_at TEXT, gps_latitude REAL, gps_longitude REAL, notes TEXT, sync_status TEXT NOT NULL, updated_at TEXT NOT NULL)',
+        );
+        await db.execute(
+          'CREATE TABLE photos (local_id TEXT PRIMARY KEY, visit_local_id TEXT NOT NULL, server_id TEXT, type TEXT NOT NULL, uri TEXT NOT NULL, captured_at TEXT NOT NULL, gps_latitude REAL, gps_longitude REAL, sync_status TEXT NOT NULL)',
+        );
+        await db.execute(
+          'CREATE TABLE sync_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, entity_local_id TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
+        );
+        await db.execute(
+          'CREATE TABLE sync_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT NOT NULL)',
+        );
+      },
+    );
+    return _db!;
+  }
+
+  String nowIso() => DateTime.now().toUtc().toIso8601String();
+
+  Future<void> saveSnapshot(MobileSnapshot snapshot) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('route_items');
+      await txn.delete('routes');
+      for (final client in snapshot.clients) {
+        await txn.insert(
+          'clients',
+          client.toDb(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      for (final route in snapshot.routes) {
+        await txn.insert(
+          'routes',
+          route.toDb(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        for (final item in route.items) {
+          await txn.insert(
+            'route_items',
+            item.toDb(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      }
+      await txn.insert('sync_logs', {
+        'status': snapshot.routes.isEmpty ? 'failed' : 'synced',
+        'message': snapshot.routes.isEmpty
+            ? 'Nenhum roteiro publicado para este promotor.'
+            : 'Roteiro atualizado: ${snapshot.routes.length} rota(s), ${snapshot.clients.length} cliente(s).',
+        'created_at': nowIso(),
+      });
+    });
+  }
+
+  Future<List<RouteItemView>> listRouteItems() async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT
+        route_items.id,
+        route_items.route_id AS routeId,
+        route_items.client_id AS clientId,
+        route_items.sequence,
+        route_items.status,
+        clients.name AS clientName,
+        clients.address AS clientAddress,
+        routes.name AS routeName,
+        visits.status AS visitStatus
+      FROM route_items
+      INNER JOIN routes ON routes.id = route_items.route_id
+      INNER JOIN clients ON clients.id = route_items.client_id
+      LEFT JOIN visits ON visits.route_item_id = route_items.id
+      WHERE route_items.id = (
+        SELECT candidate.id
+        FROM route_items candidate
+        INNER JOIN routes candidate_route ON candidate_route.id = candidate.route_id
+        WHERE candidate.client_id = route_items.client_id
+        ORDER BY candidate.sequence ASC, candidate_route.scheduled_date DESC, candidate.id ASC
+        LIMIT 1
+      )
+      ORDER BY route_items.sequence ASC
+    ''');
+    return rows.map(RouteItemView.fromDb).toList();
+  }
+
+  Future<LocalVisit?> getVisitByRouteItem(String routeItemId) async {
+    final db = await database;
+    final rows = await db.query(
+      'visits',
+      where: 'route_item_id = ?',
+      whereArgs: [routeItemId],
+      orderBy: 'updated_at DESC',
+      limit: 1,
+    );
+    return rows.isEmpty ? null : LocalVisit.fromDb(rows.first);
+  }
+
+  Future<LocalVisit?> getVisit(String localId) async {
+    final db = await database;
+    final rows = await db.query(
+      'visits',
+      where: 'local_id = ?',
+      whereArgs: [localId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : LocalVisit.fromDb(rows.first);
+  }
+
+  Future<void> upsertVisit(LocalVisit visit) async {
+    final db = await database;
+    await db.insert(
+      'visits',
+      visit.toDb(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> addPhoto(LocalPhoto photo) async {
+    final db = await database;
+    await db.insert(
+      'photos',
+      photo.toDb(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<LocalPhoto>> listPhotos(String visitLocalId) async {
+    final db = await database;
+    final rows = await db.query(
+      'photos',
+      where: 'visit_local_id = ?',
+      whereArgs: [visitLocalId],
+      orderBy: 'captured_at ASC',
+    );
+    return rows.map(LocalPhoto.fromDb).toList();
+  }
+
+  Future<LocalPhoto?> getPhoto(String localId) async {
+    final db = await database;
+    final rows = await db.query(
+      'photos',
+      where: 'local_id = ?',
+      whereArgs: [localId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : LocalPhoto.fromDb(rows.first);
+  }
+
+  Future<void> markRouteItemCompleted(String? routeItemId) async {
+    if (routeItemId == null) return;
+    final db = await database;
+    await db.update(
+      'route_items',
+      {'status': 'COMPLETED'},
+      where: 'id = ?',
+      whereArgs: [routeItemId],
+    );
+  }
+
+  Future<void> enqueue(String kind, String entityLocalId) async {
+    final db = await database;
+    final existing = await db.query(
+      'sync_queue',
+      columns: ['id'],
+      where: 'kind = ? AND entity_local_id = ? AND status IN (?, ?, ?)',
+      whereArgs: [kind, entityLocalId, 'pending', 'syncing', 'failed'],
+      limit: 1,
+    );
+    if (existing.isNotEmpty) {
+      await db.update(
+        'sync_queue',
+        {'status': 'pending', 'updated_at': nowIso()},
+        where: 'id = ?',
+        whereArgs: [existing.first['id']],
+      );
+      return;
+    }
+    await db.insert('sync_queue', {
+      'kind': kind,
+      'entity_local_id': entityLocalId,
+      'status': 'pending',
+      'attempts': 0,
+      'created_at': nowIso(),
+      'updated_at': nowIso(),
+    });
+  }
+
+  Future<List<QueueItem>> getPendingQueue() async {
+    final db = await database;
+    final rows = await db.query(
+      'sync_queue',
+      where: 'status IN (?, ?, ?)',
+      whereArgs: ['pending', 'syncing', 'failed'],
+      orderBy: 'id ASC',
+    );
+    return rows.map(QueueItem.fromDb).toList();
+  }
+
+  Future<void> setQueueStatus(int id, String status, [String? error]) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE sync_queue SET status = ?, attempts = attempts + 1, last_error = ?, updated_at = ? WHERE id = ?',
+      [status, error, nowIso(), id],
+    );
+  }
+
+  Future<void> removeQueueItem(int id) async {
+    final db = await database;
+    await db.delete('sync_queue', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> updateVisitServerId(
+    String localId,
+    String serverId,
+    String status,
+  ) async {
+    final db = await database;
+    await db.update(
+      'visits',
+      {'server_id': serverId, 'sync_status': status, 'updated_at': nowIso()},
+      where: 'local_id = ?',
+      whereArgs: [localId],
+    );
+  }
+
+  Future<void> updateVisitSyncStatus(String localId, String status) async {
+    final db = await database;
+    await db.update(
+      'visits',
+      {'sync_status': status, 'updated_at': nowIso()},
+      where: 'local_id = ?',
+      whereArgs: [localId],
+    );
+  }
+
+  Future<void> updatePhotoServerId(
+    String localId,
+    String serverId,
+    String status,
+  ) async {
+    final db = await database;
+    await db.update(
+      'photos',
+      {'server_id': serverId, 'sync_status': status},
+      where: 'local_id = ?',
+      whereArgs: [localId],
+    );
+  }
+
+  Future<void> updatePhotoSyncStatus(String localId, String status) async {
+    final db = await database;
+    await db.update(
+      'photos',
+      {'sync_status': status},
+      where: 'local_id = ?',
+      whereArgs: [localId],
+    );
+  }
+
+  Future<QueueSummary> getQueueSummary() async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT
+        SUM(CASE WHEN status IN ('pending', 'syncing') THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
+      FROM sync_queue
+    ''');
+    final row = rows.first;
+    return QueueSummary(
+      pending: asInt(row['pending']),
+      failed: asInt(row['failed']),
+    );
+  }
+
+  Future<List<QueueDiagnostic>> listQueueDiagnostics() async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT
+        sync_queue.id,
+        sync_queue.kind,
+        sync_queue.entity_local_id AS entityLocalId,
+        sync_queue.status,
+        sync_queue.attempts,
+        sync_queue.last_error AS lastError,
+        sync_queue.updated_at AS updatedAt,
+        clients.name AS clientName,
+        photos.type AS photoType
+      FROM sync_queue
+      LEFT JOIN visits
+        ON (sync_queue.kind = 'visit' AND visits.local_id = sync_queue.entity_local_id)
+        OR (sync_queue.kind = 'photo' AND visits.local_id = (SELECT visit_local_id FROM photos WHERE photos.local_id = sync_queue.entity_local_id LIMIT 1))
+      LEFT JOIN clients ON clients.id = visits.client_id
+      LEFT JOIN photos ON photos.local_id = sync_queue.entity_local_id
+      WHERE sync_queue.status IN ('pending', 'syncing', 'failed')
+      ORDER BY CASE sync_queue.status WHEN 'failed' THEN 0 WHEN 'syncing' THEN 1 ELSE 2 END, sync_queue.updated_at DESC
+    ''');
+    return rows.map(QueueDiagnostic.fromDb).toList();
+  }
+
+  Future<void> addSyncLog(String status, String message) async {
+    final db = await database;
+    await db.insert('sync_logs', {
+      'status': status,
+      'message': message,
+      'created_at': nowIso(),
+    });
+  }
+
+  Future<List<SyncLog>> listSyncLogs() async {
+    final db = await database;
+    final rows = await db.query('sync_logs', orderBy: 'id DESC', limit: 30);
+    return rows.map(SyncLog.fromDb).toList();
+  }
+
+  Future<void> clearLocalOperationalData() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      for (final table in [
+        'photos',
+        'visits',
+        'sync_queue',
+        'sync_logs',
+        'route_items',
+        'routes',
+        'clients',
+      ]) {
+        await txn.delete(table);
+      }
+    });
+  }
+}
+
+class Session {
+  Session({
+    required this.accessToken,
+    required this.refreshToken,
+    required this.user,
+  });
+
+  final String accessToken;
+  final String refreshToken;
+  final SessionUser user;
+
+  factory Session.fromJson(Map<String, dynamic> json) => Session(
+    accessToken: json['accessToken'] as String,
+    refreshToken: json['refreshToken'] as String,
+    user: SessionUser.fromJson(json['user'] as Map<String, dynamic>),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'accessToken': accessToken,
+    'refreshToken': refreshToken,
+    'user': user.toJson(),
+  };
+}
+
+class SessionUser {
+  SessionUser({
+    required this.id,
+    required this.email,
+    required this.name,
+    required this.role,
+    required this.status,
+  });
+
+  final String id;
+  final String email;
+  final String name;
+  final String role;
+  final String status;
+
+  factory SessionUser.fromJson(Map<String, dynamic> json) => SessionUser(
+    id: json['id'] as String,
+    email: json['email'] as String,
+    name: json['name'] as String,
+    role: json['role'] as String,
+    status: json['status'] as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'email': email,
+    'name': name,
+    'role': role,
+    'status': status,
+  };
+}
+
+class MobileSnapshot {
+  MobileSnapshot({required this.routes, required this.clients});
+
+  final List<RouteSnapshot> routes;
+  final List<ClientSnapshot> clients;
+
+  factory MobileSnapshot.fromJson(Map<String, dynamic> json) => MobileSnapshot(
+    routes: ((json['routes'] as List?) ?? [])
+        .map((item) => RouteSnapshot.fromJson(item as Map<String, dynamic>))
+        .toList(),
+    clients: ((json['clients'] as List?) ?? [])
+        .map((item) => ClientSnapshot.fromJson(item as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+class ClientSnapshot {
+  ClientSnapshot({
+    required this.id,
+    this.code,
+    required this.name,
+    this.address,
+    this.city,
+    this.state,
+    required this.payload,
+  });
+
+  final String id;
+  final String? code;
+  final String name;
+  final String? address;
+  final String? city;
+  final String? state;
+  final Map<String, dynamic> payload;
+
+  factory ClientSnapshot.fromJson(Map<String, dynamic> json) => ClientSnapshot(
+    id: json['id'] as String,
+    code: json['code']?.toString(),
+    name: json['name'] as String,
+    address: json['address'] as String?,
+    city: json['city'] as String?,
+    state: json['state'] as String?,
+    payload: json,
+  );
+
+  Map<String, Object?> toDb() => {
+    'id': id,
+    'code': code,
+    'name': name,
+    'address': address,
+    'city': city,
+    'state': state,
+    'payload_json': jsonEncode(payload),
+  };
+}
+
+class RouteSnapshot {
+  RouteSnapshot({
+    required this.id,
+    required this.name,
+    required this.status,
+    this.scheduledDate,
+    required this.items,
+    required this.payload,
+  });
+
+  final String id;
+  final String name;
+  final String status;
+  final String? scheduledDate;
+  final List<RouteItemSnapshot> items;
+  final Map<String, dynamic> payload;
+
+  factory RouteSnapshot.fromJson(Map<String, dynamic> json) => RouteSnapshot(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    status: json['status'] as String,
+    scheduledDate: json['scheduledDate'] as String?,
+    items: ((json['items'] as List?) ?? [])
+        .map((item) => RouteItemSnapshot.fromJson(item as Map<String, dynamic>))
+        .toList(),
+    payload: json,
+  );
+
+  Map<String, Object?> toDb() => {
+    'id': id,
+    'name': name,
+    'status': status,
+    'scheduled_date': scheduledDate,
+    'payload_json': jsonEncode(payload),
+  };
+}
+
+class RouteItemSnapshot {
+  RouteItemSnapshot({
+    required this.id,
+    required this.routeId,
+    required this.clientId,
+    required this.sequence,
+    required this.status,
+    required this.payload,
+  });
+
+  final String id;
+  final String routeId;
+  final String clientId;
+  final int sequence;
+  final String status;
+  final Map<String, dynamic> payload;
+
+  factory RouteItemSnapshot.fromJson(Map<String, dynamic> json) =>
+      RouteItemSnapshot(
+        id: json['id'] as String,
+        routeId: json['routeId'] as String,
+        clientId: json['clientId'] as String,
+        sequence: asInt(json['sequence']),
+        status: json['status'] as String,
+        payload: json,
+      );
+
+  Map<String, Object?> toDb() => {
+    'id': id,
+    'route_id': routeId,
+    'client_id': clientId,
+    'sequence': sequence,
+    'status': status,
+    'payload_json': jsonEncode(payload),
+  };
+}
+
+class RouteItemView {
+  RouteItemView({
+    required this.id,
+    required this.routeId,
+    required this.clientId,
+    required this.sequence,
+    required this.status,
+    required this.clientName,
+    this.clientAddress,
+    required this.routeName,
+    this.visitStatus,
+  });
+
+  final String id;
+  final String routeId;
+  final String clientId;
+  final int sequence;
+  final String status;
+  final String clientName;
+  final String? clientAddress;
+  final String routeName;
+  final String? visitStatus;
+
+  bool get isDone =>
+      status.toUpperCase() == 'COMPLETED' || visitStatus == 'completed';
+
+  factory RouteItemView.fromDb(Map<String, Object?> row) => RouteItemView(
+    id: row['id'] as String,
+    routeId: row['routeId'] as String,
+    clientId: row['clientId'] as String,
+    sequence: asInt(row['sequence']),
+    status: row['status'] as String,
+    clientName: row['clientName'] as String,
+    clientAddress: row['clientAddress'] as String?,
+    routeName: row['routeName'] as String,
+    visitStatus: row['visitStatus'] as String?,
+  );
+}
+
+class LocalVisit {
+  LocalVisit({
+    required this.localId,
+    this.serverId,
+    this.routeId,
+    this.routeItemId,
+    required this.clientId,
+    required this.status,
+    this.startedAt,
+    this.finishedAt,
+    this.gpsLatitude,
+    this.gpsLongitude,
+    this.notes,
+    required this.syncStatus,
+    required this.updatedAt,
+  });
+
+  final String localId;
+  final String? serverId;
+  final String? routeId;
+  final String? routeItemId;
+  final String clientId;
+  final String status;
+  final String? startedAt;
+  final String? finishedAt;
+  final double? gpsLatitude;
+  final double? gpsLongitude;
+  final String? notes;
+  final String syncStatus;
+  final String updatedAt;
+
+  LocalVisit copyWith({
+    String? serverId,
+    String? status,
+    String? startedAt,
+    Object? finishedAt = _keepValue,
+    String? notes,
+    String? syncStatus,
+    String? updatedAt,
+  }) {
+    final nextFinishedAt = identical(finishedAt, _keepValue)
+        ? this.finishedAt
+        : finishedAt as String?;
+
+    return LocalVisit(
+      localId: localId,
+      serverId: serverId ?? this.serverId,
+      routeId: routeId,
+      routeItemId: routeItemId,
+      clientId: clientId,
+      status: status ?? this.status,
+      startedAt: startedAt ?? this.startedAt,
+      finishedAt: nextFinishedAt,
+      gpsLatitude: gpsLatitude,
+      gpsLongitude: gpsLongitude,
+      notes: notes ?? this.notes,
+      syncStatus: syncStatus ?? this.syncStatus,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  factory LocalVisit.fromDb(Map<String, Object?> row) => LocalVisit(
+    localId: row['local_id'] as String,
+    serverId: row['server_id'] as String?,
+    routeId: row['route_id'] as String?,
+    routeItemId: row['route_item_id'] as String?,
+    clientId: row['client_id'] as String,
+    status: row['status'] as String,
+    startedAt: row['started_at'] as String?,
+    finishedAt: row['finished_at'] as String?,
+    gpsLatitude: asDouble(row['gps_latitude']),
+    gpsLongitude: asDouble(row['gps_longitude']),
+    notes: row['notes'] as String?,
+    syncStatus: row['sync_status'] as String,
+    updatedAt: row['updated_at'] as String,
+  );
+
+  Map<String, Object?> toDb() => {
+    'local_id': localId,
+    'server_id': serverId,
+    'route_id': routeId,
+    'route_item_id': routeItemId,
+    'client_id': clientId,
+    'status': status,
+    'started_at': startedAt,
+    'finished_at': finishedAt,
+    'gps_latitude': gpsLatitude,
+    'gps_longitude': gpsLongitude,
+    'notes': notes,
+    'sync_status': syncStatus,
+    'updated_at': updatedAt,
+  };
+}
+
+class LocalPhoto {
+  LocalPhoto({
+    required this.localId,
+    required this.visitLocalId,
+    this.serverId,
+    required this.type,
+    required this.uri,
+    required this.capturedAt,
+    this.gpsLatitude,
+    this.gpsLongitude,
+    required this.syncStatus,
+  });
+
+  final String localId;
+  final String visitLocalId;
+  final String? serverId;
+  final String type;
+  final String uri;
+  final String capturedAt;
+  final double? gpsLatitude;
+  final double? gpsLongitude;
+  final String syncStatus;
+
+  factory LocalPhoto.fromDb(Map<String, Object?> row) => LocalPhoto(
+    localId: row['local_id'] as String,
+    visitLocalId: row['visit_local_id'] as String,
+    serverId: row['server_id'] as String?,
+    type: row['type'] as String,
+    uri: row['uri'] as String,
+    capturedAt: row['captured_at'] as String,
+    gpsLatitude: asDouble(row['gps_latitude']),
+    gpsLongitude: asDouble(row['gps_longitude']),
+    syncStatus: row['sync_status'] as String,
+  );
+
+  Map<String, Object?> toDb() => {
+    'local_id': localId,
+    'visit_local_id': visitLocalId,
+    'server_id': serverId,
+    'type': type,
+    'uri': uri,
+    'captured_at': capturedAt,
+    'gps_latitude': gpsLatitude,
+    'gps_longitude': gpsLongitude,
+    'sync_status': syncStatus,
+  };
+}
+
+class QueueItem {
+  QueueItem({
+    required this.id,
+    required this.kind,
+    required this.entityLocalId,
+    required this.attempts,
+  });
+
+  final int id;
+  final String kind;
+  final String entityLocalId;
+  final int attempts;
+
+  factory QueueItem.fromDb(Map<String, Object?> row) => QueueItem(
+    id: asInt(row['id']),
+    kind: row['kind'] as String,
+    entityLocalId: row['entity_local_id'] as String,
+    attempts: asInt(row['attempts']),
+  );
+}
+
+class QueueDiagnostic {
+  QueueDiagnostic({
+    required this.kind,
+    required this.status,
+    required this.attempts,
+    this.lastError,
+    this.clientName,
+    this.photoType,
+  });
+
+  final String kind;
+  final String status;
+  final int attempts;
+  final String? lastError;
+  final String? clientName;
+  final String? photoType;
+
+  factory QueueDiagnostic.fromDb(Map<String, Object?> row) => QueueDiagnostic(
+    kind: row['kind'] as String,
+    status: row['status'] as String,
+    attempts: asInt(row['attempts']),
+    lastError: row['lastError'] as String?,
+    clientName: row['clientName'] as String?,
+    photoType: row['photoType'] as String?,
+  );
+}
+
+class SyncLog {
+  SyncLog({required this.status, required this.message});
+
+  final String status;
+  final String message;
+
+  factory SyncLog.fromDb(Map<String, Object?> row) => SyncLog(
+    status: row['status'] as String,
+    message: row['message'] as String,
+  );
+}
+
+class QueueSummary {
+  const QueueSummary({required this.pending, required this.failed});
+
+  final int pending;
+  final int failed;
+}
+
+class SyncResult {
+  SyncResult({required this.synced, required this.failed});
+
+  final int synced;
+  final int failed;
+}
+
+class GpsPoint {
+  GpsPoint({
+    required this.latitude,
+    required this.longitude,
+    this.accuracyMeters,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double? accuracyMeters;
+}
+
+Future<GpsPoint?> getGpsOrNull() async {
+  var permission = await Geolocator.checkPermission();
+  if (permission == LocationPermission.denied) {
+    permission = await Geolocator.requestPermission();
+  }
+  if (permission == LocationPermission.denied ||
+      permission == LocationPermission.deniedForever) {
+    return null;
+  }
+
+  try {
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 8),
+      ),
+    );
+    return GpsPoint(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracyMeters: position.accuracy,
+    );
+  } catch (_) {
+    final last = await Geolocator.getLastKnownPosition();
+    if (last == null) return null;
+    return GpsPoint(
+      latitude: last.latitude,
+      longitude: last.longitude,
+      accuracyMeters: last.accuracy,
+    );
+  }
+}
+
+String parseApiError(http.Response response) {
+  try {
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return ((body['error'] as Map<String, dynamic>?)?['message'] as String?) ??
+        'Erro HTTP ${response.statusCode}';
+  } catch (_) {
+    return 'Erro HTTP ${response.statusCode}';
+  }
+}
+
+String normalizedError(Object error) {
+  final text = error.toString().replaceFirst('Exception: ', '');
+  return text.isEmpty ? 'Erro desconhecido.' : text;
+}
+
+int asInt(Object? value) {
+  if (value == null) return 0;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString()) ?? 0;
+}
+
+double? asDouble(Object? value) {
+  if (value == null) return null;
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString());
+}
+
+String photoLabel(String type) {
+  return switch (type) {
+    'checkin' => 'Check-in',
+    'before' => 'Foto antes',
+    'after' => 'Foto depois',
+    _ => 'Ocorrencia',
+  };
+}
+
+String syncLabel(String status) {
+  return switch (status) {
+    'pending' => 'Pendente',
+    'syncing' => 'Sincronizando',
+    'synced' => 'Sincronizado',
+    'failed' => 'Falha',
+    _ => status,
+  };
+}
+
+String formatDate(String? value) {
+  if (value == null) return '-';
+  final date = DateTime.tryParse(value);
+  if (date == null) return '-';
+  return DateFormat('dd/MM/yyyy HH:mm').format(date.toLocal());
+}
+
+class AppShell extends StatelessWidget {
+  const AppShell({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(body: SafeArea(child: child));
+  }
+}
+
+class AppTopBar extends StatelessWidget {
+  const AppTopBar({
+    super.key,
+    required this.title,
+    this.showBack = false,
+    this.onLogout,
+  });
+
+  final String title;
+  final bool showBack;
+  final VoidCallback? onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: const BoxDecoration(color: brandNavy),
+      child: Row(
+        children: [
+          if (showBack)
+            FilledButton.tonalIcon(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Voltar'),
+            )
+          else
+            Image.asset('assets/promotorpro-icon.png', width: 42, height: 42),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          if (onLogout != null)
+            IconButton(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout, color: Colors.white),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class BrandHeader extends StatelessWidget {
+  const BrandHeader({super.key, required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Image.asset('assets/promotorpro-icon.png', width: 78, height: 78),
+        const SizedBox(height: 16),
+        Text(
+          'PROMOTORPRO',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            letterSpacing: 2,
+            color: brandBlue,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: brandNavy,
+          ),
+        ),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class PrimaryButton extends StatelessWidget {
+  const PrimaryButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 56,
+      child: FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: brandBlue,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+      ),
+    );
+  }
+}
+
+class SecondaryButton extends StatelessWidget {
+  const SecondaryButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+      ),
+    );
+  }
+}
+
+class MessageBox extends StatelessWidget {
+  const MessageBox({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: line),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF475569),
+        ),
+      ),
+    );
+  }
+}
+
+class InfoCard extends StatelessWidget {
+  const InfoCard({super.key, required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: brandNavy,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: const TextStyle(
+              height: 1.45,
+              color: Color(0xFF475569),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class DashboardGrid extends StatelessWidget {
+  const DashboardGrid({super.key, required this.cards});
+
+  final List<MetricData> cards;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: MediaQuery.of(context).size.width > 650 ? 4 : 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 1.45,
+      children: cards.map((card) => MetricCard(data: card)).toList(),
+    );
+  }
+}
+
+class MetricData {
+  MetricData(this.label, this.value, this.icon);
+  final String label;
+  final String value;
+  final IconData icon;
+}
+
+class MetricCard extends StatelessWidget {
+  const MetricCard({super.key, required this.data});
+
+  final MetricData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(data.icon, color: brandBlue),
+          const Spacer(),
+          Text(
+            data.value,
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: brandNavy,
+            ),
+          ),
+          Text(
+            data.label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RouteItemCard extends StatelessWidget {
+  const RouteItemCard({super.key, required this.item, required this.onTap});
+
+  final RouteItemView item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: line),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.all(16),
+        leading: CircleAvatar(
+          backgroundColor: brandNavy,
+          child: Text(
+            '${item.sequence}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        title: Text(
+          item.clientName,
+          style: const TextStyle(fontWeight: FontWeight.w900, color: brandNavy),
+        ),
+        subtitle: Text(
+          '${item.clientAddress ?? 'Endereco nao informado'}\n${item.routeName}',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+}
+
+class ClientHero extends StatelessWidget {
+  const ClientHero({super.key, required this.item, required this.status});
+
+  final RouteItemView item;
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: brandNavy,
+        borderRadius: BorderRadius.circular(26),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Cliente #${item.sequence}',
+            style: const TextStyle(
+              color: Color(0xFF94A3B8),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.clientName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item.clientAddress ?? 'Endereco nao informado',
+            style: const TextStyle(
+              color: Color(0xFFE2E8F0),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Chip(
+            label: Text(
+              status,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            backgroundColor: Colors.white,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class EvidenceButton extends StatelessWidget {
+  const EvidenceButton({
+    super.key,
+    required this.label,
+    required this.ok,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool ok;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(
+          ok ? Icons.check_circle : Icons.camera_alt,
+          color: ok ? brandGreen : brandBlue,
+        ),
+        label: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            ok ? '$label capturada' : label,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(64),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PhotoTile extends StatelessWidget {
+  const PhotoTile({super.key, required this.photo});
+
+  final LocalPhoto photo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: line),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.photo_camera, color: brandBlue),
+        title: Text(
+          photoLabel(photo.type),
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(
+          'Capturada: ${formatDate(photo.capturedAt)}\nGPS: ${photo.gpsLatitude?.toStringAsFixed(6) ?? 'sem gps'}, ${photo.gpsLongitude?.toStringAsFixed(6) ?? 'sem gps'}',
+        ),
+      ),
+    );
+  }
+}
+
+class DiagnosticCard extends StatelessWidget {
+  const DiagnosticCard({super.key, required this.item});
+
+  final QueueDiagnostic item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: const Color(0xFFFFFBEB),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0xFFF59E0B)),
+      ),
+      child: ListTile(
+        title: Text(
+          '${item.kind == 'visit' ? 'Visita' : 'Foto'} - ${item.clientName ?? 'cliente'}',
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(
+          'Situacao: ${syncLabel(item.status)} | Tentativas: ${item.attempts}\n${item.lastError ?? 'Sem mensagem tecnica registrada.'}',
+        ),
+      ),
+    );
+  }
+}
+
+class EmptyState extends StatelessWidget {
+  const EmptyState({super.key, required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.task_alt, color: brandGreen, size: 44),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              color: brandNavy,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

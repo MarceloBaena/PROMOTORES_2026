@@ -1,6 +1,6 @@
 # Sales Promoters
 
-Monorepo npm workspaces para painel web, API Express serverless no Vercel, app mobile Expo/React Native offline-first e pacote compartilhado TypeScript.
+Monorepo para painel web, API Express serverless no Vercel, app mobile Expo/React Native offline-first, novo app mobile Flutter e pacote compartilhado TypeScript.
 
 ## Fonte unica oficial
 
@@ -15,6 +15,7 @@ Guia detalhado: `docs/fonte-unica.md`.
 - `apps/api` - Express, Prisma ORM, PostgreSQL/Supabase, JWT e rotas protegidas.
 - `apps/web` - React, Vite, TailwindCSS, React Router e lucide-react.
 - `apps/mobile` - app Android Expo/React Native para operacao offline do promotor.
+- `apps/mobile_flutter` - app Android Flutter offline-first para operacao de campo.
 - `packages/shared` - constantes e tipos compartilhados.
 - `docs` - guias operacionais.
 
@@ -118,6 +119,31 @@ npx eas build -p android --profile preview
 ```
 
 Se for build local, a maquina precisa ter Android Studio/Android SDK configurado. Se for build EAS, precisa login em uma conta Expo.
+
+## App mobile Flutter
+
+O app em `apps/mobile_flutter` e a nova base Flutter do aplicativo de campo.
+
+Ele usa os mesmos contratos da API existente:
+
+- `POST /auth/login`
+- `GET /mobile/snapshot`
+- `POST /visits`
+- `PUT /visits/:id`
+- `POST /visits/:id/photos/base64`
+- `POST /locations/heartbeat`
+
+Comandos principais:
+
+```bash
+cd apps/mobile_flutter
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --release --dart-define=API_BASE_URL=https://promotores-2026-api.vercel.app
+```
+
+Em Windows, se o projeto estiver em pasta com caracteres especiais ou acentos e o Gradle/CMake falhar, copie temporariamente para um caminho simples como `C:\PromotorFlutterWork` antes do build.
 
 ## Mapa ao vivo
 
