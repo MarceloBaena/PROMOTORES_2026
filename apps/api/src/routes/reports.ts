@@ -56,6 +56,82 @@ function endOfDay(date: Date) {
   return next;
 }
 
+function zonedDateParts(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+
+  return {
+    year: value("year"),
+    month: value("month"),
+    day: value("day"),
+    hour: value("hour"),
+    minute: value("minute"),
+    second: value("second")
+  };
+}
+
+function zonedDateTimeToUtc(
+  timeZone: string,
+  parts: { year: number; month: number; day: number; hour?: number; minute?: number; second?: number; millisecond?: number }
+) {
+  const desiredUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour ?? 0,
+    parts.minute ?? 0,
+    parts.second ?? 0,
+    parts.millisecond ?? 0
+  );
+  const guessedParts = zonedDateParts(new Date(desiredUtc), timeZone);
+  const guessedUtc = Date.UTC(
+    guessedParts.year,
+    guessedParts.month - 1,
+    guessedParts.day,
+    guessedParts.hour,
+    guessedParts.minute,
+    guessedParts.second
+  );
+
+  return new Date(desiredUtc + (desiredUtc - guessedUtc));
+}
+
+function businessTodayRange(timeZone = "America/Cuiaba") {
+  const today = zonedDateParts(new Date(), timeZone);
+  const start = zonedDateTimeToUtc(timeZone, {
+    year: today.year,
+    month: today.month,
+    day: today.day
+  });
+  const nextDayStart = zonedDateTimeToUtc(timeZone, {
+    year: today.year,
+    month: today.month,
+    day: today.day + 1
+  });
+
+  return {
+    start,
+    end: new Date(nextDayStart.getTime() - 1),
+    timeZone
+  };
+}
+
+function countByStatus<T extends string>(items: Array<{ status: T; _count: { id: number } }>) {
+  return items.reduce<Record<string, number>>((acc, item) => {
+    acc[item.status] = item._count.id;
+    return acc;
+  }, {});
+}
+
 function minutesBetween(start?: Date | null, end?: Date | null) {
   if (!start || !end) {
     return null;
@@ -213,13 +289,44 @@ reportsRouter.get(
   "/summary",
   asyncHandler(async (req, res) => {
     const companyWhere = scopedCompanyWhere(req);
+    const today = businessTodayRange();
+    const todayRouteWhere: Prisma.RouteWhereInput = {
+      ...companyWhere,
+      scheduledDate: {
+        gte: today.start,
+        lte: today.end
+      }
+    };
+    const todayVisitWhere: Prisma.VisitWhereInput = {
+      ...companyWhere,
+      OR: [
+        {
+          startedAt: {
+            gte: today.start,
+            lte: today.end
+          }
+        },
+        {
+          startedAt: null,
+          createdAt: {
+            gte: today.start,
+            lte: today.end
+          }
+        }
+      ]
+    };
     const clients = await prisma.client.count({ where: { ...companyWhere, status: "ACTIVE" } });
     const promoters = await prisma.promoter.count({ where: { ...companyWhere, status: "ACTIVE" } });
     const supervisors = await prisma.supervisor.count({ where: { ...companyWhere, status: "ACTIVE" } });
     const routes = await prisma.route.count({ where: companyWhere });
+    const routesToday = await prisma.route.groupBy({ by: ["status"], where: todayRouteWhere, _count: { id: true } });
     const visits = await prisma.visit.groupBy({ by: ["status"], where: companyWhere, _count: { id: true } });
+    const visitsToday = await prisma.visit.groupBy({ by: ["status"], where: todayVisitWhere, _count: { id: true } });
+    const checkinsToday = await prisma.visitPhoto.count({ where: { type: "checkin", visit: todayVisitWhere } });
     const auditFlags = await prisma.auditFlag.count({ where: { resolved: false, visit: companyWhere } });
     const imports = await prisma.clientImportLog.findMany({ where: companyWhere, orderBy: { createdAt: "desc" }, take: 5 });
+    const routeStatusToday = countByStatus(routesToday);
+    const visitStatusToday = countByStatus(visitsToday);
 
     res.json({
       data: {
@@ -227,11 +334,19 @@ reportsRouter.get(
         promoters,
         supervisors,
         routes,
+        routesToday: {
+          planned: (routeStatusToday.DRAFT ?? 0) + (routeStatusToday.PUBLISHED ?? 0),
+          inProgress: visitStatusToday.in_progress ?? 0,
+          completed: routeStatusToday.COMPLETED ?? 0,
+          cancelled: routeStatusToday.CANCELLED ?? 0,
+          total: routesToday.reduce((total, item) => total + item._count.id, 0),
+          date: today.start.toISOString(),
+          timeZone: today.timeZone
+        },
         auditFlags,
-        visits: visits.reduce<Record<string, number>>((acc, item) => {
-          acc[item.status] = item._count.id;
-          return acc;
-        }, {}),
+        visits: countByStatus(visits),
+        visitsToday: visitStatusToday,
+        checkinsToday,
         imports
       }
     });

@@ -23,8 +23,19 @@ interface Summary {
   promoters: number;
   supervisors: number;
   routes: number;
+  routesToday: {
+    planned: number;
+    inProgress: number;
+    completed: number;
+    cancelled: number;
+    total: number;
+    date: string;
+    timeZone: string;
+  };
   auditFlags: number;
   visits: Record<string, number>;
+  visitsToday: Record<string, number>;
+  checkinsToday: number;
   imports: Array<{
     id: string;
     fileName: string;
@@ -49,11 +60,13 @@ export function Dashboard() {
       .catch((nextError: Error) => setError(nextError.message));
   }, []);
 
-  const completedVisits = summary?.visits.completed ?? 0;
-  const inProgressVisits = summary?.visits.in_progress ?? 0;
-  const pendingVisits = summary?.visits.pending ?? 0;
+  const todayVisits = summary?.visitsToday ?? {};
+  const completedVisits = todayVisits.completed ?? 0;
+  const inProgressVisits = todayVisits.in_progress ?? 0;
+  const pendingVisits = todayVisits.pending ?? 0;
   const totalOperationalVisits = completedVisits + inProgressVisits + pendingVisits;
   const executionRate = totalOperationalVisits > 0 ? Math.round((completedVisits / totalOperationalVisits) * 100) : 0;
+  const routeDay = summary?.routesToday ?? { planned: 0, inProgress: 0, completed: 0, cancelled: 0, total: 0 };
 
   const kpis = useMemo(
     () => [
@@ -73,7 +86,7 @@ export function Dashboard() {
       },
       {
         label: "Check-ins realizados",
-        value: completedVisits,
+        value: summary?.checkinsToday ?? 0,
         helper: "Atendimentos com evidencia",
         icon: CheckCircle2,
         tone: "text-emerald-700 bg-emerald-50"
@@ -100,7 +113,7 @@ export function Dashboard() {
         tone: "text-amber-700 bg-amber-50"
       }
     ],
-    [completedVisits, executionRate, pendingVisits, summary?.auditFlags, summary?.clients, summary?.promoters, totalOperationalVisits]
+    [completedVisits, executionRate, pendingVisits, summary?.auditFlags, summary?.checkinsToday, summary?.clients, summary?.promoters, totalOperationalVisits]
   );
 
   return (
@@ -167,9 +180,9 @@ export function Dashboard() {
                   <Navigation className="h-5 w-5 text-execution" />
                 </div>
                 <div className="space-y-3">
-                  <RouteStep label="Planejado" value={summary?.routes ?? 0} active />
-                  <RouteStep label="Em atendimento" value={inProgressVisits} active={inProgressVisits > 0} />
-                  <RouteStep label="Concluido" value={completedVisits} active={completedVisits > 0} />
+                  <RouteStep label="Planejado" value={routeDay.planned} active={routeDay.planned > 0} />
+                  <RouteStep label="Em atendimento" value={routeDay.inProgress} active={routeDay.inProgress > 0} />
+                  <RouteStep label="Concluido" value={routeDay.completed} active={routeDay.completed > 0} />
                 </div>
               </div>
             </div>
