@@ -2,7 +2,7 @@
   "expo": {
     "name": "PromotorPro",
     "slug": "promotores-2026-mobile",
-    "version": "0.1.18",
+    "version": "0.1.24",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "promotores2026",
@@ -12,7 +12,7 @@
     ],
     "android": {
       "package": "com.promotores2026.app",
-      "versionCode": 19,
+      "versionCode": 25,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F172A"
@@ -31,7 +31,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "O aplicativo usa a camera para registrar check-in, foto antes e foto depois da visita."
+          "cameraPermission": "O aplicativo usa a camera para registrar check-in, foto antes, foto depois e check-out da visita."
         }
       ],
       [

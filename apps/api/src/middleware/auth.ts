@@ -34,7 +34,12 @@ export const authenticate = asyncHandler(async (req: Request, _res: Response, ne
 
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    include: { role: true, company: true }
+    include: {
+      role: true,
+      company: true,
+      supervisor: { select: { id: true } },
+      promoter: { select: { id: true, supervisorId: true } }
+    }
   });
 
   if (!user || user.status !== "ACTIVE") {
@@ -52,6 +57,8 @@ export const authenticate = asyncHandler(async (req: Request, _res: Response, ne
     role: user.role.code,
     status: user.status,
     companyId: user.companyId,
+    supervisorId: user.supervisor?.id ?? null,
+    promoterId: user.promoter?.id ?? null,
     company: user.company
       ? {
           id: user.company.id,

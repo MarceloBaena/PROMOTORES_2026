@@ -6,6 +6,9 @@ import { Dashboard } from "./pages/Dashboard";
 import { PromotersPage, SupervisorsPage } from "./pages/PeoplePages";
 import { CompaniesPage } from "./pages/CompaniesPage";
 import { ClientsPage } from "./pages/ClientsPage";
+import { ClientActivitiesPage } from "./pages/ClientActivitiesPage";
+import { ProductCategoriesPage } from "./pages/ProductCategoriesPage";
+import { SuppliersPage } from "./pages/SuppliersPage";
 import { ClientImportPage } from "./pages/ClientImportPage";
 import { RoutingPage } from "./pages/RoutingPage";
 import { VisitsPage } from "./pages/VisitsPage";
@@ -29,9 +32,12 @@ function ProtectedApp() {
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="/empresas" element={<CompaniesPage />} />
+        <Route path="/atividades" element={<ClientActivitiesPage />} />
+        <Route path="/categorias-produtos" element={<ProductCategoriesPage />} />
         <Route path="/promotores" element={<PromotersPage />} />
         <Route path="/supervisores" element={<SupervisorsPage />} />
         <Route path="/clientes" element={<ClientsPage />} />
+        <Route path="/fornecedores" element={<SuppliersPage />} />
         <Route path="/importacao" element={<ClientImportPage />} />
         <Route path="/roteirizacao" element={<RoutingPage />} />
         <Route path="/visitas" element={<VisitsPage />} />

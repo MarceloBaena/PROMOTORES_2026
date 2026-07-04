@@ -21,3 +21,11 @@ apps/mobile/android/
 apps/mobile/ios/
 *.apk
 *.aab
+api/dist/
+api/prisma/
+
+.vercel
+.env*
+
+.vercel
+.env*

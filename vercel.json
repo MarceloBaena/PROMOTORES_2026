@@ -5,6 +5,10 @@
   "outputDirectory": "apps/web/dist",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://promotores-2026-api.vercel.app/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -1,17 +1,23 @@
-import { postJson, uploadVisitPhoto } from "./api";
+import { postJson, uploadVisitPhoto, type ClientSnapshot } from "./api";
 import {
   addSyncLog,
+  getClient,
   getPendingQueue,
   getPhoto,
+  getSupplierExecution,
   getVisit,
   listPhotos,
+  listSupplierExecutions,
   removeQueueItem,
   setQueueStatus,
   updatePhotoServerId,
   updatePhotoSyncStatus,
+  updateSupplierExecutionServerId,
+  updateSupplierExecutionSyncStatus,
   updateVisitServerId,
   updateVisitSyncStatus,
   type LocalPhoto,
+  type LocalSupplierExecution,
   type LocalVisit
 } from "./database";
 
@@ -21,9 +27,51 @@ interface VisitResponse {
   };
 }
 
-function hasRequiredPhotos(photos: LocalPhoto[]) {
+interface SupplierExecutionResponse {
+  data: {
+    id: string;
+  };
+}
+
+function parseClientPayload(client?: ReturnType<typeof getClient> | null) {
+  if (!client?.payloadJson) {
+    return null;
+  }
+
+  return JSON.parse(client.payloadJson) as ClientSnapshot;
+}
+
+function hasVisitRequiredPhotos(photos: LocalPhoto[]) {
   const types = new Set(photos.map((photo) => photo.type));
-  return types.has("checkin") && types.has("before") && types.has("after");
+  return types.has("checkin") && types.has("checkout");
+}
+
+function hasLegacyRequiredPhotos(photos: LocalPhoto[]) {
+  const types = new Set(photos.map((photo) => photo.type));
+  return types.has("checkin") && types.has("before") && types.has("after") && types.has("checkout");
+}
+
+function hasSupplierRequiredPhotos(photos: LocalPhoto[]) {
+  const types = new Set(photos.map((photo) => photo.type));
+  return types.has("supplier_before") && types.has("supplier_after");
+}
+
+function isCompletedSupplierExecutionValid(execution: LocalSupplierExecution, photos: LocalPhoto[]) {
+  if (execution.deliveryReceived === null || execution.deliveryReceived === undefined) {
+    return false;
+  }
+
+  if (execution.deliveryReceived === false) {
+    return true;
+  }
+
+  return (
+    hasSupplierRequiredPhotos(photos) &&
+    execution.productsReplenished !== null &&
+    execution.productsReplenished !== undefined &&
+    execution.stockoutFound !== null &&
+    execution.stockoutFound !== undefined
+  );
 }
 
 async function sendVisit(accessToken: string, visit: LocalVisit, statusOverride?: LocalVisit["status"]) {
@@ -48,6 +96,36 @@ async function sendVisit(accessToken: string, visit: LocalVisit, statusOverride?
   return response.data.id;
 }
 
+async function sendSupplierExecution(accessToken: string, visitId: string, execution: LocalSupplierExecution) {
+  const payload = {
+    clientGeneratedId: execution.localId,
+    supplierId: execution.supplierId,
+    status: execution.status,
+    deliveryReceived: execution.deliveryReceived ?? null,
+    productsReplenished: execution.deliveryReceived === false ? false : execution.productsReplenished ?? null,
+    stockoutFound: execution.deliveryReceived === false ? false : execution.stockoutFound ?? null,
+    notes: execution.notes ?? undefined,
+    startedAtDevice: execution.startedAtDevice ?? undefined,
+    finishedAtDevice: execution.finishedAtDevice ?? undefined
+  };
+
+  const response = execution.serverId
+    ? await postJson<SupplierExecutionResponse>(accessToken, `/visits/${visitId}/supplier-executions/${execution.serverId}`, payload, "PUT")
+    : await postJson<SupplierExecutionResponse>(accessToken, `/visits/${visitId}/supplier-executions`, payload);
+
+  updateSupplierExecutionServerId(execution.localId, response.data.id, "synced");
+  return response.data.id;
+}
+
+async function ensureServerVisit(accessToken: string, visit: LocalVisit) {
+  return visit.serverId ?? await sendVisit(accessToken, { ...visit, status: "in_progress" }, "in_progress");
+}
+
+async function ensureServerSupplierExecution(accessToken: string, visitId: string, execution: LocalSupplierExecution) {
+  updateSupplierExecutionSyncStatus(execution.localId, "syncing");
+  return execution.serverId ?? await sendSupplierExecution(accessToken, visitId, execution);
+}
+
 async function uploadPhoto(accessToken: string, visitId: string, photo: LocalPhoto) {
   if (photo.serverId || photo.syncStatus === "synced") {
     return;
@@ -60,10 +138,31 @@ async function uploadPhoto(accessToken: string, visitId: string, photo: LocalPho
     clientGeneratedId: photo.localId,
     capturedAt: photo.capturedAt,
     gpsLatitude: photo.gpsLatitude,
-    gpsLongitude: photo.gpsLongitude
+    gpsLongitude: photo.gpsLongitude,
+    supplierExecutionId: photo.supplierExecutionLocalId
+      ? (getSupplierExecution(photo.supplierExecutionLocalId)?.serverId ?? undefined)
+      : undefined,
+    supplierId: photo.supplierId ?? undefined
   });
 
   updatePhotoServerId(photo.localId, response.data.id, "synced");
+}
+
+async function syncSupplierExecution(accessToken: string, localId: string) {
+  const execution = getSupplierExecution(localId);
+
+  if (!execution) {
+    return;
+  }
+
+  const visit = getVisit(execution.visitLocalId);
+
+  if (!visit) {
+    throw new Error("Visita da execucao do fornecedor nao encontrada.");
+  }
+
+  const serverVisitId = await ensureServerVisit(accessToken, visit);
+  await ensureServerSupplierExecution(accessToken, serverVisitId, execution);
 }
 
 async function syncVisit(accessToken: string, localId: string) {
@@ -81,14 +180,65 @@ async function syncVisit(accessToken: string, localId: string) {
   }
 
   const photos = listPhotos(visit.localId);
+  const supplierExecutions = listSupplierExecutions(visit.localId);
+  const expectedSuppliers = parseClientPayload(getClient(visit.clientId))?.suppliers ?? [];
 
-  if (!hasRequiredPhotos(photos)) {
-    throw new Error("Visita concluida localmente sem todas as fotos obrigatorias.");
+  if (expectedSuppliers.length === 0 && supplierExecutions.length === 0) {
+    if (!hasLegacyRequiredPhotos(photos)) {
+      throw new Error("Visita concluida localmente sem check-in, foto antes, foto depois e check-out.");
+    }
+
+    const serverVisitId = await ensureServerVisit(accessToken, visit);
+
+    for (const photo of photos) {
+      await uploadPhoto(accessToken, serverVisitId, photo);
+    }
+
+    const refreshedVisit = getVisit(localId) ?? visit;
+    await sendVisit(accessToken, { ...refreshedVisit, serverId: serverVisitId });
+    return;
   }
 
-  const serverVisitId = visit.serverId ?? await sendVisit(accessToken, visit, "in_progress");
+  if (!hasVisitRequiredPhotos(photos)) {
+    throw new Error("Visita concluida localmente sem foto de check-in e check-out.");
+  }
+
+  const incompleteSuppliers = expectedSuppliers.filter((supplier) => {
+    const execution = supplierExecutions.find((item) => item.supplierId === supplier.id);
+    return !execution || execution.status !== "completed";
+  });
+
+  if (incompleteSuppliers.length > 0) {
+    throw new Error(
+      `Visita concluida localmente com ${incompleteSuppliers.length} fornecedor(es) sem concluir fotos e atividades obrigatorias.`
+    );
+  }
+
+  const completedExecutions = supplierExecutions.filter((execution) => execution.status === "completed");
+
+  for (const execution of completedExecutions) {
+    const executionPhotos = photos.filter((photo) => photo.supplierExecutionLocalId === execution.localId);
+
+    if (!isCompletedSupplierExecutionValid(execution, executionPhotos)) {
+      throw new Error("Fornecedor concluido localmente sem cumprir as regras obrigatorias da atividade.");
+    }
+  }
+
+  const serverVisitId = await ensureServerVisit(accessToken, visit);
+
+  for (const execution of supplierExecutions) {
+    await ensureServerSupplierExecution(accessToken, serverVisitId, execution);
+  }
 
   for (const photo of photos) {
+    if (photo.supplierExecutionLocalId) {
+      const execution = getSupplierExecution(photo.supplierExecutionLocalId);
+
+      if (execution && !execution.serverId) {
+        await ensureServerSupplierExecution(accessToken, serverVisitId, execution);
+      }
+    }
+
     await uploadPhoto(accessToken, serverVisitId, photo);
   }
 
@@ -109,14 +259,25 @@ async function syncPhoto(accessToken: string, localId: string) {
     throw new Error("Visita da foto nao encontrada.");
   }
 
-  const serverVisitId = visit.serverId ?? await sendVisit(accessToken, { ...visit, status: "in_progress" }, "in_progress");
+  const serverVisitId = await ensureServerVisit(accessToken, visit);
+
+  if (photo.supplierExecutionLocalId) {
+    const execution = getSupplierExecution(photo.supplierExecutionLocalId);
+
+    if (!execution) {
+      throw new Error("Execucao do fornecedor da foto nao encontrada.");
+    }
+
+    await ensureServerSupplierExecution(accessToken, serverVisitId, execution);
+  }
+
   await uploadPhoto(accessToken, serverVisitId, photo);
 }
 
 interface SyncProgress {
   item: {
     id: number;
-    kind: "visit" | "photo";
+    kind: "visit" | "supplierExecution" | "photo";
     entityLocalId: string;
     attempts: number;
   };
@@ -142,6 +303,8 @@ export async function syncPending(accessToken: string, onProgress?: (progress: S
 
       if (item.kind === "visit") {
         await syncVisit(accessToken, item.entityLocalId);
+      } else if (item.kind === "supplierExecution") {
+        await syncSupplierExecution(accessToken, item.entityLocalId);
       } else {
         await syncPhoto(accessToken, item.entityLocalId);
       }

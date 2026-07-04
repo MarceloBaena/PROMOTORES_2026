@@ -9,6 +9,8 @@ import {
   LogOut,
   Map,
   MapPinned,
+  Package,
+  Tags,
   Route,
   ShieldCheck,
   Store,
@@ -36,7 +38,10 @@ const navSections = [
     label: "Cadastros",
     items: [
       { to: "/empresas", label: "Empresas/Filiais", icon: Building },
+      { to: "/atividades", label: "Atividades", icon: ClipboardList },
+      { to: "/categorias-produtos", label: "Categorias", icon: Tags },
       { to: "/clientes", label: "Clientes", icon: Store },
+      { to: "/fornecedores", label: "Fornecedores", icon: Package },
       { to: "/promotores", label: "Promotores", icon: Users },
       { to: "/supervisores", label: "Supervisores", icon: ShieldCheck },
       { to: "/importacao", label: "Importacao", icon: FileSpreadsheet }
@@ -80,6 +85,9 @@ export function Layout() {
                 <div className="mt-1 text-sm font-black text-execution">Tempo real</div>
               </div>
             </div>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.08] to-white/[0.03] px-3 py-2 text-xs font-semibold text-white/72">
+              Painel unificado para operacao, auditoria e acompanhamento da equipe em campo.
+            </div>
           </div>
         </div>
 
@@ -95,7 +103,7 @@ export function Layout() {
                       key={item.to}
                       to={item.to}
                       className={({ isActive }) =>
-                        `relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-bold transition ${
+                        `relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-bold transition ${
                           isActive
                             ? "bg-white text-navy shadow-lg shadow-black/10 before:absolute before:left-0 before:top-2.5 before:h-6 before:w-1 before:rounded-r before:bg-brand"
                             : "text-white/65 hover:bg-white/10 hover:text-white"
@@ -173,6 +181,9 @@ export function Layout() {
             </nav>
 
             <div className="hidden items-center gap-2 lg:flex">
+              <div className="rounded-full border border-line bg-field px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-slateText">
+                Operacao online
+              </div>
               <button type="button" className="icon-button" title="Notificacoes">
                 <Bell className="h-4 w-4" />
               </button>

@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
 import { AppError } from "../lib/errors";
-import { scopedCompanyWhere, assertSameCompany } from "../lib/tenant";
+import { scopedCompanyWhere, assertSameCompany, requireSupervisorProfileId } from "../lib/tenant";
+import { buildRouteWindowWhere } from "../lib/route-window";
 
 export const promoterLocationsRouter = Router();
 
@@ -52,6 +53,10 @@ function dayBounds(referenceDate: Date) {
   return { start, end };
 }
 
+function todayBounds() {
+  return dayBounds(new Date());
+}
+
 promoterLocationsRouter.get(
   "/live",
   asyncHandler(async (req, res) => {
@@ -59,23 +64,13 @@ promoterLocationsRouter.get(
       throw new AppError(403, "LIVE_MAP_FORBIDDEN", "Only admins and supervisors can view the live map.");
     }
 
-    const today = dayBounds(new Date());
-    const supervisorScope =
-      req.user.role === "SUPERVISOR"
-        ? await prisma.supervisor.findFirst({
-            where: { ...scopedCompanyWhere(req), userId: req.user.id },
-            select: { id: true }
-          })
-        : null;
-
-    if (req.user.role === "SUPERVISOR" && !supervisorScope) {
-      throw new AppError(403, "SUPERVISOR_PROFILE_NOT_FOUND", "Supervisor autenticado nao possui cadastro operacional.");
-    }
-
+    const { start, end } = todayBounds();
+    const routeWindowWhere = buildRouteWindowWhere(start, end);
+    const supervisorScope = req.user.role === "SUPERVISOR" ? { supervisorId: requireSupervisorProfileId(req) } : {};
     const promoters = await prisma.promoter.findMany({
       where: {
         ...scopedCompanyWhere(req),
-        ...(supervisorScope ? { supervisorId: supervisorScope.id } : {}),
+        ...supervisorScope,
         status: "ACTIVE",
         user: { status: "ACTIVE" }
       },
@@ -96,19 +91,19 @@ promoterLocationsRouter.get(
         routes: {
           where: {
             status: "PUBLISHED",
-            scheduledDate: {
-              gte: today.start,
-              lte: today.end
+            ...routeWindowWhere,
+            items: {
+              some: {
+                status: "PLANNED"
+              }
             }
           },
-          orderBy: { scheduledDate: "desc" },
+          orderBy: [{ startDate: "asc" }, { scheduledDate: "asc" }],
           take: 1,
           include: {
             items: {
               where: { status: "PLANNED" },
-              orderBy: { sequence: "asc" },
-              take: 1,
-              include: { client: true }
+              select: { id: true }
             }
           }
         }
@@ -120,7 +115,6 @@ promoterLocationsRouter.get(
         const latestLocation = promoter.locations[0];
         const activeVisit = promoter.visits[0];
         const activeRoute = promoter.routes[0];
-        const nextRouteItem = activeRoute?.items[0];
 
         return {
           promoter: {
@@ -143,7 +137,9 @@ promoterLocationsRouter.get(
                 id: activeRoute.id,
                 name: activeRoute.name,
                 scheduledDate: activeRoute.scheduledDate,
-                nextClientName: nextRouteItem?.client.name ?? null
+                startDate: activeRoute.startDate,
+                endDate: activeRoute.endDate,
+                pendingItems: activeRoute.items.length
               }
             : null,
           location: latestLocation
@@ -173,6 +169,7 @@ promoterLocationsRouter.post(
     const input = locationSchema.parse(req.body);
     const capturedAt = input.capturedAt ? new Date(input.capturedAt) : new Date();
     const { start, end } = dayBounds(capturedAt);
+    const routeWindowWhere = buildRouteWindowWhere(start, end);
     const promoter = await prisma.promoter.findUnique({
       where: { userId: req.user.id },
       include: {
@@ -187,12 +184,9 @@ promoterLocationsRouter.post(
         routes: {
           where: {
             status: "PUBLISHED",
-            scheduledDate: {
-              gte: start,
-              lte: end
-            }
+            ...routeWindowWhere
           },
-          orderBy: { scheduledDate: "asc" },
+          orderBy: [{ startDate: "asc" }, { scheduledDate: "asc" }],
           take: 1
         }
       }

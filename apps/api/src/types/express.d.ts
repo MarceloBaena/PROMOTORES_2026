@@ -10,6 +10,8 @@ declare global {
         role: RoleCode;
         status: UserStatus;
         companyId?: string | null;
+        supervisorId?: string | null;
+        promoterId?: string | null;
         company?: {
           id: string;
           code: number;

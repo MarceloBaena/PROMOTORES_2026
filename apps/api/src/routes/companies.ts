@@ -32,9 +32,26 @@ const companySchema = z.object({
 companiesRouter.get(
   "/",
   asyncHandler(async (req, res) => {
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const numericCode = /^\d+$/.test(q) ? Number(q) : undefined;
     const companies = await prisma.company.findMany({
-      where: req.user?.companyId ? { id: req.user.companyId } : undefined,
-      orderBy: { code: "asc" }
+      where: {
+        ...(req.user?.companyId ? { id: req.user.companyId } : {}),
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { document: { contains: q, mode: "insensitive" } },
+                { city: { contains: q, mode: "insensitive" } },
+                { state: { contains: q, mode: "insensitive" } },
+                { contactName: { contains: q, mode: "insensitive" } },
+                ...(numericCode ? [{ code: numericCode }] : [])
+              ]
+        }
+          : {})
+      },
+      orderBy: { code: "asc" },
+      take: 80
     });
 
     res.json({ data: companies });
@@ -87,8 +104,17 @@ companiesRouter.delete(
       throw new AppError(403, "PLATFORM_ADMIN_REQUIRED", "Apenas o administrador geral pode inativar empresas/filiais.");
     }
 
-    await prisma.company.update({
+    const existing = await prisma.company.findUnique({
       where: { id: req.params.id },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa/filial nao encontrada.");
+    }
+
+    await prisma.company.update({
+      where: { id: existing.id },
       data: { status: "INACTIVE" }
     });
 

@@ -63,6 +63,20 @@ export interface ClientSnapshot {
   code?: string | null;
   name: string;
   document?: string | null;
+  activities?: Array<{
+    id: string;
+    code: number;
+    name: string;
+    description?: string | null;
+    status: string;
+  }>;
+  suppliers?: Array<{
+    id: string;
+    name: string;
+    tradeName?: string | null;
+    document?: string | null;
+    status: string;
+  }>;
   address?: string | null;
   city?: string | null;
   state?: string | null;
@@ -191,6 +205,8 @@ export async function uploadVisitPhoto(
     capturedAt: string;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
+    supplierExecutionId?: string;
+    supplierId?: string;
   }
 ) {
   const base64Image = await FileSystem.readAsStringAsync(input.uri, {
@@ -206,6 +222,8 @@ export async function uploadVisitPhoto(
       capturedAt: input.capturedAt,
       gpsLatitude: input.gpsLatitude,
       gpsLongitude: input.gpsLongitude,
+      supplierExecutionId: input.supplierExecutionId,
+      supplierId: input.supplierId,
       contentType: "image/jpeg",
       base64Image
     }

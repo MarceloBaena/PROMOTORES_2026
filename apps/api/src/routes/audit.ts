@@ -1,10 +1,16 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
+import { endOfDay } from "../lib/route-window";
 import { AppError } from "../lib/errors";
 import { assertSameCompany, scopedCompanyWhere } from "../lib/tenant";
 
 export const auditRouter = Router();
+
+const resolveAuditSchema = z.object({
+  resolutionNote: z.string().trim().min(3).max(500).optional()
+});
 
 auditRouter.get(
   "/",
@@ -33,7 +39,8 @@ auditRouter.get(
 auditRouter.patch(
   "/:id/resolve",
   asyncHandler(async (req, res) => {
-    const flag = await prisma.auditFlag.findUnique({
+    const input = resolveAuditSchema.parse(req.body);
+    const existing = await prisma.auditFlag.findUnique({
       where: { id: req.params.id },
       include: {
         visit: {
@@ -44,18 +51,38 @@ auditRouter.patch(
       }
     });
 
-    if (!flag) {
+    if (!existing) {
       throw new AppError(404, "AUDIT_FLAG_NOT_FOUND", "Alerta de auditoria nao encontrado.");
     }
 
-    assertSameCompany(req, flag.visit.companyId);
+    assertSameCompany(req, existing.visit.companyId);
 
-    const resolved = await prisma.auditFlag.update({
-      where: { id: flag.id },
-      data: { resolved: true }
+    const flag = await prisma.auditFlag.update({
+      where: { id: req.params.id },
+      data: {
+        resolved: true,
+        resolvedById: req.user?.id,
+        resolvedAt: new Date(),
+        resolutionNote: input.resolutionNote ?? "Resolvido manualmente pela retaguarda."
+      },
+      include: {
+        resolvedBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        visit: {
+          include: {
+            client: true,
+            promoter: { include: { user: true } }
+          }
+        }
+      }
     });
 
-    res.json({ data: resolved });
+    res.json({ data: flag });
   })
 );
 
@@ -143,6 +170,8 @@ auditRouter.post(
           name: `Revisita - ${flag.visit.client.name}`,
           status: "PUBLISHED",
           scheduledDate,
+          startDate: scheduledDate,
+          endDate: endOfDay(scheduledDate),
           promoterId,
           supervisorId: promoter.supervisorId,
           items: {
@@ -161,7 +190,12 @@ auditRouter.post(
 
       await tx.auditFlag.update({
         where: { id: flag.id },
-        data: { resolved: true }
+        data: {
+          resolved: true,
+          resolvedById: req.user?.id,
+          resolvedAt: new Date(),
+          resolutionNote: "Cliente recolocado em roteiro pela auditoria."
+        }
       });
 
       return createdRoute;

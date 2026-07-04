@@ -13,16 +13,36 @@ export type ProfileStatus = (typeof PROFILE_STATUSES)[number];
 export const CLIENT_STATUSES = ["ACTIVE", "INACTIVE", "ARCHIVED"] as const;
 export type ClientStatus = (typeof CLIENT_STATUSES)[number];
 
+export const SUPPLIER_STATUSES = ["ACTIVE", "INACTIVE"] as const;
+export type SupplierStatus = (typeof SUPPLIER_STATUSES)[number];
+
+export const SUPPLIER_EXECUTION_STATUSES = ["pending", "in_progress", "completed", "skipped"] as const;
+export type SupplierExecutionStatus = (typeof SUPPLIER_EXECUTION_STATUSES)[number];
+
 export const ROUTE_STATUSES = ["DRAFT", "PUBLISHED", "CANCELLED", "COMPLETED"] as const;
 export type RouteStatus = (typeof ROUTE_STATUSES)[number];
 
 export const ROUTE_ITEM_STATUSES = ["PLANNED", "COMPLETED", "SKIPPED", "CANCELLED"] as const;
 export type RouteItemStatus = (typeof ROUTE_ITEM_STATUSES)[number];
 
-export const VISIT_STATUSES = ["pending", "in_progress", "completed", "not_completed"] as const;
+export const VISIT_STATUSES = ["pending", "in_progress", "completed", "not_completed", "canceled"] as const;
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
 
-export const PHOTO_TYPES = ["checkin", "before", "after", "occurrence_extra"] as const;
+export const PHOTO_TYPES = [
+  "checkin",
+  "before",
+  "after",
+  "supplier_before",
+  "supplier_after",
+  "leaflet",
+  "gondola",
+  "display",
+  "island",
+  "promotional_material",
+  "checkout",
+  "store_extra",
+  "occurrence_extra"
+] as const;
 export type PhotoType = (typeof PHOTO_TYPES)[number];
 
 export const SYNC_STATUSES = ["pending", "syncing", "synced", "failed"] as const;
@@ -44,14 +64,36 @@ export type SyncType = (typeof SYNC_TYPES)[number];
 export const SYNC_ENTITY_TYPES = ["VISIT", "PHOTO", "OCCURRENCE"] as const;
 export type SyncEntityType = (typeof SYNC_ENTITY_TYPES)[number];
 
+export const OCCURRENCE_TYPES = [
+  "store_closed",
+  "manager_absent",
+  "rupture",
+  "no_stock",
+  "price_issue",
+  "competitor_action",
+  "other"
+] as const;
+export type OccurrenceType = (typeof OCCURRENCE_TYPES)[number];
+
+export const OCCURRENCE_STATUSES = ["open", "in_review", "resolved", "rejected"] as const;
+export type OccurrenceStatus = (typeof OCCURRENCE_STATUSES)[number];
+
 export const AUDIT_FLAG_TYPES = [
   "GPS_MISSING",
   "OUTSIDE_GEOFENCE",
   "MISSING_REQUIRED_PHOTO",
+  "SUPPLIER_MISSING_BEFORE_PHOTO",
+  "SUPPLIER_MISSING_AFTER_PHOTO",
+  "SUPPLIER_MISSING_DELIVERY_RESPONSE",
+  "SUPPLIER_MISSING_REPLENISHMENT_RESPONSE",
+  "SUPPLIER_MISSING_STOCKOUT_RESPONSE",
+  "SUPPLIER_TOO_FAST",
+  "CHECKOUT_WITH_PENDING_SUPPLIER",
   "TOO_FAST_VISIT",
   "TOO_LONG_VISIT",
   "INCONSISTENT_FINISH",
-  "SYNC_FAILURE"
+  "SYNC_FAILURE",
+  "POSSIBLE_DUPLICATE_PHOTO"
 ] as const;
 export type AuditFlagType = (typeof AUDIT_FLAG_TYPES)[number];
 
@@ -79,6 +121,14 @@ export interface AuthSession {
   accessToken: string;
   refreshToken: string;
   user: SessionUser;
+}
+
+export interface SupplierSummary {
+  id: string;
+  name: string;
+  tradeName?: string | null;
+  document?: string | null;
+  status: SupplierStatus;
 }
 
 export const DEFAULT_USERS = {

@@ -2,6 +2,7 @@ export interface CompanyOption {
   id: string;
   code?: number;
   name?: string;
+  status?: string | null;
 }
 
 export function companyLabel(company?: CompanyOption | null) {
@@ -14,8 +15,14 @@ export function companyLabel(company?: CompanyOption | null) {
   return `${formattedCode} - ${company.name ?? "Empresa sem nome"}`;
 }
 
-export function toCompanyOptions(companies: CompanyOption[]) {
-  return companies.map((company) => ({
+export function activeCompaniesOnly(companies: CompanyOption[]) {
+  return companies.filter((company) => String(company.status ?? "ACTIVE") === "ACTIVE");
+}
+
+export function toCompanyOptions(companies: CompanyOption[], onlyActive = true) {
+  const source = onlyActive ? activeCompaniesOnly(companies) : companies;
+
+  return source.map((company) => ({
     value: company.id,
     label: companyLabel(company)
   }));

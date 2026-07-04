@@ -1,17 +1,25 @@
 import type { AuthSession } from "@sales-promoters/shared";
 
 const SESSION_KEY = "sales-promoters-session";
-const PRODUCTION_API_BASE_URL = "https://promotores-2026-api.vercel.app";
+const PRODUCTION_API_BASE_URL = "/api";
 const LOCAL_API_BASE_URL = "http://localhost:3000";
 
 function resolveApiBaseUrl() {
   const configuredUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
+  if (import.meta.env.PROD) {
+    if (configuredUrl && !configuredUrl.includes("URL-DA-API") && configuredUrl.startsWith("/")) {
+      return configuredUrl.replace(/\/$/, "");
+    }
+
+    return PRODUCTION_API_BASE_URL.replace(/\/$/, "");
+  }
+
   if (configuredUrl && !configuredUrl.includes("URL-DA-API")) {
     return configuredUrl.replace(/\/$/, "");
   }
 
-  return (import.meta.env.PROD ? PRODUCTION_API_BASE_URL : LOCAL_API_BASE_URL).replace(/\/$/, "");
+  return LOCAL_API_BASE_URL.replace(/\/$/, "");
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
@@ -113,6 +121,24 @@ async function request(path: string, init: RequestInit = {}, retry = true): Prom
   return response;
 }
 
+async function parseJsonBody<T>(response: Response): Promise<T | undefined> {
+  if (response.status === 204 || response.status === 205) {
+    return undefined;
+  }
+
+  const raw = await response.text();
+
+  if (!raw.trim()) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new Error("Resposta invalida da API.");
+  }
+}
+
 export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await request(path, init);
 
@@ -121,9 +147,9 @@ export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<
     let code: string | undefined;
 
     try {
-      const body = await response.json();
-      message = body.error?.message ?? message;
-      code = body.error?.code;
+      const body = await parseJsonBody<{ error?: { message?: string; code?: string } }>(response);
+      message = body?.error?.message ?? message;
+      code = body?.error?.code;
     } catch {
       // Keep fallback message.
     }
@@ -131,7 +157,8 @@ export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<
     throw new ApiHttpError(response.status, message, code);
   }
 
-  return response.json() as Promise<T>;
+  const body = await parseJsonBody<T>(response);
+  return body as T;
 }
 
 export async function apiDownload(path: string) {

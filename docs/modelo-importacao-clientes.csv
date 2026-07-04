@@ -1,0 +1,3 @@
+codigo,nome,documento,representante,endereco,numero,bairro,cidade,uf,fornecedores,atividades
+0001,MERCEARIA EXEMPLO,12345678000190,CARLOS SILVA,RUA DAS FLORES,120,CENTRO,VARZEA GRANDE,MT,FORNECEDOR A,Reposicao; Precificacao
+0002,CLIENTE SEM CNPJ,,MARIA SOUZA,AV BRASIL,45,JARDIM AMERICA,CUIABA,MT,,Ponto extra

@@ -11,6 +11,7 @@ App Expo/React Native para Android com operacao offline-first.
 - Foto before.
 - Anotacoes de execucao.
 - Foto after.
+- Foto de check-out.
 - Encerramento da visita.
 - Fila persistente de sincronizacao.
 - Logs locais de sync.
@@ -45,5 +46,7 @@ npm run android
 - O primeiro login precisa de internet para baixar o roteiro.
 - Depois do download, o app reabre e trabalha com SQLite mesmo sem internet.
 - Fotos sao copiadas para o armazenamento local do app.
-- A visita nao encerra sem check-in, before e after.
+- A visita nao encerra sem check-in, before, after e check-out.
+- Quando o cliente tiver fornecedores vinculados, todos precisam ser concluidos com foto antes, foto depois e respostas obrigatorias antes do check-out final.
+- Se o promotor marcar que o fornecedor nao recebeu mercadoria, o sistema permite concluir esse fornecedor sem fotos antes/depois e sem abastecimento.
 - O mapa ao vivo so envia localizacao em primeiro plano e durante jornada operacional ativa.

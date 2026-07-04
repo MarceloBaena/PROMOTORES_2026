@@ -4,7 +4,7 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { useAuth } from "../context/AuthContext";
 import { apiJson } from "../lib/api";
-import { companyLabel, type CompanyOption } from "../lib/company-options";
+import { activeCompaniesOnly, companyLabel, type CompanyOption } from "../lib/company-options";
 
 interface ImportLog {
   id: string;
@@ -27,7 +27,7 @@ export function ClientImportPage() {
 
   useEffect(() => {
     void apiJson<{ data: CompanyOption[] }>("/companies")
-      .then((response) => setCompanies(response.data))
+      .then((response) => setCompanies(activeCompaniesOnly(response.data)))
       .catch(() => setCompanies([]));
   }, []);
 

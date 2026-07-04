@@ -12,7 +12,7 @@
     "packages/*"
   ],
   "scripts": {
-    "api:build": "npm run build -w @sales-promoters/api",
+    "api:build": "npm run build -w @sales-promoters/api && node scripts/prepare-vercel-api.cjs",
     "api:migrate": "npm run prisma:migrate -w @sales-promoters/api",
     "api:seed:access": "npm run seed:access -w @sales-promoters/api",
     "supabase:check": "npm run supabase:check -w @sales-promoters/api",

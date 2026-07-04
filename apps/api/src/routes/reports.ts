@@ -5,6 +5,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
 import { scopedCompanyWhere } from "../lib/tenant";
+import { buildRouteWindowWhere, endOfDay, startOfDay } from "../lib/route-window";
+import { summarizeRouteProgress } from "../services/route-status";
 
 export const reportsRouter = Router();
 
@@ -43,94 +45,6 @@ const productivityQuerySchema = z.object({
   startDate: z.string().datetime().or(z.string().date()).optional(),
   endDate: z.string().datetime().or(z.string().date()).optional()
 });
-
-function startOfDay(date: Date) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function endOfDay(date: Date) {
-  const next = new Date(date);
-  next.setHours(23, 59, 59, 999);
-  return next;
-}
-
-function zonedDateParts(date: Date, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23"
-  }).formatToParts(date);
-  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value);
-
-  return {
-    year: value("year"),
-    month: value("month"),
-    day: value("day"),
-    hour: value("hour"),
-    minute: value("minute"),
-    second: value("second")
-  };
-}
-
-function zonedDateTimeToUtc(
-  timeZone: string,
-  parts: { year: number; month: number; day: number; hour?: number; minute?: number; second?: number; millisecond?: number }
-) {
-  const desiredUtc = Date.UTC(
-    parts.year,
-    parts.month - 1,
-    parts.day,
-    parts.hour ?? 0,
-    parts.minute ?? 0,
-    parts.second ?? 0,
-    parts.millisecond ?? 0
-  );
-  const guessedParts = zonedDateParts(new Date(desiredUtc), timeZone);
-  const guessedUtc = Date.UTC(
-    guessedParts.year,
-    guessedParts.month - 1,
-    guessedParts.day,
-    guessedParts.hour,
-    guessedParts.minute,
-    guessedParts.second
-  );
-
-  return new Date(desiredUtc + (desiredUtc - guessedUtc));
-}
-
-function businessTodayRange(timeZone = "America/Cuiaba") {
-  const today = zonedDateParts(new Date(), timeZone);
-  const start = zonedDateTimeToUtc(timeZone, {
-    year: today.year,
-    month: today.month,
-    day: today.day
-  });
-  const nextDayStart = zonedDateTimeToUtc(timeZone, {
-    year: today.year,
-    month: today.month,
-    day: today.day + 1
-  });
-
-  return {
-    start,
-    end: new Date(nextDayStart.getTime() - 1),
-    timeZone
-  };
-}
-
-function countByStatus<T extends string>(items: Array<{ status: T; _count: { id: number } }>) {
-  return items.reduce<Record<string, number>>((acc, item) => {
-    acc[item.status] = item._count.id;
-    return acc;
-  }, {});
-}
 
 function minutesBetween(start?: Date | null, end?: Date | null) {
   if (!start || !end) {
@@ -289,107 +203,121 @@ reportsRouter.get(
   "/summary",
   asyncHandler(async (req, res) => {
     const companyWhere = scopedCompanyWhere(req);
-    const today = businessTodayRange();
+    const now = new Date();
+    const todayStart = startOfDay(now);
+    const todayEnd = endOfDay(now);
+    const routeWindowWhere = buildRouteWindowWhere(todayStart, todayEnd);
     const todayRouteWhere: Prisma.RouteWhereInput = {
       ...companyWhere,
-      scheduledDate: {
-        gte: today.start,
-        lte: today.end
-      }
+      status: { in: ["PUBLISHED", "COMPLETED", "CANCELLED"] },
+      ...routeWindowWhere
     };
-    const todayVisitWhere: Prisma.VisitWhereInput = {
-      ...companyWhere,
-      OR: [
-        {
-          startedAt: {
-            gte: today.start,
-            lte: today.end
-          }
-        },
-        {
-          startedAt: null,
-          createdAt: {
-            gte: today.start,
-            lte: today.end
-          }
-        }
-      ]
-    };
-    const staleCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
-    const releasedRouteItemWhere: Prisma.RouteItemWhereInput = {
-      route: {
-        ...todayRouteWhere,
-        status: { in: ["PUBLISHED", "COMPLETED"] }
-      }
-    };
-    const noServiceOver48Where: Prisma.RouteItemWhereInput = {
-      status: "PLANNED",
-      route: {
-        ...companyWhere,
-        status: "PUBLISHED",
-        scheduledDate: {
-          lte: staleCutoff
-        }
-      }
-    };
-    const openUnder48Where: Prisma.RouteItemWhereInput = {
-      status: "PLANNED",
-      route: {
-        ...companyWhere,
-        status: "PUBLISHED",
-        scheduledDate: {
-          gt: staleCutoff
-        }
-      }
-    };
-    const clients = await prisma.client.count({ where: { ...companyWhere, status: "ACTIVE" } });
-    const promoters = await prisma.promoter.count({ where: { ...companyWhere, status: "ACTIVE" } });
-    const supervisors = await prisma.supervisor.count({ where: { ...companyWhere, status: "ACTIVE" } });
-    const routes = await prisma.route.count({ where: companyWhere });
-    const routesToday = await prisma.route.groupBy({ by: ["status"], where: todayRouteWhere, _count: { id: true } });
-    const visits = await prisma.visit.groupBy({ by: ["status"], where: companyWhere, _count: { id: true } });
-    const visitsToday = await prisma.visit.groupBy({ by: ["status"], where: todayVisitWhere, _count: { id: true } });
-    const checkinsToday = await prisma.visitPhoto.count({ where: { type: "checkin", visit: todayVisitWhere } });
-    const releasedClientsToday = await prisma.routeItem.count({ where: releasedRouteItemWhere });
-    const attendedClientsToday = await prisma.routeItem.count({ where: { ...releasedRouteItemWhere, status: "COMPLETED" } });
-    const noServiceOver48 = await prisma.routeItem.count({ where: noServiceOver48Where });
-    const openUnder48 = await prisma.routeItem.count({ where: openUnder48Where });
-    const auditFlags = await prisma.auditFlag.count({ where: { resolved: false, visit: companyWhere } });
-    const imports = await prisma.clientImportLog.findMany({ where: companyWhere, orderBy: { createdAt: "desc" }, take: 5 });
-    const routeStatusToday = countByStatus(routesToday);
-    const visitStatusToday = countByStatus(visitsToday);
-    const executionRate =
-      releasedClientsToday > 0 ? Math.round((attendedClientsToday / releasedClientsToday) * 100) : 0;
 
+    const [clients, promoters, supervisors, routesToday, auditFlags, imports, routesTotal, checkinsToday] =
+      await Promise.all([
+      prisma.client.count({ where: { ...companyWhere, status: "ACTIVE" } }),
+      prisma.promoter.count({ where: { ...companyWhere, status: "ACTIVE" } }),
+      prisma.supervisor.count({ where: { ...companyWhere, status: "ACTIVE" } }),
+      prisma.route.findMany({
+        where: {
+          ...todayRouteWhere
+        },
+        select: {
+          id: true,
+          status: true,
+          scheduledDate: true,
+          startDate: true,
+          endDate: true,
+          items: {
+            where: {
+              status: { not: "CANCELLED" }
+            },
+            select: {
+              status: true,
+              visits: {
+                select: {
+                  status: true
+                }
+              }
+            }
+          }
+        }
+      }),
+      prisma.auditFlag.count({ where: { resolved: false, visit: companyWhere } }),
+      prisma.clientImportLog.findMany({ where: companyWhere, orderBy: { createdAt: "desc" }, take: 5 }),
+      prisma.route.count({ where: companyWhere }),
+      prisma.visitPhoto.count({
+        where: {
+          type: "checkin",
+          visit: {
+            ...companyWhere,
+            OR: [
+              {
+                startedAt: {
+                  gte: todayStart,
+                  lte: todayEnd
+                }
+              },
+              {
+                startedAt: null,
+                createdAt: {
+                  gte: todayStart,
+                  lte: todayEnd
+                }
+              }
+            ]
+          }
+        }
+      })
+    ]);
+
+    const routeSummaries = routesToday.map((route) => summarizeRouteProgress(route, now));
+    const routesPublished = routeSummaries.filter(
+      (route) => route.operationalStatus === "PUBLISHED" || route.operationalStatus === "IN_PROGRESS"
+    ).length;
+    const routesInProgress = routeSummaries.filter((route) => route.operationalStatus === "IN_PROGRESS").length;
+    const routesCompleted = routeSummaries.filter((route) => route.operationalStatus === "COMPLETED").length;
+    const routesNotCompleted = routeSummaries.filter((route) => route.operationalStatus === "NOT_COMPLETED").length;
+    const routeItemsToday = routeSummaries.reduce((total, route) => total + route.totalItems, 0);
+    const completedVisitsToday = routeSummaries.reduce((total, route) => total + route.completedItems, 0);
+    const inProgressVisitsToday = routeSummaries.reduce((total, route) => total + route.inProgressItems, 0);
+    const notCompletedVisitsToday = routeSummaries.reduce((total, route) => total + route.resolvedWithoutCompletionItems, 0);
+    const plannedVisitsToday = routeSummaries.reduce((total, route) => total + route.plannedItems, 0);
+    const pendingVisitsToday = routeSummaries.reduce(
+      (total, route) => total + (route.isExpired ? route.unresolvedItems : 0),
+      0
+    );
     res.json({
       data: {
         clients,
         promoters,
         supervisors,
-        routes,
-        routesToday: {
-          planned: (routeStatusToday.DRAFT ?? 0) + (routeStatusToday.PUBLISHED ?? 0),
-          inProgress: visitStatusToday.in_progress ?? 0,
-          completed: routeStatusToday.COMPLETED ?? 0,
-          cancelled: routeStatusToday.CANCELLED ?? 0,
-          total: routesToday.reduce((total, item) => total + item._count.id, 0),
-          date: today.start.toISOString(),
-          timeZone: today.timeZone
-        },
-        fieldWork: {
-          activePromoters: promoters,
-          releasedClientsToday,
-          attendedClientsToday,
-          inServiceNow: visitStatusToday.in_progress ?? 0,
-          openUnder48,
-          noServiceOver48,
-          executionRate,
-          staleRuleHours: 48
-        },
+        routes: routesPublished,
+        routesInProgress,
+        routesCompleted,
+        routesNotCompleted,
         auditFlags,
-        visits: countByStatus(visits),
-        visitsToday: visitStatusToday,
+        routeItemsToday,
+        todayWindow: {
+          startDate: todayStart.toISOString(),
+          endDate: todayEnd.toISOString()
+        },
+        visits: {
+          completed: completedVisitsToday,
+          in_progress: inProgressVisitsToday,
+          not_completed: notCompletedVisitsToday,
+          planned: plannedVisitsToday,
+          pending: pendingVisitsToday
+        },
+        visitsToday: {
+          completed: completedVisitsToday,
+          in_progress: inProgressVisitsToday,
+          not_completed: notCompletedVisitsToday,
+          planned: plannedVisitsToday,
+          pending: pendingVisitsToday
+        },
         checkinsToday,
+        routesTotal,
         imports
       }
     });

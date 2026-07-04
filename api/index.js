@@ -1,7 +1,8 @@
 let handler;
+const bundlePath = "./dist/serverless";
 
 try {
-  const serverless = require("../apps/api/dist/serverless");
+  const serverless = require(bundlePath);
   handler = serverless.default || serverless.handler || serverless;
 } catch (error) {
   handler = (_req, res) => {
@@ -14,7 +15,8 @@ try {
         status: "error",
         code: "API_BOOT_FAILED",
         message: "API failed to load its serverless bundle.",
-        detail: message
+        detail: message,
+        bundlePath
       })
     );
   };

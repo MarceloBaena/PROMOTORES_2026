@@ -35,13 +35,29 @@ supervisorsRouter.get(
     }
 
     const promoterId = req.query.promoterId ? String(req.query.promoterId) : undefined;
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const numericCode = /^\d+$/.test(q) ? Number(q) : undefined;
     const where = promoterId
       ? { ...scopedCompanyWhere(req), promoters: { some: { id: promoterId } } }
       : scopedCompanyWhere(req);
 
     const supervisors = await prisma.supervisor.findMany({
-      where,
+      where: {
+        ...where,
+        ...(q
+          ? {
+              OR: [
+                { user: { name: { contains: q, mode: "insensitive" } } },
+                { user: { email: { contains: q, mode: "insensitive" } } },
+                { region: { contains: q, mode: "insensitive" } },
+                { company: { name: { contains: q, mode: "insensitive" } } },
+                ...(numericCode ? [{ code: numericCode }] : [])
+              ]
+        }
+          : {})
+      },
       orderBy: { code: "asc" },
+      take: 80,
       include: { user: { include: { role: true } }, company: true }
     });
 

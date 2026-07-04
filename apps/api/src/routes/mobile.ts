@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../lib/errors";
 import { asyncHandler } from "../middleware/async-handler";
+import { buildRouteWindowWhere, endOfDay, startOfDay } from "../lib/route-window";
 
 export const mobileRouter = Router();
 
@@ -39,19 +40,36 @@ mobileRouter.get(
       throw new AppError(403, "PROMOTER_NOT_ACTIVE", "Promoter profile is not active.");
     }
 
+    const now = new Date();
+    const routeWindowWhere = buildRouteWindowWhere(startOfDay(now), endOfDay(now));
     const latestRoute = await prisma.route.findFirst({
       where: {
         companyId: promoter.companyId,
         promoterId: promoter.id,
-        status: "PUBLISHED"
+        status: "PUBLISHED",
+        OR: [
+          { endDate: null },
+          { endDate: { gte: now } }
+        ],
+        ...routeWindowWhere
       },
-      orderBy: [{ scheduledDate: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ startDate: "desc" }, { scheduledDate: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
         name: true,
         status: true,
         scheduledDate: true,
+        startDate: true,
+        endDate: true,
         items: {
+          where: {
+            status: "PLANNED",
+            visits: {
+              none: {
+                status: "completed"
+              }
+            }
+          },
           orderBy: { sequence: "asc" },
           select: {
             id: true,
@@ -61,12 +79,39 @@ mobileRouter.get(
             status: true,
             plannedStart: true,
             plannedEnd: true,
-            client: true
+            client: {
+              include: {
+                suppliers: {
+                  include: {
+                    supplier: true
+                  }
+                },
+                activities: {
+                  include: {
+                    activity: true
+                  }
+                }
+              }
+            }
           }
         }
       }
     });
-    const routes = latestRoute ? [latestRoute] : [];
+    const routes = latestRoute && latestRoute.items.length > 0
+      ? [
+          {
+            ...latestRoute,
+            items: latestRoute.items.map((item) => ({
+              ...item,
+              client: {
+                ...item.client,
+                suppliers: item.client.suppliers.map((link) => link.supplier),
+                activities: item.client.activities.map((link) => link.activity)
+              }
+            }))
+          }
+        ]
+      : [];
 
     const clientsById = new Map<string, (typeof routes)[number]["items"][number]["client"]>();
 
