@@ -32,11 +32,11 @@ function locationStatus(capturedAt?: Date | null) {
 
   const ageMs = Date.now() - capturedAt.getTime();
 
-  if (ageMs <= 5 * 60 * 1000) {
+  if (ageMs <= 2 * 60 * 1000) {
     return "online";
   }
 
-  if (ageMs <= 30 * 60 * 1000) {
+  if (ageMs <= 10 * 60 * 1000) {
     return "stale";
   }
 

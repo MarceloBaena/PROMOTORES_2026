@@ -53,6 +53,9 @@ const TEST_PROMOTER_PASSWORD = "Promotor@123";
 const OFFLINE_DEMO_ACCESS_TOKEN = "offline-demo-access-token";
 const OFFLINE_DEMO_REFRESH_TOKEN = "offline-demo-refresh-token";
 const GPS_CAPTURE_TIMEOUT_MS = 8000;
+const LIVE_TRACKING_VISIT_INTERVAL_MS = 20 * 1000;
+const LIVE_TRACKING_ROUTE_INTERVAL_MS = 60 * 1000;
+const LIVE_TRACKING_ERROR_LOG_WINDOW_MS = 5 * 60 * 1000;
 const extraPhotoTypes = ["leaflet", "gondola", "display", "island", "promotional_material", "store_extra"] as const;
 const FALLBACK_APP_VERSION = "0.1.24";
 const FALLBACK_ANDROID_BUILD = 25;
@@ -230,11 +233,19 @@ function isExpiredSessionError(message: string) {
   return /invalid or expired access token|sessao expirada|token/i.test(message);
 }
 
-async function getGps() {
-  const permission = await Location.requestForegroundPermissionsAsync();
+async function getGps(options: { silent?: boolean } = {}) {
+  const currentPermission = await Location.getForegroundPermissionsAsync();
+  const permission =
+    currentPermission.status === "granted"
+      ? currentPermission
+      : currentPermission.canAskAgain
+        ? await Location.requestForegroundPermissionsAsync()
+        : currentPermission;
 
   if (permission.status !== "granted") {
-    addSyncLog("failed", "GPS sem permissao. A visita continua localmente com excecao de auditoria registrada.");
+    if (!options.silent) {
+      addSyncLog("failed", "GPS sem permissao. A visita continua localmente com excecao de auditoria registrada.");
+    }
     return null;
   }
 
@@ -258,7 +269,9 @@ async function getGps() {
     }).catch(() => null);
 
     if (lastKnownPosition) {
-      addSyncLog("pending", "GPS atual demorou. Evidencia registrada com a ultima localizacao conhecida do aparelho.");
+      if (!options.silent) {
+        addSyncLog("pending", "GPS atual demorou. Evidencia registrada com a ultima localizacao conhecida do aparelho.");
+      }
       return {
         latitude: lastKnownPosition.coords.latitude,
         longitude: lastKnownPosition.coords.longitude,
@@ -266,7 +279,9 @@ async function getGps() {
       };
     }
 
-    addSyncLog("failed", "GPS indisponivel no aparelho. A evidencia foi mantida localmente sem coordenada.");
+    if (!options.silent) {
+      addSyncLog("failed", "GPS indisponivel no aparelho. A evidencia foi mantida localmente sem coordenada.");
+    }
     return null;
   }
 }
@@ -301,6 +316,11 @@ export default function App() {
   const [syncSummary, setSyncSummary] = useState(getQueueSummary());
   const [syncDiagnostics, setSyncDiagnostics] = useState(listQueueDiagnostics());
   const trackerRef = useRef<ReturnType<typeof createForegroundLocationTracker> | null>(null);
+  const liveTrackingLogRef = useRef<{ mode: "visit" | "route" | null; lastErrorMessage: string | null; lastErrorAt: number }>({
+    mode: null,
+    lastErrorMessage: null,
+    lastErrorAt: 0
+  });
 
   const isCompact = width < 390;
   const isTablet = width >= 720;
@@ -417,7 +437,29 @@ export default function App() {
     const hasOpenRoute = routeItems.some(isOpenRouteItem);
 
     if (!session || isOfflineDemoSession(session) || (!hasActiveVisit && !hasOpenRoute)) {
+      liveTrackingLogRef.current = {
+        mode: null,
+        lastErrorMessage: null,
+        lastErrorAt: 0
+      };
       return;
+    }
+
+    const trackingMode = hasActiveVisit ? "visit" : "route";
+    const intervalMs = hasActiveVisit ? LIVE_TRACKING_VISIT_INTERVAL_MS : LIVE_TRACKING_ROUTE_INTERVAL_MS;
+
+    if (liveTrackingLogRef.current.mode !== trackingMode) {
+      addSyncLog(
+        "synced",
+        trackingMode === "visit"
+          ? "Rastreamento online ativado durante atendimento em andamento."
+          : "Rastreamento online ativado para roteiro em campo."
+      );
+      liveTrackingLogRef.current = {
+        mode: trackingMode,
+        lastErrorMessage: null,
+        lastErrorAt: 0
+      };
     }
 
     trackerRef.current = createForegroundLocationTracker({
@@ -425,19 +467,29 @@ export default function App() {
       getAccessToken: () => session.accessToken,
       getVisitId: () => (hasActiveVisit ? activeVisit?.serverId ?? undefined : undefined),
       getCoordinates: async () => {
-        const gps = await getGps();
+        const gps = await getGps({ silent: true });
         return gps ? { latitude: gps.latitude, longitude: gps.longitude, accuracyMeters: gps.accuracyMeters } : null;
       },
       isOperationallyActive: () => hasActiveVisit || routeItems.some(isOpenRouteItem),
-      intervalMs: 3 * 60 * 1000,
-      onError: (error) => addSyncLog("failed", `Mapa ao vivo nao atualizado: ${error.message}`),
-      onSuccess: () =>
-        addSyncLog(
-          "synced",
-          hasActiveVisit
-            ? "Mapa ao vivo atualizado durante atendimento ativo."
-            : "Mapa ao vivo atualizado com roteiro ativo."
-        )
+      intervalMs,
+      onError: (error) => {
+        const technicalMessage = `Mapa ao vivo nao atualizado: ${error.message}`;
+        const shouldLog =
+          liveTrackingLogRef.current.lastErrorMessage !== technicalMessage ||
+          Date.now() - liveTrackingLogRef.current.lastErrorAt >= LIVE_TRACKING_ERROR_LOG_WINDOW_MS;
+
+        if (!shouldLog) {
+          return;
+        }
+
+        liveTrackingLogRef.current.lastErrorMessage = technicalMessage;
+        liveTrackingLogRef.current.lastErrorAt = Date.now();
+        addSyncLog("failed", technicalMessage);
+      },
+      onSuccess: () => {
+        liveTrackingLogRef.current.lastErrorMessage = null;
+        liveTrackingLogRef.current.lastErrorAt = 0;
+      }
     });
     trackerRef.current.start();
 
