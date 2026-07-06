@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef } from "react";
-import { ExternalLink, LocateFixed, Navigation, RadioTower } from "lucide-react";
+import { ExternalLink, LocateFixed, Navigation, RadioTower, Route, TimerReset, UserRound } from "lucide-react";
 import { CircleMarker, MapContainer, Popup, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { latLng, latLngBounds, type LatLngExpression } from "leaflet";
 import {
@@ -22,7 +22,7 @@ function signalColors(status: LivePromoter["status"], selected: boolean) {
     return {
       stroke: selected ? "#0f766e" : "#059669",
       fill: selected ? "#10b981" : "#34d399",
-      trail: selected ? "#10b981" : "#6ee7b7"
+      trail: selected ? "#2563eb" : "#6ee7b7"
     };
   }
 
@@ -30,14 +30,14 @@ function signalColors(status: LivePromoter["status"], selected: boolean) {
     return {
       stroke: selected ? "#b45309" : "#d97706",
       fill: selected ? "#f59e0b" : "#fbbf24",
-      trail: selected ? "#f59e0b" : "#fcd34d"
+      trail: selected ? "#2563eb" : "#fcd34d"
     };
   }
 
   return {
     stroke: selected ? "#1e3a8a" : "#475569",
     fill: selected ? "#3b82f6" : "#94a3b8",
-    trail: selected ? "#60a5fa" : "#cbd5e1"
+    trail: selected ? "#2563eb" : "#cbd5e1"
   };
 }
 
@@ -53,6 +53,30 @@ function resolveFocusedPromoter(items: LivePromoter[], selectedPromoterId?: stri
     items.find((item) => hasCoordinates(item.location)) ??
     null
   );
+}
+
+function routeWindowLabel(item: LivePromoter) {
+  if (item.activeVisit) {
+    return item.activeVisit.routeName ?? "Rota em execucao";
+  }
+
+  if (item.activeRoute) {
+    return item.activeRoute.name;
+  }
+
+  return "Sem rota ativa";
+}
+
+function nextClientLabel(item: LivePromoter) {
+  if (item.activeVisit) {
+    return item.activeVisit.clientName;
+  }
+
+  if (item.activeRoute?.nextClientName) {
+    return item.activeRoute.nextClientName;
+  }
+
+  return "Sem proximo cliente definido";
 }
 
 function MapViewportController({
@@ -129,6 +153,9 @@ export function PromotersLiveMap({
   const focusedPromoter = useMemo(() => resolveFocusedPromoter(items, selectedPromoterId), [items, selectedPromoterId]);
   const mapHeight = heightClassName ?? (compact ? "h-[18rem]" : "h-[38rem]");
   const locatedItems = useMemo(() => items.filter((item) => hasCoordinates(item.location)), [items]);
+  const onlineCount = useMemo(() => items.filter((item) => item.status === "online").length, [items]);
+  const activeVisitCount = useMemo(() => items.filter((item) => item.activeVisit).length, [items]);
+  const activeRouteCount = useMemo(() => items.filter((item) => item.activeRoute).length, [items]);
 
   if (locatedItems.length === 0) {
     return (
@@ -150,15 +177,10 @@ export function PromotersLiveMap({
 
   return (
     <div className={`live-map-shell relative overflow-hidden rounded-[1.35rem] ${mapHeight}`}>
-      <MapContainer
-        center={DEFAULT_CENTER}
-        zoom={12}
-        scrollWheelZoom
-        className="live-leaflet-map h-full w-full"
-      >
+      <MapContainer center={DEFAULT_CENTER} zoom={12} scrollWheelZoom className="live-leaflet-map h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
 
         <MapViewportController items={locatedItems} focusedPromoter={focusedPromoter} compact={compact} />
@@ -180,14 +202,42 @@ export function PromotersLiveMap({
           return (
             <Fragment key={item.promoter.id}>
               {trailPositions.length >= 2 ? (
-                <Polyline
-                  positions={trailPositions}
+                <>
+                  {selected ? (
+                    <Polyline
+                      positions={trailPositions}
+                      pathOptions={{
+                        color: "#ffffff",
+                        weight: compact ? 8 : 10,
+                        opacity: 0.96,
+                        lineCap: "round",
+                        lineJoin: "round"
+                      }}
+                    />
+                  ) : null}
+                  <Polyline
+                    positions={trailPositions}
+                    pathOptions={{
+                      color: colors.trail,
+                      weight: selected ? (compact ? 4 : 5) : compact ? 2.5 : 3,
+                      opacity: selected ? 0.96 : 0.62,
+                      lineCap: "round",
+                      lineJoin: "round",
+                      dashArray: selected ? undefined : "10 10"
+                    }}
+                  />
+                </>
+              ) : null}
+
+              {selected ? (
+                <CircleMarker
+                  center={[location.latitude as number, location.longitude as number]}
+                  radius={compact ? 18 : 22}
                   pathOptions={{
-                    color: colors.trail,
-                    weight: selected ? 5 : 3,
-                    opacity: selected ? 0.9 : 0.55,
-                    lineCap: "round",
-                    lineJoin: "round"
+                    color: "#ffffff",
+                    fillColor: colors.fill,
+                    fillOpacity: 0.14,
+                    weight: 2
                   }}
                 />
               ) : null}
@@ -236,36 +286,92 @@ export function PromotersLiveMap({
         })}
       </MapContainer>
 
-      <div className="pointer-events-none absolute left-4 top-4 z-[500] flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/90 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-ink shadow-lg backdrop-blur">
-          <Navigation className="h-4 w-4 text-brand" />
-          Rastro da rota
-        </span>
+      <div className="pointer-events-none absolute left-4 top-4 z-[500] max-w-[min(100%-2rem,30rem)]">
+        <div className="rounded-[1.1rem] border border-white/80 bg-white/92 px-3 py-3 shadow-xl backdrop-blur">
+          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-500">Controle ao vivo</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full bg-brandSoft px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-brand">
+              <RadioTower className="h-4 w-4" />
+              {onlineCount} conectados
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">
+              <UserRound className="h-4 w-4" />
+              {activeVisitCount} em atendimento
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-slate-700">
+              <Route className="h-4 w-4" />
+              {activeRouteCount} em rota
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="pointer-events-none absolute right-4 top-4 z-[500]">
         <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/95 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-800 shadow-lg backdrop-blur">
-          <RadioTower className="h-4 w-4" />
+          <TimerReset className="h-4 w-4" />
           Atualizacao a cada {LIVE_MAP_REFRESH_INTERVAL_MS / 1000}s
         </span>
       </div>
 
       {focusedPromoter?.location ? (
-        <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-[500]">
-          <div className="rounded-3xl border border-white/80 bg-white/92 p-4 shadow-xl backdrop-blur">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="absolute bottom-4 left-4 right-4 z-[500]">
+          <div className="rounded-[1.6rem] border border-white/80 bg-white/94 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.18)] backdrop-blur">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="font-mono text-[11px] font-black tracking-[0.14em] text-brand">
                   {promoterCode(focusedPromoter.promoter.code)}
                 </div>
-                <div className="truncate font-display text-lg font-black text-ink">{focusedPromoter.promoter.name}</div>
-                <div className="truncate text-xs font-semibold text-stone-500">{operationalLabel(focusedPromoter)}</div>
+                <div className="truncate font-display text-xl font-black text-ink">{focusedPromoter.promoter.name}</div>
+                <div className="mt-1 truncate text-sm font-bold text-stone-500">{focusedPromoter.promoter.supervisorName ?? "Sem supervisor"}</div>
               </div>
-              <div className="text-right text-xs font-semibold text-stone-500">
-                <div>{liveStatusLabels[focusedPromoter.status]}</div>
-                <div>{minutesAgo(focusedPromoter.location.capturedAt)}</div>
+              <div className="text-right">
+                <div className="inline-flex rounded-full bg-navy px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-white">
+                  {liveStatusLabels[focusedPromoter.status]}
+                </div>
+                <div className="mt-2 text-xs font-semibold text-stone-500">{minutesAgo(focusedPromoter.location.capturedAt)}</div>
               </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl bg-slate-50 p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-500">Operacao</div>
+                <div className="mt-1 text-sm font-black text-ink">{operationalLabel(focusedPromoter)}</div>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-500">Rota</div>
+                <div className="mt-1 text-sm font-black text-ink">{routeWindowLabel(focusedPromoter)}</div>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-500">Proximo ponto</div>
+                <div className="mt-1 text-sm font-black text-ink">{nextClientLabel(focusedPromoter)}</div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs font-semibold text-stone-500">
+                <div>Ultimo envio: {formatLiveTime(focusedPromoter.location.capturedAt)}</div>
+                <div>{accuracyLabel(focusedPromoter.location)}</div>
+              </div>
+              <a
+                className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-bold text-white no-underline shadow-lg shadow-brand/20"
+                href={mapsUrl(focusedPromoter.location)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Abrir navegacao
+              </a>
             </div>
           </div>
         </div>
       ) : null}
+
+      <div className="pointer-events-none absolute left-4 top-24 z-[500]">
+        <span className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/92 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-ink shadow-lg backdrop-blur">
+          <Navigation className="h-4 w-4 text-brand" />
+          Rastro recente da rota
+        </span>
+      </div>
     </div>
   );
 }
