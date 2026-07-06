@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
+import { PromotersLiveMap } from "../components/PromotersLiveMap";
 import { PageHeader } from "../components/PageHeader";
 import { apiJson } from "../lib/api";
+import { useLivePromoters } from "../lib/live-map";
 
 interface Summary {
   clients: number;
@@ -70,6 +72,7 @@ const emptyFieldWork = {
 export function Dashboard() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { items: liveMapItems, message: liveMapMessage, connectedCount, inRouteCount, reload: reloadLiveMap } = useLivePromoters();
 
   useEffect(() => {
     apiJson<{ data: Summary }>("/reports/summary")
@@ -265,21 +268,26 @@ export function Dashboard() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Mapa em tempo real</h2>
-              <p className="panel-subtitle">Acompanhe promotores durante a jornada ativa.</p>
+              <p className="panel-subtitle">Acompanhe promotores durante a jornada ativa com mapa real de rua.</p>
             </div>
-            <Link to="/mapa" className="secondary-button h-10">
-              Ver mapa
-            </Link>
+            <div className="flex items-center gap-2">
+              <button type="button" className="secondary-button h-10" onClick={() => void reloadLiveMap()}>
+                Atualizar
+              </button>
+              <Link to="/mapa" className="secondary-button h-10">
+                Ver mapa
+              </Link>
+            </div>
           </div>
-          <div className="mini-map-grid relative h-[18rem] overflow-hidden bg-skywash">
-            <div className="absolute left-[18%] top-[26%] h-3 w-3 rounded-full bg-execution shadow-[0_0_0_10px_rgba(16,185,129,0.18)]" />
-            <div className="absolute left-[58%] top-[36%] h-3 w-3 rounded-full bg-brand shadow-[0_0_0_10px_rgba(37,99,235,0.16)]" />
-            <div className="absolute left-[72%] top-[68%] h-3 w-3 rounded-full bg-warning shadow-[0_0_0_10px_rgba(245,158,11,0.18)]" />
-            <div className="absolute bottom-5 left-5 right-5 rounded-3xl border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-900/10 backdrop-blur">
+          <div className="space-y-3 p-4">
+            {liveMapMessage ? <div className="notice notice-warning !mb-0">{liveMapMessage}</div> : null}
+            <PromotersLiveMap items={liveMapItems} compact heightClassName="h-[18rem]" />
+            <div className="rounded-3xl border border-line bg-white/90 p-4 shadow-sm shadow-slate-900/5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">Equipe em campo</p>
-                  <p className="mt-1 text-sm font-black text-ink">{fieldWork.activePromoters} promotor(es) ativo(s)</p>
+                  <p className="mt-1 text-sm font-black text-ink">{connectedCount} promotor(es) com sinal recente</p>
+                  <p className="mt-1 text-xs font-semibold text-slateText">{inRouteCount} em jornada de rota ou atendimento</p>
                 </div>
                 <MapPinned className="h-6 w-6 text-brand" />
               </div>

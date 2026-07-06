@@ -13,7 +13,7 @@ Guia detalhado: `docs/fonte-unica.md`.
 ## Workspaces
 
 - `apps/api` - Express, Prisma ORM, PostgreSQL/Supabase, JWT e rotas protegidas.
-- `apps/web` - React, Vite, TailwindCSS, React Router e lucide-react.
+- `apps/web` - React, Vite, TailwindCSS, React Router, lucide-react e mapa operacional com Leaflet.
 - `apps/mobile` - app Android Expo/React Native para operacao offline do promotor.
 - `apps/mobile_flutter` - app Android Flutter offline-first para operacao de campo.
 - `packages/shared` - constantes e tipos compartilhados.
@@ -190,6 +190,8 @@ A API recalcula auditorias pelo servico `apps/api/src/services/visit-audit.ts` s
 
 O painel web possui a rota `/mapa` para visualizar a ultima posicao operacional dos promotores.
 
+O dashboard inicial tambem possui um mapa visivel com os promotores em campo, usando basemap real de ruas e rastro recente de posicoes.
+
 Regras de seguranca:
 
 - O promotor so envia localizacao pelo endpoint `POST /locations/heartbeat`.
@@ -197,4 +199,9 @@ Regras de seguranca:
 - Admin e supervisor visualizam o mapa pelo endpoint `GET /locations/live`.
 - Nao existe rastreamento fora da jornada ativa.
 
-O app mobile envia heartbeat em primeiro plano quando ha atendimento ativo: app aberto, promotor logado, GPS permitido e jornada operacional autorizada.
+Fluxo atual do mapa:
+
+- O app mobile envia heartbeat em primeiro plano quando ha atendimento ativo ou roteiro publicado em janela operacional valida.
+- Durante visita em andamento, o heartbeat e mais frequente para dar sensacao de acompanhamento em tempo quase real.
+- O endpoint `GET /locations/live` entrega ultima posicao, status do sinal e trilha recente para desenhar o rastro no painel web.
+- O mapa web usa Leaflet com tiles publicos e mostra promotores conectados, ultima posicao e linha recente da rota.

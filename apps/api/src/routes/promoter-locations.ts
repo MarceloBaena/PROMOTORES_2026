@@ -79,8 +79,13 @@ promoterLocationsRouter.get(
         user: true,
         supervisor: { include: { user: true } },
         locations: {
+          where: {
+            capturedAt: {
+              gte: start
+            }
+          },
           orderBy: { capturedAt: "desc" },
-          take: 1
+          take: 24
         },
         visits: {
           where: { status: "in_progress" },
@@ -152,6 +157,15 @@ promoterLocationsRouter.get(
                 source: latestLocation.source
               }
             : null,
+          trail: promoter.locations
+            .slice()
+            .reverse()
+            .map((point) => ({
+              latitude: toNumber(point.latitude),
+              longitude: toNumber(point.longitude),
+              accuracyMeters: toNumber(point.accuracyMeters),
+              capturedAt: point.capturedAt
+            })),
           status: locationStatus(latestLocation?.capturedAt ?? null)
         };
       })
