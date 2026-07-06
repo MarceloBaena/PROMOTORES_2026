@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, FlatList, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { Alert, BackHandler, FlatList, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import Constants from "expo-constants";
 import * as FileSystem from "expo-file-system/legacy";
@@ -57,8 +57,8 @@ const LIVE_TRACKING_VISIT_INTERVAL_MS = 20 * 1000;
 const LIVE_TRACKING_ROUTE_INTERVAL_MS = 60 * 1000;
 const LIVE_TRACKING_ERROR_LOG_WINDOW_MS = 5 * 60 * 1000;
 const extraPhotoTypes = ["leaflet", "gondola", "display", "island", "promotional_material", "store_extra"] as const;
-const FALLBACK_APP_VERSION = "0.1.24";
-const FALLBACK_ANDROID_BUILD = 25;
+const FALLBACK_APP_VERSION = "0.1.25";
+const FALLBACK_ANDROID_BUILD = 26;
 
 const photoLabels: Record<PhotoType, string> = {
   checkin: "Check-in",
@@ -653,6 +653,26 @@ export default function App() {
     );
   }
 
+  function confirmExitApp() {
+    const pendingItems = syncSummary.pending ?? 0;
+    const failedItems = syncSummary.failed ?? 0;
+    const hasVisitInProgress = activeVisit?.status === "in_progress";
+    const bodyText = hasVisitInProgress
+      ? "Existe um atendimento em andamento neste aparelho. Sair agora fecha o aplicativo, mas mantem a visita, as fotos e a fila local salvas para continuar depois."
+      : pendingItems > 0 || failedItems > 0
+        ? `Existem ${pendingItems} item(ns) pendente(s) e ${failedItems} falha(s) na fila local. Sair agora fecha o aplicativo, mas nao apaga nenhum dado salvo no aparelho.`
+        : "O aplicativo sera fechado agora. Seus dados locais e a sessao atual continuam salvos neste aparelho.";
+
+    Alert.alert("Sair do app agora?", bodyText, [
+      { text: "Continuar no app", style: "cancel" },
+      {
+        text: "Sair agora",
+        style: "destructive",
+        onPress: () => BackHandler.exitApp()
+      }
+    ]);
+  }
+
   async function openVisit(item: RouteItem) {
     const existing = getVisitByRouteItem(item.id);
     setActiveItem(item);
@@ -1032,6 +1052,7 @@ export default function App() {
           <PrimaryButton label={busy ? "Entrando..." : "Entrar e baixar roteiro"} disabled={busy} onPress={handleLogin} />
           <SecondaryButton label="Testar conexao da API" disabled={busy} onPress={handleApiConnectionTest} />
           <SecondaryButton label="Entrar em modo teste sem internet" disabled={busy} onPress={() => startOfflineDemoMode()} />
+          <SecondaryButton label="Sair do app" tone="danger" disabled={busy} onPress={confirmExitApp} />
           <Text style={[styles.statusText, message.toLowerCase().includes("erro") || message.toLowerCase().includes("nao foi") || message.toLowerCase().includes("invalid") ? styles.statusError : null]}>
             {message}
           </Text>
@@ -1043,7 +1064,7 @@ export default function App() {
   if (screen === "sync") {
       return (
         <SafeAreaView style={styles.safe}>
-          <Header title="Sincronizacao" onBack={() => setScreen("home")} />
+          <Header title="Sincronizacao" onBack={() => setScreen("home")} onExitApp={confirmExitApp} />
           <View style={[styles.card, styles.screenCard, isTablet ? styles.screenCardTablet : null]}>
             <View style={styles.syncMetaRow}>
               <View style={styles.syncMetaCard}>
@@ -1096,7 +1117,7 @@ export default function App() {
 
     return (
       <SafeAreaView style={styles.safe}>
-        <Header title="Atendimento" onBack={() => returnToHome()} />
+        <Header title="Atendimento" onBack={() => returnToHome()} onExitApp={confirmExitApp} />
         <ScrollView contentContainerStyle={[styles.content, isCompact ? styles.contentCompact : null, isTablet ? styles.contentTablet : null]}>
           <View style={styles.cardStrong}>
             <Text style={styles.kicker}>Cliente #{activeItem.sequence}</Text>
@@ -1328,7 +1349,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <Header title="Roteiro do promotor" />
+      <Header title="Roteiro do promotor" onExitApp={confirmExitApp} />
       <View style={[styles.homeHero, isCompact ? styles.homeHeroCompact : null, isTablet ? styles.homeHeroTablet : null]}>
         <View>
           <Text style={styles.heroKicker}>Execucao de hoje</Text>
@@ -1379,7 +1400,7 @@ export default function App() {
   );
 }
 
-function Header(props: { title: string; onBack?: () => void }) {
+function Header(props: { title: string; onBack?: () => void; onExitApp?: () => void }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
   const isTablet = width >= 720;
@@ -1393,10 +1414,19 @@ function Header(props: { title: string; onBack?: () => void }) {
           <Text style={[styles.headerTitle, isCompact ? styles.headerTitleCompact : null]} numberOfLines={2}>{props.title}</Text>
           <Text style={styles.headerVersionText}>{APP_RELEASE.label}</Text>
         </View>
-        {props.onBack ? (
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Voltar ao menu principal" style={[styles.backButton, isCompact ? styles.backButtonCompact : null]} onPress={props.onBack}>
-            <Text style={styles.backButtonText}>Voltar</Text>
-          </TouchableOpacity>
+        {props.onBack || props.onExitApp ? (
+          <View style={styles.headerActions}>
+            {props.onBack ? (
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Voltar ao menu principal" style={[styles.backButton, isCompact ? styles.backButtonCompact : null]} onPress={props.onBack}>
+                <Text style={styles.backButtonText}>Voltar</Text>
+              </TouchableOpacity>
+            ) : null}
+            {props.onExitApp ? (
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Sair do aplicativo" style={[styles.headerExitButton, isCompact ? styles.headerExitButtonCompact : null]} onPress={props.onExitApp}>
+                <Text style={styles.headerExitButtonText}>Sair</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         ) : null}
       </View>
     </View>
@@ -1411,10 +1441,19 @@ function PrimaryButton(props: { label: string; disabled?: boolean; onPress: () =
   );
 }
 
-function SecondaryButton(props: { label: string; grow?: boolean; disabled?: boolean; onPress: () => void }) {
+function SecondaryButton(props: { label: string; grow?: boolean; tone?: "default" | "danger"; disabled?: boolean; onPress: () => void }) {
   return (
-    <TouchableOpacity style={[styles.secondaryButton, props.grow ? styles.buttonGrow : null, props.disabled ? styles.disabled : null]} disabled={props.disabled} onPress={props.onPress}>
-      <Text style={styles.secondaryText}>{props.label}</Text>
+    <TouchableOpacity
+      style={[
+        styles.secondaryButton,
+        props.tone === "danger" ? styles.secondaryButtonDanger : null,
+        props.grow ? styles.buttonGrow : null,
+        props.disabled ? styles.disabled : null
+      ]}
+      disabled={props.disabled}
+      onPress={props.onPress}
+    >
+      <Text style={[styles.secondaryText, props.tone === "danger" ? styles.secondaryTextDanger : null]}>{props.label}</Text>
     </TouchableOpacity>
   );
 }
@@ -1765,6 +1804,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 4
   },
+  headerActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "flex-end"
+  },
   headerTitle: {
     color: "#FFFFFF",
     fontSize: 24,
@@ -1789,6 +1835,26 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: "#0F172A",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  headerExitButton: {
+    alignItems: "center",
+    backgroundColor: "#FFF1F2",
+    borderColor: "#FECDD3",
+    borderRadius: 18,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 16
+  },
+  headerExitButtonCompact: {
+    borderRadius: 14,
+    minHeight: 40,
+    paddingHorizontal: 12
+  },
+  headerExitButtonText: {
+    color: "#BE123C",
     fontSize: 14,
     fontWeight: "900"
   },
@@ -1864,6 +1930,10 @@ const styles = StyleSheet.create({
     padding: 14,
     alignItems: "center"
   },
+  secondaryButtonDanger: {
+    backgroundColor: "#FFF1F2",
+    borderColor: "#FECDD3"
+  },
   buttonGrow: {
     flex: 1,
     minWidth: 150
@@ -1871,6 +1941,9 @@ const styles = StyleSheet.create({
   secondaryText: {
     color: "#0F172A",
     fontWeight: "900"
+  },
+  secondaryTextDanger: {
+    color: "#BE123C"
   },
   disabled: {
     opacity: 0.55
