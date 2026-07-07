@@ -15,6 +15,7 @@ import {
   type LoginResponse,
   type MobileSnapshot
 } from "./api";
+import { RouteMapScreen } from "./RouteMapScreen";
 import {
   addPhoto,
   addSyncLog,
@@ -42,10 +43,16 @@ import {
   type PhotoType
 } from "./database";
 import { createForegroundLocationTracker } from "./locationHeartbeat";
+import {
+  hasRouteMapCoordinates,
+  toCoordinateNumber,
+  type RouteMapPoint,
+  type RouteMapPromoterLocation
+} from "./routeMap";
 import { syncPending } from "./sync";
 import promotorProIcon from "../assets/icon.png";
 
-type Screen = "login" | "home" | "visit" | "sync";
+type Screen = "login" | "home" | "visit" | "sync" | "map";
 type RouteItem = ReturnType<typeof listRouteItems>[number];
 
 const TEST_PROMOTER_EMAIL = "promotor.teste@formula.local";
@@ -57,8 +64,8 @@ const LIVE_TRACKING_VISIT_INTERVAL_MS = 20 * 1000;
 const LIVE_TRACKING_ROUTE_INTERVAL_MS = 60 * 1000;
 const LIVE_TRACKING_ERROR_LOG_WINDOW_MS = 5 * 60 * 1000;
 const extraPhotoTypes = ["leaflet", "gondola", "display", "island", "promotional_material", "store_extra"] as const;
-const FALLBACK_APP_VERSION = "0.1.25";
-const FALLBACK_ANDROID_BUILD = 26;
+const FALLBACK_APP_VERSION = "0.1.26";
+const FALLBACK_ANDROID_BUILD = 27;
 
 const photoLabels: Record<PhotoType, string> = {
   checkin: "Check-in",
@@ -315,6 +322,8 @@ export default function App() {
   const [message, setMessage] = useState("Inicializando banco local...");
   const [syncSummary, setSyncSummary] = useState(getQueueSummary());
   const [syncDiagnostics, setSyncDiagnostics] = useState(listQueueDiagnostics());
+  const [routeMapLocation, setRouteMapLocation] = useState<RouteMapPromoterLocation | null>(null);
+  const [selectedMapRouteItemId, setSelectedMapRouteItemId] = useState<string | null>(null);
   const trackerRef = useRef<ReturnType<typeof createForegroundLocationTracker> | null>(null);
   const liveTrackingLogRef = useRef<{ mode: "visit" | "route" | null; lastErrorMessage: string | null; lastErrorAt: number }>({
     mode: null,
@@ -352,6 +361,31 @@ export default function App() {
     [clientSuppliers, supplierExecutions]
   );
   const allSuppliersCompleted = legacyFlowEnabled || incompleteSuppliers.length === 0;
+  const routeMapPoints = useMemo<RouteMapPoint[]>(
+    () =>
+      routeItems.map((item) => {
+        const client = getClient(item.clientId);
+        const payload = parseClientPayload(client);
+        const visit = getVisitByRouteItem(item.id);
+        const address = payload?.address ?? client?.address ?? item.clientAddress ?? "";
+        const city = payload?.city ?? client?.city ?? null;
+        const state = payload?.state ?? client?.state ?? null;
+
+        return {
+          routeItemId: item.id,
+          clientId: item.clientId,
+          sequence: item.sequence,
+          clientName: item.clientName,
+          address,
+          city,
+          state,
+          latitude: toCoordinateNumber(payload?.latitude),
+          longitude: toCoordinateNumber(payload?.longitude),
+          status: visit?.status ?? "pending"
+        };
+      }),
+    [routeItems, activeVisit?.localId, activeVisit?.status]
+  );
 
   function reloadLocalData() {
     setRouteItems(listRouteItems());
@@ -510,6 +544,20 @@ export default function App() {
     setProductsReplenished(activeSupplierExecution.productsReplenished ?? null);
     setStockoutFound(activeSupplierExecution.stockoutFound ?? null);
   }, [activeSupplierExecution?.localId, activeSupplierExecution?.updatedAt]);
+
+  useEffect(() => {
+    if (routeMapPoints.length === 0) {
+      setSelectedMapRouteItemId(null);
+      return;
+    }
+
+    if (selectedMapRouteItemId && routeMapPoints.some((point) => point.routeItemId === selectedMapRouteItemId)) {
+      return;
+    }
+
+    const firstPointWithCoordinates = routeMapPoints.find(hasRouteMapCoordinates);
+    setSelectedMapRouteItemId(firstPointWithCoordinates?.routeItemId ?? routeMapPoints[0]?.routeItemId ?? null);
+  }, [routeMapPoints, selectedMapRouteItemId]);
 
   async function handleLogin() {
     const normalizedEmail = email.trim().toLowerCase();
@@ -673,6 +721,38 @@ export default function App() {
     ]);
   }
 
+  async function refreshRouteMapLocation() {
+    const gps = await getGps({ silent: true });
+
+    if (!gps) {
+      setRouteMapLocation(null);
+      setMessage("Nao foi possivel ler o GPS do aparelho agora. O mapa continua mostrando os clientes com coordenada.");
+      Alert.alert("GPS indisponivel", "Nao foi possivel atualizar sua posicao atual agora. Verifique a permissao de localizacao e tente novamente.");
+      return;
+    }
+
+    setRouteMapLocation({
+      latitude: gps.latitude,
+      longitude: gps.longitude,
+      accuracyMeters: gps.accuracyMeters ?? null,
+      capturedAt: nowIso()
+    });
+    setMessage("Minha posicao foi atualizada no mapa do roteiro.");
+  }
+
+  function openRouteMap() {
+    if (routeMapPoints.length === 0) {
+      Alert.alert("Sem clientes pendentes", "Nao existe cliente pendente no roteiro para abrir no mapa neste momento.");
+      return;
+    }
+
+    const firstPointWithCoordinates = routeMapPoints.find(hasRouteMapCoordinates);
+    setSelectedMapRouteItemId(firstPointWithCoordinates?.routeItemId ?? routeMapPoints[0]?.routeItemId ?? null);
+    setScreen("map");
+    setMessage("Mapa do roteiro aberto. Selecione um cliente para navegar ou iniciar o atendimento.");
+    void refreshRouteMapLocation();
+  }
+
   async function openVisit(item: RouteItem) {
     const existing = getVisitByRouteItem(item.id);
     setActiveItem(item);
@@ -682,6 +762,17 @@ export default function App() {
     setSupplierExecutions(existing ? listSupplierExecutions(existing.localId) : []);
     setActiveSupplierId(null);
     setScreen("visit");
+  }
+
+  function openVisitByRouteItemId(routeItemId: string) {
+    const item = routeItems.find((entry) => entry.id === routeItemId);
+
+    if (!item) {
+      Alert.alert("Cliente nao encontrado", "O roteiro foi atualizado e este cliente nao esta mais disponivel no aparelho.");
+      return;
+    }
+
+    void openVisit(item);
   }
 
   function ensureSupplierExecution(supplierId: string) {
@@ -1109,6 +1200,23 @@ export default function App() {
     );
   }
 
+  if (screen === "map") {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <Header title="Mapa do roteiro" onBack={() => setScreen("home")} onExitApp={confirmExitApp} />
+        <RouteMapScreen
+          busy={busy}
+          points={routeMapPoints}
+          selectedRouteItemId={selectedMapRouteItemId}
+          promoterLocation={routeMapLocation}
+          onSelectRouteItem={setSelectedMapRouteItemId}
+          onOpenVisit={openVisitByRouteItemId}
+          onRefreshPromoterLocation={() => void refreshRouteMapLocation()}
+        />
+      </SafeAreaView>
+    );
+  }
+
   if (screen === "visit" && activeItem) {
     const client = activeClient ?? getClient(activeItem.clientId);
     const visitCompleted = activeVisit?.status === "completed";
@@ -1373,6 +1481,7 @@ export default function App() {
       <View style={[styles.toolbar, isCompact ? styles.toolbarCompact : null, isTablet ? styles.toolbarTablet : null]}>
         <SecondaryButton label="Atualizar roteiro" grow disabled={busy} onPress={refreshSnapshot} />
         <SecondaryButton label="Sincronizar" grow disabled={busy} onPress={() => setScreen("sync")} />
+        <SecondaryButton label="Mapa do dia" grow disabled={busy || routeItems.length === 0} onPress={openRouteMap} />
       </View>
       <Text style={styles.statusText}>{message}</Text>
       <FlatList

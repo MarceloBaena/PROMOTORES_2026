@@ -16,6 +16,8 @@ App Expo/React Native para Android com operacao offline-first.
 - Fila persistente de sincronizacao.
 - Logs locais de sync.
 - Retry manual quando a internet voltar.
+- Mapa operacional no app com clientes posicionados quando houver latitude/longitude.
+- Abertura de navegacao externa para o cliente selecionado.
 
 ## Comandos
 
@@ -50,3 +52,5 @@ npm run android
 - Quando o cliente tiver fornecedores vinculados, todos precisam ser concluidos com foto antes, foto depois e respostas obrigatorias antes do check-out final.
 - Se o promotor marcar que o fornecedor nao recebeu mercadoria, o sistema permite concluir esse fornecedor sem fotos antes/depois e sem abastecimento.
 - O mapa ao vivo so envia localizacao em primeiro plano e durante jornada operacional ativa.
+- O mapa do roteiro precisa de internet para carregar as ruas, mas a lista de clientes continua disponivel mesmo sem sinal.
+- Clientes sem latitude/longitude continuam aparecendo no roteiro, mas sem marcador no mapa ate o cadastro ser completado.
