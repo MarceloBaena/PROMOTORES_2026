@@ -455,6 +455,10 @@ export function CrudPage({
             .map((fieldName) => fields.find((field) => field.name === fieldName))
             .filter((field): field is Field => Boolean(field));
           const columnsClass = section.columns === 1 ? "grid-cols-1" : "sm:grid-cols-2";
+          const showSectionHeader =
+            Boolean(section.description) ||
+            resolvedFieldSections.length > 1 ||
+            section.title !== "Dados do cadastro";
 
           if (sectionFields.length === 0) {
             return null;
@@ -462,15 +466,14 @@ export function CrudPage({
 
           return (
             <section key={section.title} className="rounded-[1.35rem] border border-line/80 bg-white p-4 shadow-sm sm:p-5">
-              <div className="mb-4">
-                <div className="mb-2 inline-flex rounded-full border border-brand/10 bg-brandSoft px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-brand">
-                  Bloco do cadastro
+              {showSectionHeader ? (
+                <div className="mb-4">
+                  <h3 className="text-base font-black tracking-tight text-ink">{section.title}</h3>
+                  {section.description ? (
+                    <p className="mt-1 text-sm leading-6 text-slateText">{section.description}</p>
+                  ) : null}
                 </div>
-                <h3 className="text-sm font-black uppercase tracking-[0.12em] text-ink">{section.title}</h3>
-                {section.description ? (
-                  <p className="mt-1 text-sm font-semibold leading-6 text-slateText">{section.description}</p>
-                ) : null}
-              </div>
+              ) : null}
               <div className={`grid gap-5 ${columnsClass}`}>
                 {sectionFields.map((field) => renderField(field))}
               </div>
@@ -485,9 +488,6 @@ export function CrudPage({
     <form onSubmit={onSubmit} className={formMode === "drawer" ? "flex h-full flex-col" : "panel overflow-hidden xl:sticky xl:top-20 xl:self-start"}>
       <div className="panel-header">
         <div>
-          <div className="mb-2 inline-flex rounded-full border border-brand/10 bg-brandSoft px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-brand">
-            {editingId ? "Edicao em andamento" : "Novo cadastro"}
-          </div>
           <h2 className="panel-title">{formTitle}</h2>
           {resolvedFormSubtitle ? (
             <p className="panel-subtitle">{resolvedFormSubtitle}</p>
@@ -507,23 +507,6 @@ export function CrudPage({
 
       <div className={formMode === "drawer" ? "flex-1 overflow-y-auto p-5 sm:p-6" : "p-6"}>
         {message && formMode === "drawer" ? <div className="notice notice-warning">{message}</div> : null}
-
-        {formMode === "drawer" ? (
-          <div className="mb-5 grid gap-3 rounded-[1.35rem] border border-brand/10 bg-gradient-to-r from-brandSoft via-white to-executionSoft p-4 sm:grid-cols-3">
-            <div>
-              <div className="field-label">Codigo</div>
-              <div className="text-sm font-black text-ink">{String(form.code ?? "Automatico") || "Automatico"}</div>
-            </div>
-            <div>
-              <div className="field-label">Situacao</div>
-              <div className="text-sm font-black text-ink">{String(form.status ?? "ACTIVE") === "ACTIVE" ? "Ativo" : String(form.status ?? "-")}</div>
-            </div>
-            <div>
-              <div className="field-label">Operacao</div>
-              <div className="text-sm font-black text-ink">{editingId ? "Alteracao de cadastro" : "Novo cadastro"}</div>
-            </div>
-          </div>
-        ) : null}
 
         {renderFormContents()}
 
@@ -584,7 +567,7 @@ export function CrudPage({
 
       {message && !(formMode === "drawer" && isFormOpen) ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className={formMode === "drawer" ? "space-y-4" : "grid gap-4 2xl:grid-cols-[minmax(0,1fr)_400px]"}>
+      <div className={formMode === "drawer" ? "space-y-4" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]"}>
         <div className="table-wrap">
           <div className="border-b border-line/80 bg-gradient-to-r from-white to-skywash/60 p-4">
             <form
@@ -637,11 +620,11 @@ export function CrudPage({
                 Buscar
               </button>
             </form>
-            <div className="mt-2 text-xs font-semibold text-stone-500">
+            <div className="mt-3 text-xs font-semibold text-stone-500">
               {hasActiveSearch
                 ? submittedSearch
-                  ? `Exibindo ${items.length} registro(s) para a pesquisa atual.`
-                  : `Exibindo ${items.length} registro(s) do cadastro.`
+                  ? `Exibindo ${items.length} registro(s) encontrados.`
+                  : `Exibindo ${items.length} registro(s).`
                 : searchHint}
             </div>
           </div>
