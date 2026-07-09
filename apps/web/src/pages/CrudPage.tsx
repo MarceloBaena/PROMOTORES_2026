@@ -584,35 +584,6 @@ export function CrudPage({
 
       {message && !(formMode === "drawer" && isFormOpen) ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className="mb-4 kpi-strip">
-        <div className="kpi-tile">
-          <div className="kpi-tile-title">Registros exibidos</div>
-          <div className="kpi-tile-value">{items.length}</div>
-          <div className="mt-2 text-xs font-semibold text-slateText">
-            {submittedSearch ? "Resultado filtrado pela busca atual." : "Leitura direta do cadastro selecionado."}
-          </div>
-        </div>
-        <div className="kpi-tile">
-          <div className="kpi-tile-title">Acao atual</div>
-          <div className="mt-2 text-xl font-black text-ink">{editingId ? "Alterando registro" : "Pronto para incluir"}</div>
-          <div className="mt-2 text-xs font-semibold text-slateText">
-            {editingId ? "O formulario foi carregado com os dados do cadastro." : "Use o formulario para incluir um novo item."}
-          </div>
-        </div>
-        <div className="kpi-tile">
-          <div className="kpi-tile-title">Consulta</div>
-          <div className="mt-2 text-xl font-black text-ink">{requiresSearch ? "Busca guiada" : "Lista aberta"}</div>
-          <div className="mt-2 text-xs font-semibold text-slateText">{searchHint}</div>
-        </div>
-        <div className="kpi-tile">
-          <div className="kpi-tile-title">Formulario</div>
-          <div className="mt-2 text-xl font-black text-ink">{formMode === "drawer" ? "Painel lateral" : "Painel fixo"}</div>
-          <div className="mt-2 text-xs font-semibold text-slateText">
-            {formMode === "drawer" ? "Mantem a consulta limpa e abre o cadastro quando voce precisa." : "Cadastro visivel ao lado da grade para agilizar a operacao."}
-          </div>
-        </div>
-      </div>
-
       <div className={formMode === "drawer" ? "space-y-4" : "grid gap-4 2xl:grid-cols-[minmax(0,1fr)_400px]"}>
         <div className="table-wrap">
           <div className="border-b border-line/80 bg-gradient-to-r from-white to-skywash/60 p-4">
