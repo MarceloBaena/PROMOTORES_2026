@@ -4,6 +4,7 @@ import { Check, Edit3, Plus, RefreshCcw, Search, Trash2, X } from "lucide-react"
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { apiJson } from "../lib/api";
+import { formatPhone } from "../lib/phone";
 
 type FormValue = string | string[];
 
@@ -11,7 +12,8 @@ interface Field {
   name: string;
   label: string;
   source?: string;
-  type?: "text" | "email" | "password" | "select" | "search" | "multiselect";
+  type?: "text" | "email" | "password" | "select" | "search" | "multiselect" | "tel";
+  format?: "phone";
   options?: Array<string | { value: string; label: string }>;
   placeholder?: string;
   description?: string;
@@ -342,6 +344,7 @@ export function CrudPage({
     const wrapperClass = field.fullWidth ? "sm:col-span-2" : "";
     const labelClass = `block ${wrapperClass}`.trim();
     const selectOptions = field.options ?? [];
+    const fieldValue = form[field.name];
     const filteredOptions = field.searchable && searchFilters[field.name]
       ? selectOptions.filter((option) => {
           const label = typeof option === "string" ? option : option.label;
@@ -426,8 +429,15 @@ export function CrudPage({
             type={field.type ?? "text"}
             placeholder={field.placeholder}
             readOnly={field.readOnly}
-            value={String(form[field.name] ?? "")}
-            onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
+            inputMode={field.type === "tel" ? "numeric" : undefined}
+            autoComplete={field.type === "tel" ? "tel" : undefined}
+            value={field.format === "phone" ? formatPhone(fieldValue) : String(fieldValue ?? "")}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                [field.name]: field.format === "phone" ? formatPhone(event.target.value) : event.target.value
+              }))
+            }
           />
         )}
         {field.description ? (

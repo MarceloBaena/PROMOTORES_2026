@@ -3,6 +3,7 @@ import { CrudPage, userEmail, userName, userStatus } from "./CrudPage";
 import { useAuth } from "../context/AuthContext";
 import { apiJson } from "../lib/api";
 import { companyLabel, toCompanyOptions, type CompanyOption } from "../lib/company-options";
+import { formatPhone } from "../lib/phone";
 
 function numericCode(item: Record<string, unknown>, prefix: "PRO" | "SUP") {
   const code = Number(item.code);
@@ -76,6 +77,8 @@ export function PromotersPage() {
         {
           name: "phone",
           label: "Telefone",
+          type: "tel",
+          format: "phone",
           placeholder: "(65) 99999-9999",
           description: "Numero do aparelho ou telefone principal do promotor para controle operacional.",
           fullWidth: true
@@ -105,7 +108,7 @@ export function PromotersPage() {
         { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
         { label: "Nome", value: userName },
         { label: "E-mail", value: userEmail },
-        { label: "Telefone", value: (item) => String(item.phone ?? "-") },
+        { label: "Telefone", value: (item) => formatPhone(item.phone) || "-" },
         { label: "Situação", value: userStatus },
         {
           label: "Supervisor",
