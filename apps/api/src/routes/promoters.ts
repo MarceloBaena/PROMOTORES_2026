@@ -23,6 +23,10 @@ const createSchema = z.object({
     emptyStringToUndefined,
     z.string().min(8, "A senha precisa ter pelo menos 8 caracteres.").optional()
   ),
+  phone: z.preprocess(
+    emptyStringToUndefined,
+    z.string().trim().optional()
+  ),
   companyId: z.preprocess(
     emptyStringToUndefined,
     z.string().uuid("Selecione uma empresa/filial valida.").optional()
@@ -128,7 +132,8 @@ promotersRouter.post(
           companyId,
           userId: user.id,
           status: "ACTIVE",
-          supervisorId
+          supervisorId,
+          phone: input.phone
         },
         include: {
           user: { include: { role: true } },
@@ -188,7 +193,8 @@ promotersRouter.put(
         data: {
           companyId,
           supervisorId,
-          status: input.status
+          status: input.status,
+          phone: input.phone
         },
         include: {
           user: { include: { role: true } },

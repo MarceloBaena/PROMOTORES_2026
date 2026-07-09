@@ -267,6 +267,7 @@ model Promoter {
   supervisorId String?            @map("supervisor_id")
   supervisor   Supervisor?        @relation(fields: [supervisorId], references: [id])
   status       ProfileStatus      @default(ACTIVE)
+  phone        String?
   routes       Route[]
   visits       Visit[]
   locations    PromoterLocation[]

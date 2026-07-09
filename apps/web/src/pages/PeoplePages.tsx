@@ -57,7 +57,7 @@ export function PromotersPage() {
     <CrudPage
       title="Promotores"
       endpoint="/promoters"
-      initialValues={{ name: "", email: "", password: "", companyId: user?.companyId ?? "", supervisorId: "" }}
+      initialValues={{ name: "", email: "", phone: "", password: "", companyId: user?.companyId ?? "", supervisorId: "" }}
       fields={[
         ...(isPlatformAdmin
           ? [{
@@ -73,6 +73,13 @@ export function PromotersPage() {
           : []),
         { name: "name", source: "user.name", label: "Nome", placeholder: "Nome do promotor", required: true, fullWidth: true },
         { name: "email", source: "user.email", label: "E-mail", type: "email", placeholder: "email@exemplo.com", required: true, fullWidth: true },
+        {
+          name: "phone",
+          label: "Telefone",
+          placeholder: "(65) 99999-9999",
+          description: "Numero do aparelho ou telefone principal do promotor para controle operacional.",
+          fullWidth: true
+        },
         {
           name: "password",
           label: "Senha",
@@ -98,6 +105,7 @@ export function PromotersPage() {
         { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
         { label: "Nome", value: userName },
         { label: "E-mail", value: userEmail },
+        { label: "Telefone", value: (item) => String(item.phone ?? "-") },
         { label: "Situação", value: userStatus },
         {
           label: "Supervisor",
