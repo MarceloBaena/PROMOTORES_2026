@@ -18,8 +18,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const testPromoterEmail = 'promotor.teste@formula.local';
-const testPromoterPassword = 'Promotor@123';
+const appVersionLabel = 'APK Flutter v1.0.1 (build 2)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -250,12 +249,11 @@ class _PromotorProAppState extends State<PromotorProApp> {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        VisitPage(
-                          repository: widget.repository,
-                          item: item,
-                          promoterName: session!.user.name,
-                        ),
+                    builder: (_) => VisitPage(
+                      repository: widget.repository,
+                      item: item,
+                      promoterName: session!.user.name,
+                    ),
                   ),
                 );
                 await _reload();
@@ -291,8 +289,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final emailController = TextEditingController(text: testPromoterEmail);
-  final passwordController = TextEditingController(text: testPromoterPassword);
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
 
   @override
   void dispose() {
@@ -348,6 +346,15 @@ class _LoginPageState extends State<LoginPage> {
           ),
           const SizedBox(height: 14),
           MessageBox(message: widget.message),
+          const SizedBox(height: 12),
+          const Text(
+            appVersionLabel,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -380,6 +387,19 @@ class HomePage extends StatelessWidget {
   final void Function(RouteItemView item) onOpenVisit;
   final VoidCallback onLogout;
 
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await confirmAction(
+      context,
+      title: 'Sair do aplicativo',
+      body:
+          'Deseja encerrar a sessao neste aparelho agora? O roteiro offline fica salvo, mas sera necessario entrar novamente para sincronizar.',
+      confirmLabel: 'Sair agora',
+    );
+    if (confirmed == true) {
+      onLogout();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pendingItems = routeItems.where((item) => !item.isDone).toList();
@@ -390,7 +410,7 @@ class HomePage extends StatelessWidget {
           AppTopBar(
             title: 'Roteiro do promotor',
             subtitle: 'Promotor: ${session.user.name}',
-            onLogout: onLogout,
+            onLogout: () => unawaited(_confirmLogout(context)),
           ),
           Expanded(
             child: RefreshIndicator(
@@ -423,6 +443,12 @@ class HomePage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 14),
+                  OperatorIdentityCard(
+                    promoterName: session.user.name,
+                    promoterEmail: session.user.email,
+                    versionLabel: appVersionLabel,
+                  ),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
@@ -444,6 +470,13 @@ class HomePage extends StatelessWidget {
                   SecondaryButton(
                     label: 'Ver fila de sincronizacao',
                     onPressed: onOpenSync,
+                  ),
+                  const SizedBox(height: 10),
+                  DangerButton(
+                    label: 'Sair do app',
+                    onPressed: busy
+                        ? null
+                        : () => unawaited(_confirmLogout(context)),
                   ),
                   const SizedBox(height: 14),
                   MessageBox(message: message),
@@ -504,7 +537,8 @@ class _VisitPageState extends State<VisitPage> {
   bool get hasCheckin => photos.any((photo) => photo.type == 'checkin');
   bool get hasBefore => photos.any((photo) => photo.type == 'before');
   bool get hasAfter => photos.any((photo) => photo.type == 'after');
-  bool get requiredReady => hasCheckin && hasBefore && hasAfter;
+  bool get hasCheckout => photos.any((photo) => photo.type == 'checkout');
+  bool get requiredReady => hasCheckin && hasBefore && hasAfter && hasCheckout;
 
   @override
   void initState() {
@@ -542,8 +576,8 @@ class _VisitPageState extends State<VisitPage> {
       final created = await widget.repository.startVisit(widget.item);
       await _load();
       setState(
-        () =>
-            message = 'Atendimento iniciado offline. Agora capture o check-in.',
+        () => message =
+            'Atendimento iniciado offline. Agora capture check-in, antes, depois e check-out.',
       );
       unawaited(widget.repository.sendHeartbeatFromVisit(created));
     } catch (error) {
@@ -581,7 +615,7 @@ class _VisitPageState extends State<VisitPage> {
     if (!requiredReady) {
       setState(
         () => message =
-            'Obrigatorio capturar check-in, foto antes e foto depois antes de encerrar.',
+            'Obrigatorio capturar check-in, foto antes, foto depois e check-out antes de encerrar.',
       );
       return;
     }
@@ -637,6 +671,11 @@ class _VisitPageState extends State<VisitPage> {
                     label: 'Foto depois',
                     ok: hasAfter,
                     onPressed: busy ? null : () => _capture('after'),
+                  ),
+                  EvidenceButton(
+                    label: 'Check-out com foto',
+                    ok: hasCheckout,
+                    onPressed: busy ? null : () => _capture('checkout'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -725,6 +764,16 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   Future<void> _clearLocalData() async {
+    final confirmed = await confirmAction(
+      context,
+      title: 'Limpar dados locais',
+      body:
+          'Deseja realmente apagar roteiro, fila de sincronizacao, visitas e fotos salvas neste aparelho? Esta acao nao pode ser desfeita.',
+      confirmLabel: 'Limpar agora',
+    );
+    if (confirmed != true) {
+      return;
+    }
     await widget.repository.clearLocalOperationalData();
     await widget.onChanged(
       nextMessage: 'Dados locais operacionais limpos neste aparelho.',
@@ -918,9 +967,10 @@ class AppRepository {
     final types = photos.map((photo) => photo.type).toSet();
     if (!types.contains('checkin') ||
         !types.contains('before') ||
-        !types.contains('after')) {
+        !types.contains('after') ||
+        !types.contains('checkout')) {
       throw Exception(
-        'Nao e permitido encerrar sem check-in, foto antes e foto depois.',
+        'Nao e permitido encerrar sem check-in, foto antes, foto depois e check-out.',
       );
     }
 
@@ -985,9 +1035,10 @@ class AppRepository {
     final types = photos.map((photo) => photo.type).toSet();
     if (!types.contains('checkin') ||
         !types.contains('before') ||
-        !types.contains('after')) {
+        !types.contains('after') ||
+        !types.contains('checkout')) {
       throw Exception(
-        'Visita concluida localmente sem todas as fotos obrigatorias.',
+        'Visita concluida localmente sem todas as fotos obrigatorias, incluindo check-out.',
       );
     }
 
@@ -1208,10 +1259,10 @@ class LocalDatabase {
     final path = p.join(directory.path, 'promotorpro_flutter.db');
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute(
-          'CREATE TABLE clients (id TEXT PRIMARY KEY, code TEXT, name TEXT NOT NULL, address TEXT, city TEXT, state TEXT, payload_json TEXT NOT NULL)',
+          'CREATE TABLE clients (id TEXT PRIMARY KEY, code TEXT, name TEXT NOT NULL, address TEXT, city TEXT, state TEXT, latitude REAL, longitude REAL, payload_json TEXT NOT NULL)',
         );
         await db.execute(
           'CREATE TABLE routes (id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT NOT NULL, scheduled_date TEXT, payload_json TEXT NOT NULL)',
@@ -1231,6 +1282,16 @@ class LocalDatabase {
         await db.execute(
           'CREATE TABLE sync_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT NOT NULL)',
         );
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          try {
+            await db.execute('ALTER TABLE clients ADD COLUMN latitude REAL');
+          } catch (_) {}
+          try {
+            await db.execute('ALTER TABLE clients ADD COLUMN longitude REAL');
+          } catch (_) {}
+        }
       },
     );
     return _db!;
@@ -1285,6 +1346,8 @@ class LocalDatabase {
         route_items.status,
         clients.name AS clientName,
         clients.address AS clientAddress,
+        clients.latitude AS clientLatitude,
+        clients.longitude AS clientLongitude,
         routes.name AS routeName,
         visits.status AS visitStatus
       FROM route_items
@@ -1631,6 +1694,8 @@ class ClientSnapshot {
     this.address,
     this.city,
     this.state,
+    this.latitude,
+    this.longitude,
     required this.payload,
   });
 
@@ -1640,6 +1705,8 @@ class ClientSnapshot {
   final String? address;
   final String? city;
   final String? state;
+  final double? latitude;
+  final double? longitude;
   final Map<String, dynamic> payload;
 
   factory ClientSnapshot.fromJson(Map<String, dynamic> json) => ClientSnapshot(
@@ -1649,6 +1716,8 @@ class ClientSnapshot {
     address: json['address'] as String?,
     city: json['city'] as String?,
     state: json['state'] as String?,
+    latitude: asDouble(json['latitude']),
+    longitude: asDouble(json['longitude']),
     payload: json,
   );
 
@@ -1659,6 +1728,8 @@ class ClientSnapshot {
     'address': address,
     'city': city,
     'state': state,
+    'latitude': latitude,
+    'longitude': longitude,
     'payload_json': jsonEncode(payload),
   };
 }
@@ -1746,6 +1817,8 @@ class RouteItemView {
     required this.status,
     required this.clientName,
     this.clientAddress,
+    this.clientLatitude,
+    this.clientLongitude,
     required this.routeName,
     this.visitStatus,
   });
@@ -1757,11 +1830,14 @@ class RouteItemView {
   final String status;
   final String clientName;
   final String? clientAddress;
+  final double? clientLatitude;
+  final double? clientLongitude;
   final String routeName;
   final String? visitStatus;
 
   bool get isDone =>
       status.toUpperCase() == 'COMPLETED' || visitStatus == 'completed';
+  bool get hasCoordinates => clientLatitude != null && clientLongitude != null;
 
   factory RouteItemView.fromDb(Map<String, Object?> row) => RouteItemView(
     id: row['id'] as String,
@@ -1771,6 +1847,8 @@ class RouteItemView {
     status: row['status'] as String,
     clientName: row['clientName'] as String,
     clientAddress: row['clientAddress'] as String?,
+    clientLatitude: asDouble(row['clientLatitude']),
+    clientLongitude: asDouble(row['clientLongitude']),
     routeName: row['routeName'] as String,
     visitStatus: row['visitStatus'] as String?,
   );
@@ -2052,6 +2130,32 @@ String normalizedError(Object error) {
   return text.isEmpty ? 'Erro desconhecido.' : text;
 }
 
+Future<bool?> confirmAction(
+  BuildContext context, {
+  required String title,
+  required String body,
+  required String confirmLabel,
+}) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(body),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: FilledButton.styleFrom(backgroundColor: brandBlue),
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  );
+}
+
 int asInt(Object? value) {
   if (value == null) return 0;
   if (value is int) return value;
@@ -2071,6 +2175,7 @@ String photoLabel(String type) {
     'checkin' => 'Check-in',
     'before' => 'Foto antes',
     'after' => 'Foto depois',
+    'checkout' => 'Check-out',
     _ => 'Ocorrencia',
   };
 }
@@ -2269,6 +2374,98 @@ class SecondaryButton extends StatelessWidget {
   }
 }
 
+class DangerButton extends StatelessWidget {
+  const DangerButton({super.key, required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFFEF4444)),
+          foregroundColor: const Color(0xFFB91C1C),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+      ),
+    );
+  }
+}
+
+class OperatorIdentityCard extends StatelessWidget {
+  const OperatorIdentityCard({
+    super.key,
+    required this.promoterName,
+    required this.promoterEmail,
+    required this.versionLabel,
+  });
+
+  final String promoterName;
+  final String promoterEmail;
+  final String versionLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 24,
+            backgroundColor: brandNavy,
+            child: Icon(Icons.person, color: Colors.white),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  promoterName,
+                  style: const TextStyle(
+                    color: brandNavy,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  promoterEmail,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  versionLabel,
+                  style: const TextStyle(
+                    color: brandBlue,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class MessageBox extends StatelessWidget {
   const MessageBox({super.key, required this.message});
 
@@ -2434,7 +2631,7 @@ class RouteItemCard extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w900, color: brandNavy),
         ),
         subtitle: Text(
-          '${item.clientAddress ?? 'Endereco nao informado'}\n${item.routeName}',
+          '${item.clientAddress ?? 'Endereco nao informado'}\n${item.routeName}${item.hasCoordinates ? '\nGPS do cliente disponivel' : ''}',
         ),
         trailing: const Icon(Icons.chevron_right),
       ),
@@ -2483,6 +2680,16 @@ class ClientHero extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
+          if (item.hasCoordinates) ...[
+            const SizedBox(height: 6),
+            Text(
+              'GPS do cliente: ${item.clientLatitude!.toStringAsFixed(6)}, ${item.clientLongitude!.toStringAsFixed(6)}',
+              style: const TextStyle(
+                color: Color(0xFF93C5FD),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Chip(
             label: Text(
