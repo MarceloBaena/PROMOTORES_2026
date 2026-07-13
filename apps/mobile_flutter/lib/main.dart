@@ -18,7 +18,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.1 (build 4)';
+const appVersionLabel = 'APK Flutter v1.1.2 (build 5)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -43,6 +43,7 @@ class PromotorProApp extends StatefulWidget {
 }
 
 class _PromotorProAppState extends State<PromotorProApp> {
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   Session? session;
   List<RouteItemView> routeItems = [];
   QueueSummary queueSummary = const QueueSummary(pending: 0, failed: 0);
@@ -194,9 +195,24 @@ class _PromotorProAppState extends State<PromotorProApp> {
     }
   }
 
+  Future<T?> _pushPage<T>(Widget page) async {
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) {
+      throw Exception(
+        'A navegacao do aplicativo ainda nao esta pronta. Feche e abra o app novamente.',
+      );
+    }
+    return navigator.push<T>(MaterialPageRoute(builder: (_) => page));
+  }
+
   void _showError(String title, String text) {
+    final dialogContext = navigatorKey.currentContext;
+    if (dialogContext == null) {
+      debugPrint('Falha ao abrir dialogo: $title - $text');
+      return;
+    }
     showDialog<void>(
-      context: context,
+      context: dialogContext,
       builder: (context) => AlertDialog(
         title: Text(title),
         content: Text(text),
@@ -214,6 +230,7 @@ class _PromotorProAppState extends State<PromotorProApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
       title: 'PromotorPro',
       theme: ThemeData(
         useMaterial3: true,
@@ -234,10 +251,9 @@ class _PromotorProAppState extends State<PromotorProApp> {
               busy: busy,
               onRefresh: _refreshRoute,
               onSync: _syncNow,
-              onOpenSync: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SyncPage(
+              onOpenSync: () => unawaited(
+                _pushPage(
+                  SyncPage(
                     repository: widget.repository,
                     promoterName: session!.user.name,
                     onSync: _syncNow,
@@ -252,14 +268,11 @@ class _PromotorProAppState extends State<PromotorProApp> {
                   message = 'Abrindo atendimento de ${item.clientName}...';
                 });
                 try {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => VisitPage(
-                        repository: widget.repository,
-                        item: item,
-                        promoterName: session!.user.name,
-                      ),
+                  await _pushPage(
+                    VisitPage(
+                      repository: widget.repository,
+                      item: item,
+                      promoterName: session!.user.name,
                     ),
                   );
                   await _reload();
