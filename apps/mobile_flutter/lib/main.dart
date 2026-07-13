@@ -18,7 +18,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.0 (build 3)';
+const appVersionLabel = 'APK Flutter v1.1.1 (build 4)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -246,17 +246,38 @@ class _PromotorProAppState extends State<PromotorProApp> {
                 ),
               ),
               onOpenVisit: (item) async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => VisitPage(
-                      repository: widget.repository,
-                      item: item,
-                      promoterName: session!.user.name,
+                if (busy) return;
+                setState(() {
+                  busy = true;
+                  message = 'Abrindo atendimento de ${item.clientName}...';
+                });
+                try {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => VisitPage(
+                        repository: widget.repository,
+                        item: item,
+                        promoterName: session!.user.name,
+                      ),
                     ),
-                  ),
-                );
-                await _reload();
+                  );
+                  await _reload();
+                } catch (error, stackTrace) {
+                  debugPrint(
+                    'Falha ao abrir atendimento ${item.id}: $error\n$stackTrace',
+                  );
+                  if (!mounted) return;
+                  setState(
+                    () => message =
+                        'Nao foi possivel abrir o cliente ${item.clientName}. ${normalizedError(error)}',
+                  );
+                  _showError('Falha ao abrir cliente', normalizedError(error));
+                } finally {
+                  if (mounted) {
+                    setState(() => busy = false);
+                  }
+                }
               },
               onLogout: () async {
                 heartbeatTimer?.cancel();
@@ -384,7 +405,7 @@ class HomePage extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onSync;
   final VoidCallback onOpenSync;
-  final void Function(RouteItemView item) onOpenVisit;
+  final Future<void> Function(RouteItemView item) onOpenVisit;
   final VoidCallback onLogout;
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -582,49 +603,76 @@ class _VisitPageState extends State<VisitPage> {
   }
 
   Future<void> _load() async {
-    final currentVisit = await widget.repository.getVisitByRouteItem(
-      widget.item.id,
-    );
-    final currentClient = await widget.repository.getClientSnapshot(
-      widget.item.clientId,
-    );
-    final currentPhotos = currentVisit == null
-        ? <LocalPhoto>[]
-        : await widget.repository.listPhotos(currentVisit.localId);
-    final currentSupplierExecutions = currentVisit == null
-        ? <LocalSupplierExecution>[]
-        : await widget.repository.listSupplierExecutions(currentVisit.localId);
-    if (!mounted) return;
+    try {
+      final currentVisit = await widget.repository.getVisitByRouteItem(
+        widget.item.id,
+      );
+      final currentClient = await widget.repository.getClientSnapshot(
+        widget.item.clientId,
+      );
+      if (currentClient == null) {
+        throw Exception(
+          'Cliente nao encontrado no aparelho. Atualize o roteiro e tente novamente.',
+        );
+      }
+      final currentPhotos = currentVisit == null
+          ? <LocalPhoto>[]
+          : await widget.repository.listPhotos(currentVisit.localId);
+      final currentSupplierExecutions = currentVisit == null
+          ? <LocalSupplierExecution>[]
+          : await widget.repository.listSupplierExecutions(
+              currentVisit.localId,
+            );
+      if (!mounted) return;
 
-    final selectedExecution = findSupplierExecution(
-      currentSupplierExecutions,
-      activeSupplierId,
-    );
+      final selectedExecution = findSupplierExecution(
+        currentSupplierExecutions,
+        activeSupplierId,
+      );
 
-    setState(() {
-      client = currentClient;
-      visit = currentVisit;
-      photos = currentPhotos;
-      supplierExecutions = currentSupplierExecutions;
-      notesController.text = currentVisit?.notes ?? '';
-      if (selectedExecution != null) {
-        supplierNotesController.text = selectedExecution.notes ?? '';
-        deliveryReceived = selectedExecution.deliveryReceived;
-        productsReplenished = selectedExecution.productsReplenished;
-        stockoutFound = selectedExecution.stockoutFound;
-      } else {
+      setState(() {
+        client = currentClient;
+        visit = currentVisit;
+        photos = currentPhotos;
+        supplierExecutions = currentSupplierExecutions;
+        notesController.text = currentVisit?.notes ?? '';
+        if (selectedExecution != null) {
+          supplierNotesController.text = selectedExecution.notes ?? '';
+          deliveryReceived = selectedExecution.deliveryReceived;
+          productsReplenished = selectedExecution.productsReplenished;
+          stockoutFound = selectedExecution.stockoutFound;
+        } else {
+          activeSupplierId = null;
+          supplierNotesController.clear();
+          deliveryReceived = null;
+          productsReplenished = null;
+          stockoutFound = null;
+        }
+        message = currentVisit == null
+            ? 'Inicie o atendimento para liberar as evidencias.'
+            : currentVisit.status == 'completed'
+            ? 'Atendimento concluido localmente. Sincronize quando houver internet.'
+            : 'Atendimento salvo localmente.';
+      });
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Falha ao carregar atendimento ${widget.item.id}: $error\n$stackTrace',
+      );
+      if (!mounted) return;
+      setState(() {
+        client = null;
+        visit = null;
+        photos = const <LocalPhoto>[];
+        supplierExecutions = const <LocalSupplierExecution>[];
         activeSupplierId = null;
         supplierNotesController.clear();
         deliveryReceived = null;
         productsReplenished = null;
         stockoutFound = null;
-      }
-      message = currentVisit == null
-          ? 'Inicie o atendimento para liberar as evidencias.'
-          : currentVisit.status == 'completed'
-          ? 'Atendimento concluido localmente. Sincronize quando houver internet.'
-          : 'Atendimento salvo localmente.';
-    });
+        message =
+            'Nao foi possivel abrir este cliente agora. ${normalizedError(error)}';
+      });
+    }
   }
 
   Future<void> _startVisit() async {
@@ -3653,10 +3701,14 @@ class RouteItemCard extends StatelessWidget {
   const RouteItemCard({super.key, required this.item, required this.onTap});
 
   final RouteItemView item;
-  final VoidCallback onTap;
+  final Future<void> Function() onTap;
 
   @override
   Widget build(BuildContext context) {
+    void handleTap() {
+      unawaited(onTap());
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 0,
@@ -3664,27 +3716,83 @@ class RouteItemCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         side: const BorderSide(color: line),
       ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.all(16),
-        leading: CircleAvatar(
-          backgroundColor: brandNavy,
-          child: Text(
-            '${item.sequence}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
+      child: InkWell(
+        onTap: handleTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: brandNavy,
+                    child: Text(
+                      '${item.sequence}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.clientName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: brandNavy,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(item.clientAddress ?? 'Endereco nao informado'),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.routeName,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        if (item.hasCoordinates) ...[
+                          const SizedBox(height: 4),
+                          const Text(
+                            'GPS do cliente disponivel',
+                            style: TextStyle(
+                              color: brandGreen,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: handleTap,
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text(
+                    'Abrir atendimento',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        title: Text(
-          item.clientName,
-          style: const TextStyle(fontWeight: FontWeight.w900, color: brandNavy),
-        ),
-        subtitle: Text(
-          '${item.clientAddress ?? 'Endereco nao informado'}\n${item.routeName}${item.hasCoordinates ? '\nGPS do cliente disponivel' : ''}',
-        ),
-        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }
