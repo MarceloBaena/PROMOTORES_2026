@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
+import { useCompanyScope } from "../context/CompanyScopeContext";
 import { apiDownload, apiJson, triggerDownload } from "../lib/api";
 import { statusLabel } from "../lib/labels";
 
@@ -131,6 +132,7 @@ function percent(value: number, total: number) {
 }
 
 export function ReportsPage() {
+  const { scopeKey } = useCompanyScope();
   const [startDate, setStartDate] = useState(defaultStartDate);
   const [endDate, setEndDate] = useState(dateInputValue(new Date()));
   const [selectedPromoterKey, setSelectedPromoterKey] = useState(allPromotersKey);
@@ -178,7 +180,7 @@ export function ReportsPage() {
     return () => {
       active = false;
     };
-  }, [productivityPath, refreshSeed]);
+  }, [productivityPath, refreshSeed, scopeKey]);
 
   const rankedPromoters = useMemo(
     () =>

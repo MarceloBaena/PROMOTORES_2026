@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, BackHandler, FlatList, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import Constants from "expo-constants";
@@ -227,6 +227,28 @@ function isOfflineDemoSession(session: LoginResponse | null) {
   return session?.accessToken === OFFLINE_DEMO_ACCESS_TOKEN || session?.refreshToken === OFFLINE_DEMO_REFRESH_TOKEN;
 }
 
+function resolveVisiblePromoterName(primary?: string | null, fallback?: string | null) {
+  const candidates = [primary, fallback];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return "Promotor nao identificado";
+}
+
+function withPromoterIdentity(sessionValue: LoginResponse, promoterName?: string | null): LoginResponse {
+  return {
+    ...sessionValue,
+    user: {
+      ...sessionValue.user,
+      name: resolveVisiblePromoterName(promoterName, sessionValue.user.name)
+    }
+  };
+}
+
 function isOpenRouteItem(item: RouteItem) {
   const status = String(item.status ?? "").toUpperCase();
   return !["COMPLETED", "CANCELLED", "SKIPPED"].includes(status);
@@ -432,9 +454,10 @@ export default function App() {
 
     try {
       const renewed = await refreshSession(session.refreshToken);
-      saveSession(renewed);
-      setSession(renewed);
-      return renewed;
+      const nextSession = withPromoterIdentity(renewed, session.user.name);
+      saveSession(nextSession);
+      setSession(nextSession);
+      return nextSession;
     } catch {
       setEmail(session.user.email);
       setPassword("");
@@ -448,10 +471,17 @@ export default function App() {
     const stored = getSession();
 
     if (stored) {
-      setSession({
+      const restoredSession = withPromoterIdentity({
         accessToken: stored.accessToken,
         refreshToken: stored.refreshToken,
         user: JSON.parse(stored.userJson) as LoginResponse["user"]
+      });
+
+      saveSession(restoredSession);
+      setSession({
+        accessToken: restoredSession.accessToken,
+        refreshToken: restoredSession.refreshToken,
+        user: restoredSession.user
       });
       setScreen("home");
       setMessage("Sessao local carregada. O aplicativo pode operar sem internet.");
@@ -578,15 +608,19 @@ export default function App() {
         throw new Error("Este aplicativo e exclusivo para usuario PROMOTOR.");
       }
 
+      const provisionalSession = withPromoterIdentity(result);
       setMessage("Senha validada. Baixando roteiro do promotor...");
-      saveSession(result);
-      setSession(result);
-      const snapshot = await downloadMobileSnapshot(result.accessToken);
+      saveSession(provisionalSession);
+      setSession(provisionalSession);
+      const snapshot = await downloadMobileSnapshot(provisionalSession.accessToken);
+      const nextSession = withPromoterIdentity(provisionalSession, snapshot.promoter?.name);
       setMessage("Roteiro recebido. Salvando dados locais no aparelho...");
+      saveSession(nextSession);
+      setSession(nextSession);
       saveSnapshot(snapshot);
       setRouteItems(listRouteItems());
       setScreen("home");
-      setMessage(`Entrada realizada. ${snapshot.routes.length} rota(s) e ${snapshot.clients.length} cliente(s) salvos para uso sem internet.`);
+      setMessage(`Entrada realizada para ${nextSession.user.name}. ${snapshot.routes.length} rota(s) e ${snapshot.clients.length} cliente(s) salvos para uso sem internet.`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Erro no acesso.";
 
@@ -669,8 +703,11 @@ export default function App() {
       }
 
       saveSnapshot(snapshot);
+      const nextSession = withPromoterIdentity(currentSession, snapshot.promoter?.name);
+      saveSession(nextSession);
+      setSession(nextSession);
       reloadLocalData();
-      setMessage(`Roteiro atualizado: ${snapshot.routes.length} rota(s), ${snapshot.clients.length} cliente(s) pendente(s).`);
+      setMessage(`Roteiro atualizado para ${nextSession.user.name}: ${snapshot.routes.length} rota(s), ${snapshot.clients.length} cliente(s) pendente(s).`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Sem internet. Usando roteiro salvo localmente.");
     } finally {
@@ -1105,6 +1142,7 @@ export default function App() {
   const completedHomeVisits = routeItems.filter((item) => getVisitByRouteItem(item.id)?.status === "completed").length;
   const inProgressHomeVisits = routeItems.filter((item) => getVisitByRouteItem(item.id)?.status === "in_progress").length;
   const pendingHomeVisits = Math.max(0, routeItems.length - completedHomeVisits - inProgressHomeVisits);
+  const activePromoterName = resolveVisiblePromoterName(session?.user.name);
 
   if (screen === "login") {
     return (
@@ -1155,8 +1193,13 @@ export default function App() {
   if (screen === "sync") {
       return (
         <SafeAreaView style={styles.safe}>
-          <Header title="Sincronizacao" onBack={() => setScreen("home")} onExitApp={confirmExitApp} />
+          <Header title="Sincronizacao" userName={activePromoterName} onBack={() => setScreen("home")} onExitApp={confirmExitApp} />
           <View style={[styles.card, styles.screenCard, isTablet ? styles.screenCardTablet : null]}>
+            <View style={styles.identityPanel}>
+              <Text style={styles.kicker}>Promotor autenticado</Text>
+              <Text style={styles.titleSmall}>{activePromoterName}</Text>
+              <Text style={styles.muted}>{session?.user.email ?? "E-mail nao informado"}</Text>
+            </View>
             <View style={styles.syncMetaRow}>
               <View style={styles.syncMetaCard}>
                 <Text style={styles.syncMetaLabel}>Versao do APK</Text>
@@ -1203,7 +1246,7 @@ export default function App() {
   if (screen === "map") {
     return (
       <SafeAreaView style={styles.safe}>
-        <Header title="Mapa do roteiro" onBack={() => setScreen("home")} onExitApp={confirmExitApp} />
+        <Header title="Mapa do roteiro" userName={activePromoterName} onBack={() => setScreen("home")} onExitApp={confirmExitApp} />
         <RouteMapScreen
           busy={busy}
           points={routeMapPoints}
@@ -1225,7 +1268,7 @@ export default function App() {
 
     return (
       <SafeAreaView style={styles.safe}>
-        <Header title="Atendimento" onBack={() => returnToHome()} onExitApp={confirmExitApp} />
+        <Header title="Atendimento" userName={activePromoterName} onBack={() => returnToHome()} onExitApp={confirmExitApp} />
         <ScrollView contentContainerStyle={[styles.content, isCompact ? styles.contentCompact : null, isTablet ? styles.contentTablet : null]}>
           <View style={styles.cardStrong}>
             <Text style={styles.kicker}>Cliente #{activeItem.sequence}</Text>
@@ -1457,7 +1500,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <Header title="Roteiro do promotor" onExitApp={confirmExitApp} />
+      <Header title="Roteiro do promotor" userName={activePromoterName} onExitApp={confirmExitApp} />
       <View style={[styles.homeHero, isCompact ? styles.homeHeroCompact : null, isTablet ? styles.homeHeroTablet : null]}>
         <View>
           <Text style={styles.heroKicker}>Execucao de hoje</Text>
@@ -1465,12 +1508,19 @@ export default function App() {
           <Text style={styles.heroSubtitle}>Atenda, registre fotos e sincronize quando houver internet.</Text>
           <View style={styles.heroMetaRow}>
             <Text style={styles.heroMetaPill}>{APP_RELEASE.label}</Text>
-            <Text style={styles.heroMetaPill}>API pronta para sincronizar</Text>
+            <Text style={styles.heroMetaPill} numberOfLines={1}>Promotor: {activePromoterName}</Text>
           </View>
         </View>
         <View style={styles.heroBadge}>
           <Text style={styles.heroBadgeText}>{syncSummary.pending ?? 0}</Text>
           <Text style={styles.heroBadgeLabel}>na fila</Text>
+        </View>
+      </View>
+      <View style={styles.identityPanelWrap}>
+        <View style={styles.identityPanel}>
+          <Text style={styles.kicker}>Promotor autenticado</Text>
+          <Text style={styles.titleSmall}>{activePromoterName}</Text>
+          <Text style={styles.muted}>{session?.user.email ?? "E-mail nao informado"}</Text>
         </View>
       </View>
       <View style={[styles.statsGrid, isCompact ? styles.statsGridCompact : null, isTablet ? styles.statsGridTablet : null]}>
@@ -1509,7 +1559,7 @@ export default function App() {
   );
 }
 
-function Header(props: { title: string; onBack?: () => void; onExitApp?: () => void }) {
+function Header(props: { title: string; userName?: string; onBack?: () => void; onExitApp?: () => void }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
   const isTablet = width >= 720;
@@ -1521,7 +1571,9 @@ function Header(props: { title: string; onBack?: () => void; onExitApp?: () => v
         <View style={styles.headerTextBlock}>
           <Text style={styles.headerBrandText}>PromotorPro</Text>
           <Text style={[styles.headerTitle, isCompact ? styles.headerTitleCompact : null]} numberOfLines={2}>{props.title}</Text>
-          <Text style={styles.headerVersionText}>{APP_RELEASE.label}</Text>
+          <Text style={styles.headerVersionText}>
+            {props.userName ? `${APP_RELEASE.label} | Promotor: ${props.userName}` : APP_RELEASE.label}
+          </Text>
         </View>
         {props.onBack || props.onExitApp ? (
           <View style={styles.headerActions}>
@@ -2124,6 +2176,19 @@ const styles = StyleSheet.create({
   screenCard: {
     margin: 16,
     marginBottom: 8
+  },
+  identityPanel: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "#C7D2FE",
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 14,
+    gap: 4,
+    marginBottom: 12
+  },
+  identityPanelWrap: {
+    marginHorizontal: 16,
+    marginTop: 12
   },
   screenCardTablet: {
     alignSelf: "center",

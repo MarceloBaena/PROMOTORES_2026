@@ -50,10 +50,12 @@ export function ClientActivitiesPage() {
     <CrudPage
       title="Atividades"
       endpoint="/client-activities"
+      formMode="drawer"
       createTitle="Incluir atividade"
       editTitle="Alterar atividade"
+      formSubtitle="Atividades padrao que podem ser liberadas para cada cliente na operacao de campo."
       createButtonLabel="Nova atividade"
-      formSubtitle="Cadastre as atividades que podem ser vinculadas aos clientes e usadas pela equipe de campo."
+      searchPlaceholder="Buscar por codigo, atividade, descricao, empresa ou situacao"
       initialValues={{
         code: "",
         companyId: user?.companyId ?? "",
@@ -62,6 +64,21 @@ export function ClientActivitiesPage() {
         description: "",
         status: "ACTIVE"
       }}
+      fieldSections={[
+        {
+          title: "Identificacao da atividade",
+          description: "Empresa vinculada e nome da atividade operacional.",
+          fields: shouldShowCompanySelect
+            ? ["code", "companyId", "name", "status"]
+            : ["code", "companyDisplay", "name", "status"]
+        },
+        {
+          title: "Descricao operacional",
+          description: "Explique rapidamente quando a atividade deve ser usada.",
+          fields: ["description"],
+          columns: 1
+        }
+      ]}
       fields={[
         {
           name: "code",
@@ -114,22 +131,17 @@ export function ClientActivitiesPage() {
       ]}
       columns={[
         {
-          label: "Codigo",
-          headerClassName: "w-[14%]",
-          className: "min-w-[120px]",
-          value: (item) => (
-            <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-forest">
-              {activityCode(item.code)}
-            </span>
-          )
-        },
-        {
           label: "Atividade",
           headerClassName: "w-[34%]",
           className: "min-w-[260px]",
           value: (item) => (
             <div className="space-y-1.5">
-              <strong className="block text-base leading-tight text-ink">{textValue(item.name)}</strong>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-forest">
+                  {activityCode(item.code)}
+                </span>
+                <strong className="text-base leading-tight text-ink">{textValue(item.name)}</strong>
+              </div>
               <div className="text-xs font-semibold text-stone-500">{textValue(item.description, "Sem descricao")}</div>
             </div>
           )
@@ -138,21 +150,27 @@ export function ClientActivitiesPage() {
           label: "Empresa/Filial",
           headerClassName: "w-[28%]",
           className: "min-w-[220px]",
-          value: (item) => companyLabel(item.company as CompanyOption | null | undefined)
+          value: (item) => <strong className="block leading-snug text-ink">{companyLabel(item.company as CompanyOption | null | undefined)}</strong>
         },
         {
-          label: "Clientes",
-          headerClassName: "w-[12%]",
-          className: "min-w-[110px]",
+          label: "Uso",
+          headerClassName: "w-[20%]",
+          className: "min-w-[170px]",
           value: (item) => {
             const count = (item._count as { clients?: number } | undefined)?.clients ?? 0;
-            return <span className="font-black text-ink">{count}</span>;
+
+            return (
+              <div className="space-y-2">
+                <strong className="block text-base leading-tight text-ink">{count} cliente(s)</strong>
+                <span className="block text-xs font-semibold text-stone-500">vinculados</span>
+              </div>
+            );
           }
         },
         {
           label: "Situacao",
-          headerClassName: "w-[12%]",
-          className: "min-w-[110px]",
+          headerClassName: "w-[18%]",
+          className: "min-w-[120px]",
           value: (item) => <StatusPill value={String(item.status ?? "")} />
         }
       ]}

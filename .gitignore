@@ -23,6 +23,11 @@ apps/mobile/ios/
 *.aab
 api/dist/
 api/prisma/
+api_runtime/
+.vscode/
+Flutter/
+promoto_app_mobile/
+imagem projeto/
 
 .vercel
 .env*

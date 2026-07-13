@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../lib/errors";
 import { asyncHandler } from "../middleware/async-handler";
-import { assertSameCompany, isPlatformAdmin } from "../lib/tenant";
+import { isPlatformAdmin } from "../lib/tenant";
 
 export const companiesRouter = Router();
 
@@ -27,6 +27,10 @@ const companySchema = z.object({
   city: z.preprocess(emptyStringToUndefined, z.string().trim().optional()),
   state: z.preprocess(emptyStringToUndefined, z.string().trim().max(2).optional()),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional()
+});
+
+const companyStatusSchema = z.object({
+  status: z.enum(["ACTIVE", "INACTIVE"])
 });
 
 companiesRouter.get(
@@ -58,6 +62,25 @@ companiesRouter.get(
   })
 );
 
+companiesRouter.get(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const company = await prisma.company.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!company) {
+      throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa/filial nao encontrada.");
+    }
+
+    if (req.user?.companyId && req.user.companyId !== company.id) {
+      throw new AppError(403, "COMPANY_FORBIDDEN", "Empresa/filial pertence a outro contexto.");
+    }
+
+    res.json({ data: company });
+  })
+);
+
 companiesRouter.post(
   "/",
   asyncHandler(async (req, res) => {
@@ -80,17 +103,46 @@ companiesRouter.post(
 companiesRouter.put(
   "/:id",
   asyncHandler(async (req, res) => {
+    if (!isPlatformAdmin(req)) {
+      throw new AppError(403, "PLATFORM_ADMIN_REQUIRED", "Apenas o administrador geral pode editar empresas/filiais.");
+    }
+
     const existing = await prisma.company.findUnique({ where: { id: req.params.id } });
 
     if (!existing) {
       throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa/filial nao encontrada.");
     }
 
-    assertSameCompany(req, existing.id);
     const input = companySchema.partial().parse(req.body);
     const company = await prisma.company.update({
       where: { id: existing.id },
       data: input
+    });
+
+    res.json({ data: company });
+  })
+);
+
+companiesRouter.patch(
+  "/:id/status",
+  asyncHandler(async (req, res) => {
+    if (!isPlatformAdmin(req)) {
+      throw new AppError(403, "PLATFORM_ADMIN_REQUIRED", "Apenas o administrador geral pode alterar situacao de empresas/filiais.");
+    }
+
+    const existing = await prisma.company.findUnique({
+      where: { id: req.params.id },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa/filial nao encontrada.");
+    }
+
+    const input = companyStatusSchema.parse(req.body);
+    const company = await prisma.company.update({
+      where: { id: existing.id },
+      data: { status: input.status }
     });
 
     res.json({ data: company });
@@ -113,11 +165,11 @@ companiesRouter.delete(
       throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa/filial nao encontrada.");
     }
 
-    await prisma.company.update({
+    const company = await prisma.company.update({
       where: { id: existing.id },
       data: { status: "INACTIVE" }
     });
 
-    res.status(204).send();
+    res.json({ data: company });
   })
 );

@@ -15,6 +15,7 @@ import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PromotersLiveMap } from "../components/PromotersLiveMap";
 import { PageHeader } from "../components/PageHeader";
+import { useCompanyScope } from "../context/CompanyScopeContext";
 import { apiJson } from "../lib/api";
 import { useLivePromoters } from "../lib/live-map";
 
@@ -72,13 +73,14 @@ const emptyFieldWork = {
 export function Dashboard() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { scopeKey } = useCompanyScope();
   const { items: liveMapItems, message: liveMapMessage, connectedCount, inRouteCount, reload: reloadLiveMap } = useLivePromoters();
 
   useEffect(() => {
     apiJson<{ data: Summary }>("/reports/summary")
       .then((response) => setSummary(response.data))
       .catch((nextError: Error) => setError(nextError.message));
-  }, []);
+  }, [scopeKey]);
 
   const routeDay = summary?.routesToday ?? emptyRouteDay;
   const fieldWork = summary?.fieldWork ?? emptyFieldWork;

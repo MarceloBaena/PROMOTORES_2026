@@ -111,6 +111,11 @@ export interface MobileSnapshot {
     name: string;
     email: string;
   };
+  company?: {
+    id: string;
+    code: number;
+    name: string;
+  } | null;
   routes: RouteSnapshot[];
   clients: ClientSnapshot[];
 }

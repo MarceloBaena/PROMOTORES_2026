@@ -194,6 +194,23 @@ suppliersRouter.post(
         });
       }
 
+      if (createdSupplier.status === "ACTIVE") {
+        const clients = await tx.client.findMany({
+          where: { companyId },
+          select: { id: true }
+        });
+
+        if (clients.length > 0) {
+          await tx.clientSupplier.createMany({
+            data: clients.map((client) => ({
+              clientId: client.id,
+              supplierId: createdSupplier.id
+            })),
+            skipDuplicates: true
+          });
+        }
+      }
+
       return tx.supplier.findUniqueOrThrow({
         where: { id: createdSupplier.id },
         include: supplierInclude()
@@ -253,6 +270,32 @@ suppliersRouter.put(
         }
       }
 
+      await tx.clientSupplier.deleteMany({
+        where: { supplierId: existing.id }
+      });
+
+      const updatedSupplier = await tx.supplier.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: supplierInclude()
+      });
+
+      if (updatedSupplier.companyId && updatedSupplier.status === "ACTIVE") {
+        const clients = await tx.client.findMany({
+          where: { companyId: updatedSupplier.companyId },
+          select: { id: true }
+        });
+
+        if (clients.length > 0) {
+          await tx.clientSupplier.createMany({
+            data: clients.map((client) => ({
+              clientId: client.id,
+              supplierId: updatedSupplier.id
+            })),
+            skipDuplicates: true
+          });
+        }
+      }
+
       return tx.supplier.findUniqueOrThrow({
         where: { id: existing.id },
         include: supplierInclude()
@@ -278,10 +321,38 @@ suppliersRouter.patch(
 
     assertSameCompany(req, existing.companyId);
 
-    const supplier = await prisma.supplier.update({
-      where: { id: existing.id },
-      data: { status: input.status },
-      include: supplierInclude()
+    const supplier = await prisma.$transaction(async (tx) => {
+      const updatedSupplier = await tx.supplier.update({
+        where: { id: existing.id },
+        data: { status: input.status },
+        include: supplierInclude()
+      });
+
+      await tx.clientSupplier.deleteMany({
+        where: { supplierId: existing.id }
+      });
+
+      if (updatedSupplier.companyId && updatedSupplier.status === "ACTIVE") {
+        const clients = await tx.client.findMany({
+          where: { companyId: updatedSupplier.companyId },
+          select: { id: true }
+        });
+
+        if (clients.length > 0) {
+          await tx.clientSupplier.createMany({
+            data: clients.map((client) => ({
+              clientId: client.id,
+              supplierId: updatedSupplier.id
+            })),
+            skipDuplicates: true
+          });
+        }
+      }
+
+      return tx.supplier.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: supplierInclude()
+      });
     });
 
     res.json({ data: normalizeSupplier(supplier as unknown as Record<string, unknown>) });
@@ -302,9 +373,15 @@ suppliersRouter.delete(
 
     assertSameCompany(req, existing.companyId);
 
-    await prisma.supplier.update({
-      where: { id: existing.id },
-      data: { status: "INACTIVE" }
+    await prisma.$transaction(async (tx) => {
+      await tx.supplier.update({
+        where: { id: existing.id },
+        data: { status: "INACTIVE" }
+      });
+
+      await tx.clientSupplier.deleteMany({
+        where: { supplierId: existing.id }
+      });
     });
 
     res.status(204).send();

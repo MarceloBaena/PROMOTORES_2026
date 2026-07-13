@@ -2,10 +2,9 @@
   "version": 2,
   "installCommand": "npm install --include=dev",
   "buildCommand": "npm run api:build",
-  "outputDirectory": "public",
   "functions": {
     "api/index.js": {
-      "includeFiles": "api/**",
+      "includeFiles": "api_runtime/**",
       "maxDuration": 300
     }
   },

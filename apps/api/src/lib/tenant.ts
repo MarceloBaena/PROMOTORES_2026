@@ -5,8 +5,25 @@ export function isPlatformAdmin(req: Request) {
   return req.user?.role === "ADMIN" && !req.user.companyId;
 }
 
+export function getCompanyScope(req: Request) {
+  return {
+    isGlobalAdmin: isPlatformAdmin(req),
+    companyId: req.user?.companyId ?? req.companyScopeId ?? null
+  };
+}
+
 export function scopedCompanyWhere(req: Request) {
-  return req.user?.companyId ? { companyId: req.user.companyId } : {};
+  const { companyId } = getCompanyScope(req);
+  return companyId ? { companyId } : {};
+}
+
+export function buildCompanyWhere<T extends Record<string, unknown>>(req: Request, where: T) {
+  const { companyId } = getCompanyScope(req);
+  return companyId ? { ...where, companyId } : where;
+}
+
+export function withCompanyScope<T extends Record<string, unknown>>(req: Request, where: T) {
+  return buildCompanyWhere(req, where);
 }
 
 export function requireSupervisorProfileId(req: Request) {
@@ -40,7 +57,7 @@ export function resolveCompanyId(req: Request, requestedCompanyId?: string | nul
     return req.user.companyId;
   }
 
-  return requestedCompanyId || null;
+  return requestedCompanyId || req.companyScopeId || null;
 }
 
 export function requireCompanyId(req: Request, requestedCompanyId?: string | null) {
@@ -54,7 +71,9 @@ export function requireCompanyId(req: Request, requestedCompanyId?: string | nul
 }
 
 export function assertSameCompany(req: Request, companyId?: string | null) {
-  if (req.user?.companyId && companyId !== req.user.companyId) {
+  const { companyId: scopedCompanyId } = getCompanyScope(req);
+
+  if (scopedCompanyId && companyId !== scopedCompanyId) {
     throw new AppError(403, "COMPANY_FORBIDDEN", "Registro pertence a outra empresa/filial.");
   }
 }

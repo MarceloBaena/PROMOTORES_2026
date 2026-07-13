@@ -6,7 +6,7 @@ Monorepo para painel web, API Express serverless no Vercel, app mobile Expo/Reac
 
 Use `C:\Promotor` como repositorio local oficial do projeto.
 
-Existe uma copia antiga em `Projeto-Promotor`; ela nao deve ser usada para novas correcoes, deploy ou APK. Manter duas pastas ativas apontando para o mesmo GitHub faz web, API e mobile ficarem fora de sincronia.
+Nao use nomes alternativos ou copias paralelas como `C:\Projeto-Promotor`, `Projeto-Promotor` ou qualquer outra pasta fora de `C:\Promotor` para novas correcoes, deploy ou APK. O sistema considera apenas `C:\Promotor` como base oficial. Manter duas pastas ativas apontando para o mesmo GitHub faz web, API e mobile ficarem fora de sincronia.
 
 Guia detalhado: `docs/fonte-unica.md`.
 
@@ -24,6 +24,8 @@ Guia detalhado: `docs/fonte-unica.md`.
 O sistema possui cadastro de `Empresas/Filiais` para uso comercial com separacao de dados entre clientes.
 
 - Administrador geral: usuario `ADMIN` sem empresa vinculada. Pode cadastrar empresas/filiais e escolher a empresa em cadastros operacionais.
+- O painel web agora possui seletor global de empresa para o `ADMIN` geral no header. Quando uma empresa ativa e selecionada, dashboard, mapa, auditoria, visitas, relatórios e listagens operacionais passam a consultar somente o contexto dessa empresa.
+- Quando o `ADMIN` geral deixa o seletor em branco, a API continua permitindo visao consolidada nas telas que suportam consolidacao.
 - Usuario de empresa: usuario com `companyId`. Enxerga somente clientes, promotores, supervisores, rotas, visitas, mapa, auditorias, importacoes e relatorios da propria empresa.
 - Cada empresa/filial tem codigo numerico sequencial, nome, CNPJ opcional, contato, telefone, e-mail, endereco, numero, bairro, cidade, UF e situacao.
 - Clientes possuem codigo sequencial por empresa/filial, permitindo `0001` em empresas diferentes sem misturar dados.
@@ -35,6 +37,13 @@ O sistema possui cadastro de `Empresas/Filiais` para uso comercial com separacao
 - Fornecedores aceitam varias categorias em `categoryIds`, facilitando classificacao comercial e filtros futuros.
 - Antes de publicar em producao, rode `npm run api:migrate` para aplicar as migrations de empresas, fornecedores, categorias, atividades e vinculos operacionais.
 
+## Escopo de empresa na API
+
+- Usuarios com `companyId` sempre operam presos a essa empresa, mesmo que tentem enviar outro `companyId` no body, query ou header.
+- `ADMIN` geral pode enviar `x-company-id` para operar em uma empresa ativa especifica sem alterar os contratos atuais.
+- Se o `x-company-id` for invalido, inexistente ou apontar para empresa inativa, a API retorna erro explicito.
+- O app mobile continua usando o `companyId` do usuario autenticado no token e nao depende do seletor global do painel web.
+
 ## Scripts principais
 
 ```bash
@@ -43,11 +52,46 @@ npm run build:shared
 npm run api:build
 npm run api:migrate
 npm run api:seed:access
+npm run api:check:tenant
 npm run supabase:check
 npm run supabase:setup
 npm run build:web
 npm run mobile:typecheck
 ```
+
+## Bootstrap multiempresa de demonstracao
+
+Por padrao, `npm run api:seed:access` cria apenas:
+
+- administrador global `admin@salespromoters.local`
+- supervisor base `supervisor@salespromoters.local`
+- empresa base do sistema
+
+O pacote de demonstracao multiempresa ficou opcional para nao poluir producao acidentalmente.
+
+Para gerar duas empresas demo completas com supervisor, promotor, telefone, categorias, fornecedores, atividades e clientes vinculados:
+
+```powershell
+$env:BOOTSTRAP_MULTI_COMPANY_DEMO="true"
+$env:BOOTSTRAP_RESET_PASSWORDS="true"
+npm run api:seed:access
+npm run api:check:tenant
+Remove-Item Env:BOOTSTRAP_MULTI_COMPANY_DEMO -ErrorAction SilentlyContinue
+Remove-Item Env:BOOTSTRAP_RESET_PASSWORDS -ErrorAction SilentlyContinue
+```
+
+Usuarios demo criados quando `BOOTSTRAP_MULTI_COMPANY_DEMO=true`:
+
+- `supervisor.formula@salespromoters.local` / `Supervisor@123`
+- `promotor.formula@salespromoters.local` / `Promotor@123`
+- `supervisor.norte@salespromoters.local` / `Supervisor@123`
+- `promotor.norte@salespromoters.local` / `Promotor@123`
+
+Observacoes:
+
+- O seed multiempresa nao cria visitas nem rotas publicadas, para nao sujar dashboard e auditoria.
+- O app mobile continua preso a empresa do usuario autenticado no token.
+- O painel web do administrador geral continua podendo alternar a empresa pelo seletor global.
 
 Configure `DATABASE_URL` com o Session Pooler do Supabase na porta `5432`. Nunca use `localhost`, `https://...supabase.co` ou o host direto `db.PROJECT_REF.supabase.co` como `DATABASE_URL`.
 

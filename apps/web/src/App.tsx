@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { CompanyScopeProvider, useCompanyScope } from "./context/CompanyScopeContext";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
@@ -18,8 +19,9 @@ import { ReportsPage } from "./pages/ReportsPage";
 
 function ProtectedApp() {
   const { user, initialized } = useAuth();
+  const { initialized: companyScopeInitialized } = useCompanyScope();
 
-  if (!initialized) {
+  if (!initialized || !companyScopeInitialized) {
     return <div className="grid min-h-screen place-items-center bg-field text-sm font-semibold text-stone-600">Carregando...</div>;
   }
 
@@ -53,9 +55,11 @@ function ProtectedApp() {
 export function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <ProtectedApp />
-      </BrowserRouter>
+      <CompanyScopeProvider>
+        <BrowserRouter>
+          <ProtectedApp />
+        </BrowserRouter>
+      </CompanyScopeProvider>
     </AuthProvider>
   );
 }

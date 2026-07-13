@@ -1,4 +1,4 @@
-import type { RoleCode, UserStatus } from "@sales-promoters/shared";
+import type { CompanyStatus, RoleCode, UserStatus } from "@sales-promoters/shared";
 
 declare global {
   namespace Express {
@@ -18,6 +18,13 @@ declare global {
           name: string;
         } | null;
       };
+      companyScopeId?: string | null;
+      companyScope?: {
+        id: string;
+        code: number;
+        name: string;
+        status: CompanyStatus;
+      } | null;
     }
   }
 }

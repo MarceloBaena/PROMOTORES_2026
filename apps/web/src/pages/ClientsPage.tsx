@@ -22,12 +22,6 @@ function textValue(value: unknown, fallback = "-") {
   return text.length > 0 ? text : fallback;
 }
 
-function supplierLabel(supplier: Record<string, unknown>) {
-  const name = textValue(supplier.tradeName, textValue(supplier.name, "Fornecedor"));
-  const document = textValue(supplier.document, "");
-  return document ? `${name} - ${document}` : name;
-}
-
 function activityLabel(activity: Record<string, unknown>) {
   return textValue(activity.name, "Atividade");
 }
@@ -36,18 +30,17 @@ export function ClientsPage() {
   const { user } = useAuth();
   const [promoterOptions, setPromoterOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [companyOptions, setCompanyOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const [supplierOptions, setSupplierOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [activityOptions, setActivityOptions] = useState<Array<{ value: string; label: string }>>([]);
   const isPlatformAdmin = user?.role === "ADMIN" && !user.companyId;
 
   useEffect(() => {
     void (async () => {
       try {
-        const [promotersResponse, suppliersResponse, activitiesResponse] = await Promise.all([
+        const [promotersResponse, activitiesResponse] = await Promise.all([
           apiJson<{ data: Array<Record<string, unknown>> }>("/promoters"),
-          apiJson<{ data: Array<Record<string, unknown>> }>("/suppliers"),
           apiJson<{ data: Array<Record<string, unknown>> }>("/client-activities")
         ]);
+
         setPromoterOptions(
           promotersResponse.data
             .map((promoter) => ({
@@ -56,15 +49,7 @@ export function ClientsPage() {
             }))
             .filter((option) => option.value !== "")
         );
-        setSupplierOptions(
-          suppliersResponse.data
-            .filter((supplier) => supplier.status !== "INACTIVE")
-            .map((supplier) => ({
-              value: String(supplier.id ?? ""),
-              label: supplierLabel(supplier)
-            }))
-            .filter((option) => option.value !== "")
-        );
+
         setActivityOptions(
           activitiesResponse.data
             .filter((activity) => activity.status !== "INACTIVE")
@@ -82,7 +67,6 @@ export function ClientsPage() {
       } catch {
         setPromoterOptions([]);
         setCompanyOptions([]);
-        setSupplierOptions([]);
         setActivityOptions([]);
       }
     })();
@@ -95,40 +79,35 @@ export function ClientsPage() {
       formMode="drawer"
       createTitle="Incluir cliente"
       editTitle="Alterar ficha do cliente"
-      formSubtitle="Preencha os dados em blocos separados para manter o cadastro claro e rapido."
+      formSubtitle="Cadastro do cliente para roteiros e atendimento em campo. Todos os fornecedores ativos da empresa/filial sao vinculados automaticamente."
       createButtonLabel="Novo cliente"
+      searchPlaceholder="Buscar por codigo, nome, documento, representante, endereco, cidade, empresa, promotor ou atividade"
       fieldSections={[
         {
           title: "Identificacao do cliente",
-          description: "Informacoes basicas para localizar e reconhecer o cliente no painel e no app.",
+          description: "Dados principais do cliente na operacao.",
           fields: ["code", "name", "document", "status"]
         },
         {
           title: "Empresa e responsavel",
-          description: "Defina a empresa/filial dona do cadastro, o promotor padrao e o representante comercial do cliente.",
+          description: "Empresa, promotor padrao e representante comercial.",
           fields: isPlatformAdmin ? ["companyId", "defaultPromoterId", "representative"] : ["defaultPromoterId", "representative"],
           columns: 1
         },
         {
           title: "Endereco comercial",
-          description: "Dados usados para roteiro, auditoria e localizacao no campo.",
+          description: "Usado em roteiro, visita e mapa.",
           fields: ["address", "addressNumber", "district", "city", "state"]
         },
         {
-          title: "Fornecedores vinculados",
-          description: "Marque os fornecedores que abastecem este cliente para facilitar importacao e atendimento.",
-          fields: ["supplierIds"],
-          columns: 1
-        },
-        {
           title: "Atividades previstas no cliente",
-          description: "Defina quais atividades operacionais podem ser executadas neste cliente pela equipe de campo.",
+          description: "Atividades liberadas para a equipe em campo.",
           fields: ["activityIds"],
           columns: 1
         },
         {
           title: "Geolocalizacao",
-          description: "Preencha apenas quando quiser fixar a coordenada do cliente na base.",
+          description: "Preencha apenas se o cliente ja tiver coordenadas.",
           fields: ["latitude", "longitude"]
         }
       ]}
@@ -146,7 +125,6 @@ export function ClientsPage() {
         state: "",
         latitude: "",
         longitude: "",
-        supplierIds: [],
         activityIds: [],
         status: "ACTIVE"
       }}
@@ -171,13 +149,12 @@ export function ClientsPage() {
               fullWidth: true
             }]
           : []),
-        { name: "name", label: "Nome", fullWidth: true },
+        { name: "name", label: "Nome", required: true, fullWidth: true },
         { name: "document", label: "Documento" },
         {
           name: "representative",
           label: "Representante",
           placeholder: "Nome do vendedor responsavel pelo cliente",
-          description: "Vendedor ou representante comercial que atende este cliente.",
           fullWidth: true
         },
         {
@@ -187,17 +164,6 @@ export function ClientsPage() {
           searchable: true,
           placeholder: "Selecione o promotor",
           options: promoterOptions,
-          description: "Promotor padrao que atendera este cliente em campo.",
-          fullWidth: true
-        },
-        {
-          name: "supplierIds",
-          source: "suppliers",
-          label: "Fornecedores que este cliente compra",
-          type: "multiselect",
-          searchable: true,
-          options: supplierOptions,
-          description: "Selecione um ou mais fornecedores vinculados ao abastecimento deste cliente.",
           fullWidth: true
         },
         {
@@ -207,7 +173,6 @@ export function ClientsPage() {
           type: "multiselect",
           searchable: true,
           options: activityOptions,
-          description: "Selecione uma ou mais atividades que fazem parte do atendimento neste cliente.",
           fullWidth: true
         },
         { name: "address", label: "Endereco", fullWidth: true },
@@ -231,34 +196,35 @@ export function ClientsPage() {
       columns={[
         {
           label: "Cliente",
-          headerClassName: "w-[34%]",
+          headerClassName: "w-[26%]",
           className: "min-w-[260px]",
-          value: (item) => {
-            const code = textValue(item.code, "Sem codigo");
-            const document = textValue(item.document, "Sem documento");
-            const company = companyLabel(item.company as CompanyOption | null | undefined);
-            const promoter = promoterLabel(item.defaultPromoter);
-            const representative = textValue(item.representative, "Nao informado");
-
-            return (
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-forest">
-                    {code}
-                  </span>
-                  <strong className="text-base leading-tight text-ink">{textValue(item.name)}</strong>
-                </div>
-                <div className="text-xs font-semibold text-stone-500">Documento: {document}</div>
-                <div className="text-xs font-semibold text-stone-500">Empresa: {company}</div>
-                <div className="text-xs font-semibold text-stone-500">Representante: {representative}</div>
-                <div className="text-xs font-semibold text-stone-500">Promotor: {promoter}</div>
+          value: (item) => (
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-forest">
+                  {textValue(item.code, "Sem codigo")}
+                </span>
+                <strong className="text-base leading-tight text-ink">{textValue(item.name)}</strong>
               </div>
-            );
-          }
+              <div className="text-xs font-semibold text-stone-500">Documento: {textValue(item.document, "Sem documento")}</div>
+            </div>
+          )
+        },
+        {
+          label: "Operacao",
+          headerClassName: "w-[24%]",
+          className: "min-w-[220px]",
+          value: (item) => (
+            <div className="space-y-1">
+              <strong className="block leading-snug text-ink">{companyLabel(item.company as CompanyOption | null | undefined)}</strong>
+              <span className="block text-xs font-semibold text-stone-500">Representante: {textValue(item.representative, "Nao informado")}</span>
+              <span className="block text-xs font-semibold text-stone-500">Promotor: {promoterLabel(item.defaultPromoter)}</span>
+            </div>
+          )
         },
         {
           label: "Endereco",
-          headerClassName: "w-[34%]",
+          headerClassName: "w-[24%]",
           className: "min-w-[240px]",
           value: (item) => {
             const street = textValue(item.address, "Sem endereco");
@@ -269,66 +235,36 @@ export function ClientsPage() {
               <div className="space-y-1">
                 <strong className="block leading-snug text-ink">{street}{number}</strong>
                 <span className="block text-xs font-semibold text-stone-500">Bairro: {district}</span>
+                <span className="block text-xs font-semibold text-stone-500">{textValue(item.city)}/{textValue(item.state)}</span>
               </div>
             );
           }
         },
         {
-          label: "Cidade/UF",
-          headerClassName: "w-[16%]",
-          className: "min-w-[150px]",
-          value: (item) => (
-            <div className="font-bold leading-snug text-ink">
-              {textValue(item.city)}/{textValue(item.state)}
-            </div>
-          )
-        },
-        {
-          label: "Atividades",
-          headerClassName: "w-[18%]",
-          className: "min-w-[200px]",
+          label: "Atendimento",
+          headerClassName: "w-[26%]",
+          className: "min-w-[240px]",
           value: (item) => {
             const activities = Array.isArray(item.activities) ? item.activities as Array<Record<string, unknown>> : [];
-
-            if (activities.length === 0) {
-              return <span className="text-sm font-semibold text-stone-500">Nao vinculadas</span>;
-            }
-
-            return (
-              <div className="flex flex-wrap gap-1.5">
-                {activities.slice(0, 3).map((activity) => (
-                  <span key={String(activity.id)} className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-700">
-                    {textValue(activity.name)}
-                  </span>
-                ))}
-                {activities.length > 3 ? (
-                  <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-black text-slateText">+{activities.length - 3}</span>
-                ) : null}
-              </div>
-            );
-          }
-        },
-        {
-          label: "Fornecedores",
-          headerClassName: "w-[16%]",
-          className: "min-w-[180px]",
-          value: (item) => {
             const suppliers = Array.isArray(item.suppliers) ? item.suppliers as Array<Record<string, unknown>> : [];
 
-            if (suppliers.length === 0) {
-              return <span className="text-sm font-semibold text-stone-500">Nao vinculados</span>;
-            }
-
             return (
-              <div className="flex flex-wrap gap-1.5">
-                {suppliers.slice(0, 3).map((supplier) => (
-                  <span key={String(supplier.id)} className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-brand">
-                    {textValue(supplier.tradeName, textValue(supplier.name))}
-                  </span>
-                ))}
-                {suppliers.length > 3 ? (
-                  <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-black text-slateText">+{suppliers.length - 3}</span>
-                ) : null}
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {activities.length === 0 ? (
+                    <span className="text-sm font-semibold text-stone-500">Sem atividades vinculadas</span>
+                  ) : (
+                    activities.slice(0, 2).map((activity) => (
+                      <span key={String(activity.id)} className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-700">
+                        {textValue(activity.name)}
+                      </span>
+                    ))
+                  )}
+                  {activities.length > 2 ? (
+                    <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-black text-slateText">+{activities.length - 2}</span>
+                  ) : null}
+                </div>
+                <span className="block text-xs font-semibold text-stone-500">Fornecedores ativos vinculados: {suppliers.length}</span>
               </div>
             );
           }

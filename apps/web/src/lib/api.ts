@@ -1,4 +1,5 @@
 import type { AuthSession } from "@sales-promoters/shared";
+import { getStoredCompanyScopeId, isGlobalAdminUser } from "./company-scope";
 
 const SESSION_KEY = "sales-promoters-session";
 const PRODUCTION_API_BASE_URL = "/api";
@@ -94,6 +95,7 @@ async function refreshSession() {
 async function request(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const session = getSession();
   const headers = new Headers(init.headers);
+  const selectedCompanyId = getStoredCompanyScopeId();
 
   if (!headers.has("content-type") && !(init.body instanceof FormData)) {
     headers.set("content-type", "application/json");
@@ -101,6 +103,16 @@ async function request(path: string, init: RequestInit = {}, retry = true): Prom
 
   if (session?.accessToken) {
     headers.set("authorization", `Bearer ${session.accessToken}`);
+  }
+
+  if (
+    selectedCompanyId &&
+    session?.user &&
+    isGlobalAdminUser(session.user) &&
+    !path.startsWith("/auth") &&
+    !path.startsWith("/companies")
+  ) {
+    headers.set("x-company-id", selectedCompanyId);
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {

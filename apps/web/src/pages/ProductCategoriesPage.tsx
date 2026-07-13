@@ -50,6 +50,12 @@ export function ProductCategoriesPage() {
     <CrudPage
       title="Categorias de produtos"
       endpoint="/product-categories"
+      formMode="drawer"
+      createTitle="Incluir categoria"
+      editTitle="Alterar categoria"
+      formSubtitle="Categorias usadas para organizar fornecedores e padronizar a leitura comercial."
+      createButtonLabel="Nova categoria"
+      searchPlaceholder="Buscar por codigo, categoria, descricao, empresa ou situacao"
       initialValues={{
         code: "",
         companyId: user?.companyId ?? "",
@@ -58,6 +64,21 @@ export function ProductCategoriesPage() {
         description: "",
         status: "ACTIVE"
       }}
+      fieldSections={[
+        {
+          title: "Identificacao da categoria",
+          description: "Empresa vinculada e dados principais da classificacao.",
+          fields: shouldShowCompanySelect
+            ? ["code", "companyId", "name", "status"]
+            : ["code", "companyDisplay", "name", "status"]
+        },
+        {
+          title: "Descricao operacional",
+          description: "Uso interno para orientar a equipe comercial.",
+          fields: ["description"],
+          columns: 1
+        }
+      ]}
       fields={[
         {
           name: "code",
@@ -100,22 +121,17 @@ export function ProductCategoriesPage() {
       ]}
       columns={[
         {
-          label: "Codigo",
-          headerClassName: "w-[14%]",
-          className: "min-w-[120px]",
-          value: (item) => (
-            <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-forest">
-              {categoryCode(item.code)}
-            </span>
-          )
-        },
-        {
           label: "Categoria",
           headerClassName: "w-[34%]",
           className: "min-w-[260px]",
           value: (item) => (
             <div className="space-y-1.5">
-              <strong className="block text-base leading-tight text-ink">{textValue(item.name)}</strong>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-forest">
+                  {categoryCode(item.code)}
+                </span>
+                <strong className="text-base leading-tight text-ink">{textValue(item.name)}</strong>
+              </div>
               <div className="text-xs font-semibold text-stone-500">{textValue(item.description, "Sem descricao")}</div>
             </div>
           )
@@ -124,21 +140,27 @@ export function ProductCategoriesPage() {
           label: "Empresa/Filial",
           headerClassName: "w-[28%]",
           className: "min-w-[220px]",
-          value: (item) => companyLabel(item.company as CompanyOption | null | undefined)
+          value: (item) => <strong className="block leading-snug text-ink">{companyLabel(item.company as CompanyOption | null | undefined)}</strong>
         },
         {
-          label: "Fornecedores",
-          headerClassName: "w-[12%]",
-          className: "min-w-[110px]",
+          label: "Uso",
+          headerClassName: "w-[20%]",
+          className: "min-w-[170px]",
           value: (item) => {
             const count = (item._count as { suppliers?: number } | undefined)?.suppliers ?? 0;
-            return <span className="font-black text-ink">{count}</span>;
+
+            return (
+              <div className="space-y-2">
+                <strong className="block text-base leading-tight text-ink">{count} fornecedor(es)</strong>
+                <span className="block text-xs font-semibold text-stone-500">vinculados</span>
+              </div>
+            );
           }
         },
         {
           label: "Situacao",
-          headerClassName: "w-[12%]",
-          className: "min-w-[110px]",
+          headerClassName: "w-[18%]",
+          className: "min-w-[120px]",
           value: (item) => <StatusPill value={String(item.status ?? "")} />
         }
       ]}

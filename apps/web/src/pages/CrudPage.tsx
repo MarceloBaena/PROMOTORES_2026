@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Check, Edit3, Plus, RefreshCcw, Search, Trash2, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
+import { useCompanyScope } from "../context/CompanyScopeContext";
 import { apiJson } from "../lib/api";
 import { formatPhone } from "../lib/phone";
 
@@ -51,6 +52,8 @@ interface CrudPageProps {
   formSubtitle?: string;
   createButtonLabel?: string;
   fieldSections?: FieldSection[];
+  searchPlaceholder?: string;
+  searchHint?: string;
 }
 
 export function CrudPage({
@@ -66,8 +69,11 @@ export function CrudPage({
   editTitle,
   formSubtitle,
   createButtonLabel,
-  fieldSections
+  fieldSections,
+  searchPlaceholder,
+  searchHint
 }: CrudPageProps) {
+  const { scopeKey } = useCompanyScope();
   const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
   const [form, setForm] = useState(initialValues);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -79,22 +85,22 @@ export function CrudPage({
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
   const [isFormOpen, setIsFormOpen] = useState(formMode === "sidebar");
 
-  const actionLabel = useMemo(() => (editingId ? "Alterar" : "Incluir"), [editingId]);
+  const actionLabel = useMemo(() => (editingId ? "Salvar alteracao" : "Salvar cadastro"), [editingId]);
   const requiresSearch = searchMode === "search-first";
   const hasActiveSearch = !requiresSearch || searchRequested;
-  const searchPlaceholder = title === "Clientes"
+  const resolvedSearchPlaceholder = searchPlaceholder ?? (title === "Clientes"
     ? "Buscar cliente por codigo, nome, documento, representante, endereco, bairro, cidade, empresa, promotor ou atividade"
-    : `Buscar em ${title.toLowerCase()}`;
+    : `Buscar em ${title.toLowerCase()}`);
   const resolvedCreateTitle = createTitle ?? (title === "Clientes" ? "Incluir cliente" : "Incluir registro");
   const resolvedEditTitle = editTitle ?? (title === "Clientes" ? "Alterar ficha do cliente" : "Alterar registro");
   const resolvedFormSubtitle = formSubtitle ?? (title === "Clientes"
     ? "Cadastro completo para roteiro e atendimento em campo."
     : undefined);
-  const resolvedCreateButtonLabel = createButtonLabel ?? (title === "Clientes" ? "Novo cliente" : `Novo ${title.slice(0, -1).toLowerCase()}`);
+  const resolvedCreateButtonLabel = createButtonLabel ?? (title === "Clientes" ? "Novo cliente" : "Novo cadastro");
   const formTitle = editingId ? resolvedEditTitle : resolvedCreateTitle;
-  const searchHint = requiresSearch
-    ? `Digite pelo menos ${searchMinLength} caracteres ou clique em Buscar vazio para listar todos.`
-    : "Busca vazia lista todos os registros deste cadastro.";
+  const resolvedSearchHint = searchHint ?? (requiresSearch
+    ? `Digite ${searchMinLength}+ caracteres ou use a busca vazia para listar tudo.`
+    : "Busca vazia lista todos os registros.");
 
   const resolvedFieldSections = useMemo(() => {
     if (!fieldSections || fieldSections.length === 0) {
@@ -174,7 +180,7 @@ export function CrudPage({
     }
 
     void load("");
-  }, [endpoint, requiresSearch]);
+  }, [endpoint, requiresSearch, scopeKey]);
 
   function softDeleteMode(item: Record<string, unknown>) {
     return typeof item.status === "string";
@@ -441,7 +447,7 @@ export function CrudPage({
           />
         )}
         {field.description ? (
-          <p className="mt-2 text-sm text-stone-500">{field.description}</p>
+          <p className="mt-2 text-xs leading-5 text-stone-500">{field.description}</p>
         ) : null}
       </label>
     );
@@ -449,7 +455,7 @@ export function CrudPage({
 
   function renderFormContents() {
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         {resolvedFieldSections.map((section) => {
           const sectionFields = section.fields
             .map((fieldName) => fields.find((field) => field.name === fieldName))
@@ -465,12 +471,12 @@ export function CrudPage({
           }
 
           return (
-            <section key={section.title} className="rounded-[1.35rem] border border-line/80 bg-white p-4 shadow-sm sm:p-5">
+            <section key={section.title} className="rounded-[1.25rem] border border-line/80 bg-white p-4 shadow-sm">
               {showSectionHeader ? (
-                <div className="mb-4">
+                <div className="mb-3">
                   <h3 className="text-base font-black tracking-tight text-ink">{section.title}</h3>
                   {section.description ? (
-                    <p className="mt-1 text-sm leading-6 text-slateText">{section.description}</p>
+                    <p className="mt-1 text-xs leading-5 text-slateText">{section.description}</p>
                   ) : null}
                 </div>
               ) : null}
@@ -485,7 +491,10 @@ export function CrudPage({
   }
 
   const formElement = (
-    <form onSubmit={onSubmit} className={formMode === "drawer" ? "flex h-full flex-col" : "panel overflow-hidden xl:sticky xl:top-20 xl:self-start"}>
+    <form
+      onSubmit={onSubmit}
+      className={formMode === "drawer" ? "flex h-full flex-col" : "panel overflow-hidden xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:self-start"}
+    >
       <div className="panel-header">
         <div>
           <h2 className="panel-title">{formTitle}</h2>
@@ -505,7 +514,7 @@ export function CrudPage({
         ) : null}
       </div>
 
-      <div className={formMode === "drawer" ? "flex-1 overflow-y-auto p-5 sm:p-6" : "p-6"}>
+      <div className={formMode === "drawer" ? "flex-1 overflow-y-auto p-5 sm:p-6" : "overflow-y-auto p-6"}>
         {message && formMode === "drawer" ? <div className="notice notice-warning">{message}</div> : null}
 
         {renderFormContents()}
@@ -518,7 +527,7 @@ export function CrudPage({
           ) : null}
           <button type="submit" title={actionLabel} disabled={loading} className={`primary-button ${formMode === "drawer" ? "w-full sm:w-auto" : "w-full"}`}>
             {editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {editingId ? "Salvar alteracao" : actionLabel}
+            {actionLabel}
           </button>
         </div>
       </div>
@@ -567,11 +576,11 @@ export function CrudPage({
 
       {message && !(formMode === "drawer" && isFormOpen) ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className={formMode === "drawer" ? "space-y-4" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]"}>
+      <div className={formMode === "drawer" ? "space-y-4" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]"}>
         <div className="table-wrap">
-          <div className="border-b border-line/80 bg-gradient-to-r from-white to-skywash/60 p-4">
+          <div className="border-b border-line/80 bg-gradient-to-r from-white to-skywash/40 p-4">
             <form
-              className="flex flex-col gap-3 lg:flex-row"
+              className="flex flex-col gap-3 xl:flex-row"
               onSubmit={(event) => {
                 event.preventDefault();
                 const nextSearch = tableSearch.trim();
@@ -592,9 +601,9 @@ export function CrudPage({
               <label className="relative block flex-1">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                 <input
-                  className="input-control h-12 pl-11 pr-24"
+                  className="input-control h-11 pl-11 pr-24"
                   type="search"
-                  placeholder={searchPlaceholder}
+                  placeholder={resolvedSearchPlaceholder}
                   value={tableSearch}
                   onChange={(event) => setTableSearch(event.target.value)}
                 />
@@ -615,7 +624,7 @@ export function CrudPage({
                 ) : null}
               </label>
 
-              <button type="submit" className="secondary-button h-12 min-w-[132px]">
+              <button type="submit" className="secondary-button h-11 min-w-[132px]">
                 <Search className="h-4 w-4" />
                 Buscar
               </button>
@@ -623,9 +632,9 @@ export function CrudPage({
             <div className="mt-3 text-xs font-semibold text-stone-500">
               {hasActiveSearch
                 ? submittedSearch
-                  ? `Exibindo ${items.length} registro(s) encontrados.`
-                  : `Exibindo ${items.length} registro(s).`
-                : searchHint}
+                  ? `Total encontrado: ${items.length} registro(s).`
+                  : `Total exibido: ${items.length} registro(s).`
+                : resolvedSearchHint}
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -674,11 +683,11 @@ export function CrudPage({
                 ))}
                 {items.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-8 text-center text-stone-500" colSpan={columns.length + 1}>
+                    <td className="px-4 py-10 text-center text-stone-500" colSpan={columns.length + 1}>
                       {loading
                         ? "Pesquisando..."
                         : !hasActiveSearch
-                          ? searchHint
+                          ? resolvedSearchHint
                           : submittedSearch
                             ? "Nenhum registro encontrado para a busca."
                             : "Nenhum registro encontrado."}

@@ -1,5 +1,5 @@
 let handler;
-const bundlePath = "./dist/serverless";
+const bundlePath = "../api_runtime/dist/serverless";
 
 try {
   const serverless = require(bundlePath);

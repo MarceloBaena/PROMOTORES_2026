@@ -22,7 +22,8 @@ const configSchema = z.object({
   UPLOAD_DRIVER: z.enum(["local", "s3"]).default("local"),
   UPLOAD_BASE_URL: z.string().optional(),
   STARTUP_DATABASE_SETUP: booleanFromEnv.default(false),
-  BOOTSTRAP_RESET_PASSWORDS: booleanFromEnv.default(false)
+  BOOTSTRAP_RESET_PASSWORDS: booleanFromEnv.default(false),
+  BOOTSTRAP_MULTI_COMPANY_DEMO: booleanFromEnv.default(false)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

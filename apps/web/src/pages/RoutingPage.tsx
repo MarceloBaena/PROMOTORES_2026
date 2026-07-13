@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Plus, Send, X } from "lucide-react";
+import { Plus, Send, X, Users, Store, Route as RouteIcon } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { useAuth } from "../context/AuthContext";
+import { useCompanyScope } from "../context/CompanyScopeContext";
 import { apiJson } from "../lib/api";
 import { statusLabel } from "../lib/labels";
 import { activeCompaniesOnly, companyLabel, type CompanyOption } from "../lib/company-options";
@@ -108,11 +109,12 @@ function routeProgressText(route: RoutePlan) {
     progress.resolvedWithoutCompletionItems > 0 ? `${progress.resolvedWithoutCompletionItems} nao concluido(s)` : null
   ].filter(Boolean);
 
-  return parts.length > 0 ? parts.join(" • ") : "Sem clientes vinculados";
+  return parts.length > 0 ? parts.join(" - ") : "Sem clientes vinculados";
 }
 
 export function RoutingPage() {
   const { user } = useAuth();
+  const { scopeKey, selectedCompanyId } = useCompanyScope();
   const [routes, setRoutes] = useState<RoutePlan[]>([]);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [supervisors, setSupervisors] = useState<PersonOption[]>([]);
@@ -122,7 +124,7 @@ export function RoutingPage() {
     name: "",
     startDate: "",
     endDate: "",
-    companyId: user?.companyId ?? "",
+    companyId: user?.companyId ?? selectedCompanyId ?? "",
     supervisorId: "",
     promoterId: ""
   });
@@ -150,7 +152,26 @@ export function RoutingPage() {
 
   useEffect(() => {
     load().catch((error: Error) => setMessage(error.message));
-  }, []);
+  }, [scopeKey]);
+
+  useEffect(() => {
+    const nextCompanyId = user?.companyId ?? selectedCompanyId ?? "";
+
+    setForm((current) => {
+      if (current.companyId === nextCompanyId) {
+        return current;
+      }
+
+      return {
+        ...current,
+        companyId: nextCompanyId,
+        supervisorId: "",
+        promoterId: ""
+      };
+    });
+    setSelectedClientIds([]);
+    setFilters((current) => ({ ...current, supervisor: "", promoter: "", client: "" }));
+  }, [selectedCompanyId, user?.companyId]);
 
   async function createRoute(event: FormEvent) {
     event.preventDefault();
@@ -210,7 +231,7 @@ export function RoutingPage() {
         name: "",
         startDate: "",
         endDate: "",
-        companyId: user?.companyId ?? "",
+        companyId: user?.companyId ?? selectedCompanyId ?? "",
         supervisorId: "",
         promoterId: ""
       });
@@ -234,15 +255,18 @@ export function RoutingPage() {
     (!form.companyId || supervisor.companyId === form.companyId) &&
     optionLabel(supervisor, "SUP").toLowerCase().includes(filters.supervisor.toLowerCase())
   );
+
   const filteredPromoters = promoters.filter((promoter) =>
     (!form.companyId || promoter.companyId === form.companyId) &&
     (!form.supervisorId || promoter.supervisor?.id === form.supervisorId) &&
     optionLabel(promoter, "PRO").toLowerCase().includes(filters.promoter.toLowerCase())
   );
+
   const filteredClients = clients.filter((client) =>
     (!form.companyId || client.companyId === form.companyId) &&
     clientLabel(client).toLowerCase().includes(filters.client.toLowerCase())
   );
+
   const filteredRoutes = routes.filter((route) => {
     const normalizedSearch = routeSearch.trim().toLowerCase();
 
@@ -263,17 +287,19 @@ export function RoutingPage() {
       routeClients
     ].join(" ").toLowerCase().includes(normalizedSearch);
   });
+
   const routeOverview = useMemo(() => {
     const statuses = filteredRoutes.map((route) => routeOperationalStatus(route));
 
     return [
-      { label: "Rascunho", value: statuses.filter((status) => status === "DRAFT").length, tone: "slate" },
-      { label: "Publicada", value: statuses.filter((status) => status === "PUBLISHED").length, tone: "emerald" },
-      { label: "Em atendimento", value: statuses.filter((status) => status === "IN_PROGRESS").length, tone: "blue" },
-      { label: "Concluida", value: statuses.filter((status) => status === "COMPLETED").length, tone: "moss" },
-      { label: "Nao concluida", value: statuses.filter((status) => status === "NOT_COMPLETED").length, tone: "amber" }
+      { label: "Rascunho", value: statuses.filter((status) => status === "DRAFT").length },
+      { label: "Publicada", value: statuses.filter((status) => status === "PUBLISHED").length },
+      { label: "Em atendimento", value: statuses.filter((status) => status === "IN_PROGRESS").length },
+      { label: "Concluida", value: statuses.filter((status) => status === "COMPLETED").length },
+      { label: "Nao concluida", value: statuses.filter((status) => status === "NOT_COMPLETED").length }
     ];
   }, [filteredRoutes]);
+
   const selectedClients = selectedClientIds
     .map((id) => clients.find((client) => client.id === id))
     .filter((client): client is ClientOption => Boolean(client));
@@ -286,138 +312,178 @@ export function RoutingPage() {
 
   return (
     <section>
-      <PageHeader title="Roteirizacao" />
+      <PageHeader
+        title="Roteirizacao"
+        subtitle="Monte a rota com periodo, equipe e clientes e acompanhe o andamento das publicacoes."
+      />
+
       {message ? <div className="notice notice-warning">{message}</div> : null}
-      <div className="grid gap-4 xl:grid-cols-[440px_minmax(0,1fr)]">
+
+      <div className="kpi-strip mb-4">
+        {routeOverview.map((item) => (
+          <article key={item.label} className="kpi-tile">
+            <div className="kpi-tile-title">{item.label}</div>
+            <div className="kpi-tile-value">{item.value}</div>
+            <div className="section-helper mt-2">rotas no filtro atual</div>
+          </article>
+        ))}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[460px_minmax(0,1fr)]">
         <form onSubmit={createRoute} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Nova rota</h2>
-              <p className="panel-subtitle">Defina inicio, fim, equipe e clientes da jornada operacional.</p>
+              <p className="panel-subtitle">Defina periodo, equipe e clientes da jornada operacional.</p>
             </div>
           </div>
-          <div className="space-y-3 p-4">
-            <label className="block">
-              <span className="field-label">Empresa/Filial</span>
-              <select
-                className="input-control"
-                disabled={!isPlatformAdmin}
-                value={form.companyId}
-                onChange={(event) => {
-                  setForm((current) => ({ ...current, companyId: event.target.value, supervisorId: "", promoterId: "" }));
-                  setSelectedClientIds([]);
-                  setFilters({ supervisor: "", promoter: "", client: "" });
-                }}
-              >
-                <option value="">Selecione a empresa/filial</option>
-                {companies.map((company) => (
-                  <option key={company.id} value={company.id}>{companyLabel(company)}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="field-label">Nome</span>
-              <input
-                className="input-control"
-                type="text"
-                value={form.name}
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              />
-            </label>
-            <label className="block">
-              <span className="field-label">Data inicial</span>
-              <input
-                className="input-control"
-                type="datetime-local"
-                value={form.startDate}
-                onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))}
-              />
-            </label>
-            <label className="block">
-              <span className="field-label">Data final</span>
-              <input
-                className="input-control"
-                type="datetime-local"
-                value={form.endDate}
-                onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))}
-              />
-            </label>
-            <label className="block">
-              <span className="field-label">Supervisor</span>
-              <input
-                className="input-control mb-2"
-                type="search"
-                placeholder="Buscar supervisor por codigo ou nome"
-                value={filters.supervisor}
-                onChange={(event) => setFilters((current) => ({ ...current, supervisor: event.target.value }))}
-              />
-              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-stone-500">
-                <span>{filteredSupervisors.length} supervisor(es) visivel(is).</span>
-                <span>Deixe em branco para listar todos.</span>
+
+          <div className="space-y-4 p-5">
+            <div className="rounded-2xl border border-line bg-white p-4">
+              <div className="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.12em] text-slateText">
+                <RouteIcon className="h-4 w-4" />
+                Dados da rota
               </div>
-              <select
-                className="input-control"
-                value={form.supervisorId}
-                onChange={(event) => {
-                  const supervisorId = event.target.value;
-                  setForm((current) => {
-                    const nextPromoterBelongsToSupervisor = promoters.some((promoter) =>
-                      promoter.id === current.promoterId && promoter.supervisor?.id === supervisorId
-                    );
+              <div className="grid gap-3">
+                <label className="block">
+                  <span className="field-label">Empresa/Filial</span>
+                  <select
+                    className="input-control"
+                    disabled={!isPlatformAdmin}
+                    value={form.companyId}
+                    onChange={(event) => {
+                      setForm((current) => ({ ...current, companyId: event.target.value, supervisorId: "", promoterId: "" }));
+                      setSelectedClientIds([]);
+                      setFilters({ supervisor: "", promoter: "", client: "" });
+                    }}
+                  >
+                    <option value="">Selecione a empresa/filial</option>
+                    {companies.map((company) => (
+                      <option key={company.id} value={company.id}>{companyLabel(company)}</option>
+                    ))}
+                  </select>
+                </label>
 
-                    return {
-                      ...current,
-                      supervisorId,
-                      promoterId: supervisorId && nextPromoterBelongsToSupervisor ? current.promoterId : ""
-                    };
-                  });
-                }}
-              >
-                <option value="">Selecione um supervisor</option>
-                {filteredSupervisors.map((supervisor) => (
-                  <option key={supervisor.id} value={supervisor.id}>{optionLabel(supervisor, "SUP")}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="field-label">Promotor de vendas</span>
-              <input
-                className="input-control mb-2"
-                type="search"
-                placeholder="Buscar promotor por codigo, nome ou e-mail"
-                value={filters.promoter}
-                onChange={(event) => setFilters((current) => ({ ...current, promoter: event.target.value }))}
-              />
-              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-stone-500">
-                <span>{filteredPromoters.length} promotor(es) visivel(is).</span>
-                <span>Deixe em branco para listar todos.</span>
+                <label className="block">
+                  <span className="field-label">Nome da rota</span>
+                  <input
+                    className="input-control"
+                    type="text"
+                    value={form.name}
+                    onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                  />
+                </label>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="field-label">Data inicial</span>
+                    <input
+                      className="input-control"
+                      type="datetime-local"
+                      value={form.startDate}
+                      onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="field-label">Data final</span>
+                    <input
+                      className="input-control"
+                      type="datetime-local"
+                      value={form.endDate}
+                      onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))}
+                    />
+                  </label>
+                </div>
               </div>
-              <select
-                className="input-control"
-                value={form.promoterId}
-                onChange={(event) => {
-                  const promoterId = event.target.value;
-                  setForm((current) => ({ ...current, promoterId }));
+            </div>
 
-                  if (promoterId) {
-                    const promoterClientIds = clients
-                      .filter((client) => client.defaultPromoter?.id === promoterId)
-                      .map((client) => client.id);
+            <div className="rounded-2xl border border-line bg-white p-4">
+              <div className="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.12em] text-slateText">
+                <Users className="h-4 w-4" />
+                Equipe da rota
+              </div>
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="field-label">Supervisor</span>
+                  <input
+                    className="input-control mb-2"
+                    type="search"
+                    placeholder="Buscar supervisor por codigo ou nome"
+                    value={filters.supervisor}
+                    onChange={(event) => setFilters((current) => ({ ...current, supervisor: event.target.value }))}
+                  />
+                  <select
+                    className="input-control"
+                    value={form.supervisorId}
+                    onChange={(event) => {
+                      const supervisorId = event.target.value;
+                      setForm((current) => {
+                        const nextPromoterBelongsToSupervisor = promoters.some((promoter) =>
+                          promoter.id === current.promoterId && promoter.supervisor?.id === supervisorId
+                        );
 
-                    if (promoterClientIds.length > 0) {
-                      setSelectedClientIds((current) => Array.from(new Set([...current, ...promoterClientIds])));
-                    }
-                  }
-                }}
-              >
-                <option value="">Selecione um promotor</option>
-                {filteredPromoters.map((promoter) => (
-                  <option key={promoter.id} value={promoter.id}>{optionLabel(promoter, "PRO")}</option>
-                ))}
-              </select>
-            </label>
-            <div className="rounded-2xl border border-line bg-white p-3">
-              <span className="field-label">Clientes</span>
+                        return {
+                          ...current,
+                          supervisorId,
+                          promoterId: supervisorId && nextPromoterBelongsToSupervisor ? current.promoterId : ""
+                        };
+                      });
+                    }}
+                  >
+                    <option value="">Selecione um supervisor</option>
+                    {filteredSupervisors.map((supervisor) => (
+                      <option key={supervisor.id} value={supervisor.id}>{optionLabel(supervisor, "SUP")}</option>
+                    ))}
+                  </select>
+                  <div className="mt-2 text-xs font-semibold text-stone-500">{filteredSupervisors.length} supervisor(es) disponiveis.</div>
+                </label>
+
+                <label className="block">
+                  <span className="field-label">Promotor de vendas</span>
+                  <input
+                    className="input-control mb-2"
+                    type="search"
+                    placeholder="Buscar promotor por codigo, nome ou e-mail"
+                    value={filters.promoter}
+                    onChange={(event) => setFilters((current) => ({ ...current, promoter: event.target.value }))}
+                  />
+                  <select
+                    className="input-control"
+                    value={form.promoterId}
+                    onChange={(event) => {
+                      const promoterId = event.target.value;
+                      setForm((current) => ({ ...current, promoterId }));
+
+                      if (promoterId) {
+                        const promoterClientIds = clients
+                          .filter((client) => client.defaultPromoter?.id === promoterId)
+                          .map((client) => client.id);
+
+                        if (promoterClientIds.length > 0) {
+                          setSelectedClientIds((current) => Array.from(new Set([...current, ...promoterClientIds])));
+                        }
+                      }
+                    }}
+                  >
+                    <option value="">Selecione um promotor</option>
+                    {filteredPromoters.map((promoter) => (
+                      <option key={promoter.id} value={promoter.id}>{optionLabel(promoter, "PRO")}</option>
+                    ))}
+                  </select>
+                  <div className="mt-2 text-xs font-semibold text-stone-500">{filteredPromoters.length} promotor(es) disponiveis.</div>
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-line bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.12em] text-slateText">
+                  <Store className="h-4 w-4" />
+                  Clientes da rota
+                </div>
+                <span className="rounded-full bg-muted px-3 py-1 text-xs font-black text-graphite">{selectedClientIds.length} selecionado(s)</span>
+              </div>
+
               <input
                 className="input-control mb-3"
                 type="search"
@@ -425,10 +491,7 @@ export function RoutingPage() {
                 value={filters.client}
                 onChange={(event) => setFilters((current) => ({ ...current, client: event.target.value }))}
               />
-              <div className="mb-3 flex items-center justify-between text-xs font-semibold text-stone-500">
-                <span>{filteredClients.length} cliente(s) visivel(is).</span>
-                <span>Deixe em branco para listar todos.</span>
-              </div>
+
               <div className="mb-3 flex flex-wrap gap-2">
                 {selectedClients.length === 0 ? (
                   <span className="text-sm font-semibold text-stone-500">Nenhum cliente selecionado.</span>
@@ -446,6 +509,7 @@ export function RoutingPage() {
                   </button>
                 ))}
               </div>
+
               <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                 {filteredClients.map((client) => {
                   const selected = selectedClientIds.includes(client.id);
@@ -468,6 +532,7 @@ export function RoutingPage() {
                 ) : null}
               </div>
             </div>
+
             <button className="primary-button w-full" type="submit" title="Criar rota">
               <Plus className="h-4 w-4" />
               Criar rota com {selectedClientIds.length} cliente(s)
@@ -476,32 +541,10 @@ export function RoutingPage() {
         </form>
 
         <div className="table-wrap">
-          <div className="border-b border-line/80 bg-white/80 p-4">
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              {routeOverview.map((item) => (
-                <div key={item.label} className="rounded-2xl border border-line bg-field/70 px-4 py-3">
-                  <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">{item.label}</div>
-                  <div
-                    className={`mt-2 font-display text-3xl font-black ${
-                      item.tone === "emerald"
-                        ? "text-emerald-700"
-                        : item.tone === "blue"
-                          ? "text-blue-700"
-                          : item.tone === "moss"
-                            ? "text-moss"
-                            : item.tone === "amber"
-                              ? "text-amber-700"
-                              : "text-ink"
-                    }`}
-                  >
-                    {item.value}
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="glass-strip border-b border-line/80 p-4">
             <div className="flex flex-col gap-3 lg:flex-row">
               <label className="block flex-1">
-                <span className="field-label">Buscar rota, promotor, supervisor, cliente ou situacao</span>
+                <span className="field-label">Buscar rota, equipe, cliente ou situacao</span>
                 <input
                   className="input-control"
                   type="search"
@@ -521,33 +564,46 @@ export function RoutingPage() {
             <div className="mt-2 text-xs font-semibold text-stone-500">
               {routeSearch.trim()
                 ? `Exibindo ${filteredRoutes.length} rota(s) para a busca atual.`
-                : `Exibindo ${filteredRoutes.length} rota(s). Busca vazia mostra todas as rotas disponiveis.`}
+                : `Exibindo ${filteredRoutes.length} rota(s). Busca vazia mostra todas as rotas.`}
             </div>
           </div>
+
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th className="px-4 py-3">Rota</th>
-                  <th className="px-4 py-3">Periodo</th>
-                  <th className="px-4 py-3">Situacao</th>
-                  <th className="px-4 py-3">Promotor</th>
-                  <th className="px-4 py-3">Clientes</th>
-                  <th className="px-4 py-3">Acoes</th>
+                  <th>Rota</th>
+                  <th>Periodo</th>
+                  <th>Equipe</th>
+                  <th>Situação</th>
+                  <th>Clientes</th>
+                  <th>Acoes</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRoutes.map((route) => (
                   <tr key={route.id}>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{route.name}</div>
+                    <td className="min-w-[220px]">
+                      <div className="font-bold text-ink">{route.name}</div>
                       <div className="mt-1 text-xs font-semibold text-stone-500">{routeProgressText(route)}</div>
                     </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-stone-600">{formatRoutePeriod(route)}</td>
-                    <td className="px-4 py-3"><StatusPill value={routeOperationalStatus(route)} /></td>
-                    <td className="px-4 py-3">{personLabel(route.promoter, "PRO")}</td>
-                    <td className="px-4 py-3">{route.items.length}</td>
-                    <td className="px-4 py-3">
+                    <td className="min-w-[220px] text-sm font-semibold text-stone-600">{formatRoutePeriod(route)}</td>
+                    <td className="min-w-[220px]">
+                      <div className="space-y-1 text-sm font-semibold text-stone-600">
+                        <div><span className="font-black text-ink">Promotor:</span> {personLabel(route.promoter, "PRO")}</div>
+                        <div><span className="font-black text-ink">Supervisor:</span> {personLabel(route.supervisor, "SUP")}</div>
+                      </div>
+                    </td>
+                    <td className="min-w-[140px]">
+                      <StatusPill value={routeOperationalStatus(route)} />
+                    </td>
+                    <td className="min-w-[120px]">
+                      <div className="space-y-1">
+                        <strong className="block text-base leading-tight text-ink">{route.items.length}</strong>
+                        <span className="block text-xs font-semibold text-stone-500">cliente(s)</span>
+                      </div>
+                    </td>
+                    <td className="min-w-[110px]">
                       {route.status === "DRAFT" ? (
                         <button className="icon-button text-moss" type="button" title="Publicar rota" onClick={() => void publish(route.id)}>
                           <Send className="h-4 w-4" />

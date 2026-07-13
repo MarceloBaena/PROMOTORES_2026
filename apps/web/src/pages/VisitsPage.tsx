@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Camera, CheckCircle2, Clock, Eye, FileText, MapPin, RefreshCw, UserRound } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
+import { useCompanyScope } from "../context/CompanyScopeContext";
 import { API_BASE_URL, apiJson } from "../lib/api";
 import { auditTypeLabel } from "../lib/labels";
 
@@ -275,6 +276,7 @@ function hasRequiredPhotos(visit: Visit) {
 }
 
 export function VisitsPage() {
+  const { scopeKey } = useCompanyScope();
   const [visits, setVisits] = useState<Visit[]>([]);
   const [promoters, setPromoters] = useState<RegisteredPromoter[]>([]);
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
@@ -340,10 +342,10 @@ export function VisitsPage() {
     const evidences = filteredVisits.reduce((total, visit) => total + visit.photos.length, 0);
 
     return [
-      { title: "Visitas carregadas", value: String(filteredVisits.length), note: "Resultado exibido na tela" },
-      { title: "Concluidas", value: String(completed), note: "Atendimentos ja finalizados" },
-      { title: "Em atendimento", value: String(inProgress), note: "Jornada ainda aberta" },
-      { title: "Evidencias", value: String(evidences), note: "Fotos recebidas do app" }
+      { title: "Na tela", value: String(filteredVisits.length), note: "visitas no filtro atual" },
+      { title: "Concluidas", value: String(completed), note: "atendimentos finalizados" },
+      { title: "Em andamento", value: String(inProgress), note: "jornada ainda aberta" },
+      { title: "Fotos", value: String(evidences), note: "evidencias sincronizadas" }
     ];
   }, [filteredVisits]);
 
@@ -415,7 +417,7 @@ export function VisitsPage() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [scopeKey]);
 
   async function completeVisit(visit: Visit) {
     if (!hasRequiredPhotos(visit)) {
@@ -447,7 +449,7 @@ export function VisitsPage() {
     <section>
       <PageHeader
         title="Visitas"
-        subtitle="Consulte atendimentos enviados pelo aplicativo: situação, horários, fotos, GPS e auditoria."
+        subtitle="Consulte os atendimentos sincronizados com horario, GPS, fotos e auditoria."
         action={(
           <button className="secondary-button" type="button" disabled={loading} onClick={() => void load()}>
             <RefreshCw className="h-4 w-4" />
@@ -468,7 +470,7 @@ export function VisitsPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_430px]">
         <div className="table-wrap">
           <div className="glass-strip border-b border-line/80 p-4">
             <div className="flex flex-col gap-3 lg:flex-row">
@@ -510,8 +512,8 @@ export function VisitsPage() {
             </div>
             <div className="mt-2 text-xs font-semibold text-stone-500">
               {search.trim() || selectedPromoter
-                ? `Exibindo ${filteredVisits.length} visita(s) para a busca atual.`
-                : `Exibindo ${filteredVisits.length} visita(s). Busca vazia mostra todas as visitas.`}
+                ? `Total encontrado: ${filteredVisits.length} visita(s).`
+                : `Total exibido: ${filteredVisits.length} visita(s).`}
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -557,7 +559,12 @@ export function VisitsPage() {
                         {visit.photos.length}
                       </span>
                     </td>
-                    <td>{formatDate(visit.createdAt)}</td>
+                    <td className="min-w-[140px]">
+                      <div className="space-y-1 text-sm font-semibold text-stone-600">
+                        <div>{formatOnlyDate(visit.createdAt)}</div>
+                        <div className="text-xs font-semibold text-stone-500">{formatOnlyTime(visit.createdAt)}</div>
+                      </div>
+                    </td>
                     <td>
                       <button
                         className="icon-button text-moss"
@@ -594,7 +601,7 @@ export function VisitsPage() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Detalhe da visita</h2>
-              <p className="panel-subtitle">Dados recebidos do atendimento no aplicativo</p>
+              <p className="panel-subtitle">Resumo do atendimento selecionado</p>
             </div>
           </div>
 
@@ -602,14 +609,14 @@ export function VisitsPage() {
             <div className="p-5 text-sm font-semibold text-stone-500">Selecione uma visita para consultar.</div>
           ) : (
             <div className="space-y-4 p-5">
-              <div className="rounded-2xl bg-forest p-4 text-white">
-                <div className="text-xs font-black uppercase tracking-[0.14em] text-white/55">Cliente</div>
-                <div className="mt-2 font-display text-2xl font-black">{selectedVisit.client.name}</div>
-                <div className="mt-2 text-sm font-semibold text-white/75">{selectedVisit.client.address ?? "Endereço não informado"}</div>
-                <div className="mt-3"><StatusPill value={selectedVisit.status} /></div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <div className="rounded-2xl bg-white/10 px-3 py-3">
-                    <div className="text-[11px] font-black uppercase tracking-[0.12em] text-white/55">Rota</div>
+                <div className="rounded-2xl bg-forest p-4 text-white">
+                  <div className="text-xs font-black uppercase tracking-[0.14em] text-white/55">Cliente</div>
+                  <div className="mt-2 font-display text-2xl font-black">{selectedVisit.client.name}</div>
+                  <div className="mt-2 text-sm font-semibold text-white/75">{selectedVisit.client.address ?? "Endereco nao informado"}</div>
+                  <div className="mt-3"><StatusPill value={selectedVisit.status} /></div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    <div className="rounded-2xl bg-white/10 px-3 py-3">
+                      <div className="text-[11px] font-black uppercase tracking-[0.12em] text-white/55">Rota</div>
                     <div className="mt-1 text-sm font-bold text-white">{selectedVisit.route?.name ?? "Sem rota vinculada"}</div>
                   </div>
                   <div className="rounded-2xl bg-white/10 px-3 py-3">
@@ -633,8 +640,8 @@ export function VisitsPage() {
               <div className="surface-card">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
-                    <h3 className="font-display text-lg font-black text-ink">Evidências</h3>
-                    <p className="text-xs font-semibold text-stone-500">Fotos sincronizadas pelo aplicativo</p>
+                    <h3 className="font-display text-lg font-black text-ink">Evidencias da visita</h3>
+                    <p className="text-xs font-semibold text-stone-500">Fotos gerais sincronizadas pelo aplicativo</p>
                   </div>
                   <span className="rounded-full bg-muted px-3 py-1 text-xs font-black text-graphite">{visitPhotos.length} foto(s)</span>
                 </div>
@@ -669,7 +676,7 @@ export function VisitsPage() {
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
                     <h3 className="font-display text-lg font-black text-ink">Fotos por fornecedor</h3>
-                    <p className="text-xs font-semibold text-stone-500">Evidencias do antes e depois separadas por fornecedor</p>
+                    <p className="text-xs font-semibold text-stone-500">Antes e depois organizados por fornecedor</p>
                   </div>
                   <span className="rounded-full bg-muted px-3 py-1 text-xs font-black text-graphite">{supplierPhotoGroups.length} fornecedor(es)</span>
                 </div>
@@ -723,9 +730,9 @@ export function VisitsPage() {
               <div className="surface-card">
                 <div className="flex items-center gap-2 font-display text-lg font-black text-ink">
                   <FileText className="h-4 w-4" />
-                  Observações
+                  Observacoes
                 </div>
-                <p className="mt-2 text-sm font-semibold text-stone-600">{selectedVisit.notes || "Sem observações registradas."}</p>
+                <p className="mt-2 text-sm font-semibold text-stone-600">{selectedVisit.notes || "Sem observacoes registradas."}</p>
               </div>
 
               {selectedVisit.auditFlags && selectedVisit.auditFlags.length > 0 ? (

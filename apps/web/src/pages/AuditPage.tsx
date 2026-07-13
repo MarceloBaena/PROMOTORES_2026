@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarPlus, CheckCircle2, RefreshCw } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
+import { useCompanyScope } from "../context/CompanyScopeContext";
 import { apiJson } from "../lib/api";
 import { auditTypeLabel } from "../lib/labels";
 
@@ -30,6 +31,7 @@ function promoterLabel(promoter?: AuditFlag["visit"]["promoter"]) {
 }
 
 export function AuditPage() {
+  const { scopeKey } = useCompanyScope();
   const [flags, setFlags] = useState<AuditFlag[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,7 +54,7 @@ export function AuditPage() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [scopeKey]);
 
   const filteredFlags = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();

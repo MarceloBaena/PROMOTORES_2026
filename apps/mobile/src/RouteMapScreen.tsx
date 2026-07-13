@@ -21,8 +21,41 @@ interface RouteMapScreenProps {
   onRefreshPromoterLocation: () => void | Promise<void>;
 }
 
-function mapsNavigationUrl(point: RouteMapPoint) {
-  return `https://www.google.com/maps/dir/?api=1&destination=${point.latitude},${point.longitude}&travelmode=driving`;
+function mapsNavigationUrl(point: RouteMapPoint, promoterLocation?: RouteMapPromoterLocation | null) {
+  const origin =
+    promoterLocation && Number.isFinite(promoterLocation.latitude) && Number.isFinite(promoterLocation.longitude)
+      ? `&origin=${promoterLocation.latitude},${promoterLocation.longitude}`
+      : "";
+
+  return `https://www.google.com/maps/dir/?api=1${origin}&destination=${point.latitude},${point.longitude}&travelmode=driving`;
+}
+
+function wazeNavigationUrl(point: RouteMapPoint) {
+  return `waze://?ll=${point.latitude},${point.longitude}&navigate=yes`;
+}
+
+function formatCapturedAtLabel(value?: string | null) {
+  if (!value) {
+    return "Aguardando leitura do GPS";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Horario indisponivel";
+  }
+
+  return parsed.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatAccuracyLabel(value?: number | null) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "Sem precisao";
+  }
+
+  return `${Math.round(value)} m`;
 }
 
 export function RouteMapScreen(props: RouteMapScreenProps) {
@@ -58,6 +91,18 @@ export function RouteMapScreen(props: RouteMapScreenProps) {
 
     return haversineDistanceKm(props.promoterLocation, selectedPoint);
   }, [props.promoterLocation, selectedPoint]);
+  const nextOperationalPoint = useMemo(() => {
+    return (
+      props.points.find((point) => point.status !== "completed" && point.status !== "canceled") ??
+      props.points.find((point) => point.status !== "completed") ??
+      props.points[0] ??
+      null
+    );
+  }, [props.points]);
+  const selectedIsNextStop = selectedPoint?.routeItemId === nextOperationalPoint?.routeItemId;
+  const selectedDistanceLabel = formatDistanceLabel(directDistanceKm);
+  const promoterLocationCapturedLabel = formatCapturedAtLabel(props.promoterLocation?.capturedAt);
+  const promoterLocationAccuracyLabel = formatAccuracyLabel(props.promoterLocation?.accuracyMeters);
 
   useEffect(() => {
     if (!selectedPoint?.routeItemId) {
@@ -69,21 +114,40 @@ export function RouteMapScreen(props: RouteMapScreenProps) {
     );
   }, [selectedPoint?.routeItemId]);
 
-  async function openExternalNavigation() {
+  async function openExternalNavigation(app: "google" | "waze" = "google") {
     if (!selectedPoint || !hasRouteMapCoordinates(selectedPoint)) {
       Alert.alert("Cliente sem coordenada", "Este cliente ainda nao possui latitude e longitude para abrir navegacao.");
       return;
     }
 
     const googleNavigationUrl = `google.navigation:q=${selectedPoint.latitude},${selectedPoint.longitude}`;
-    const fallbackUrl = mapsNavigationUrl(selectedPoint);
+    const wazeUrl = wazeNavigationUrl(selectedPoint);
+    const fallbackUrl = mapsNavigationUrl(selectedPoint, props.promoterLocation);
 
     try {
+      if (app === "waze") {
+        const canOpenWaze = await Linking.canOpenURL(wazeUrl);
+        await Linking.openURL(canOpenWaze ? wazeUrl : fallbackUrl);
+        return;
+      }
+
       const canOpenGoogleNavigation = await Linking.canOpenURL(googleNavigationUrl);
       await Linking.openURL(canOpenGoogleNavigation ? googleNavigationUrl : fallbackUrl);
     } catch {
       Alert.alert("Nao foi possivel abrir a navegacao", "Tente novamente com internet ou abra o mapa manualmente no aparelho.");
     }
+  }
+
+  function focusPromoterOnMap() {
+    webViewRef.current?.injectJavaScript("window.focusPromoterLocation && window.focusPromoterLocation(); true;");
+  }
+
+  function focusNextStop() {
+    if (!nextOperationalPoint?.routeItemId) {
+      return;
+    }
+
+    props.onSelectRouteItem(nextOperationalPoint.routeItemId);
   }
 
   function handleWebViewMessage(rawData: string) {
@@ -102,27 +166,54 @@ export function RouteMapScreen(props: RouteMapScreenProps) {
       <View style={styles.heroCard}>
         <View style={styles.heroTextBlock}>
           <Text style={styles.heroKicker}>Mapa de deslocamento</Text>
-          <Text style={styles.heroTitle}>Roteiro visual do promotor</Text>
+          <Text style={styles.heroTitle}>Jornada do promotor em campo</Text>
           <Text style={styles.heroSubtitle}>
-            Veja os clientes no mapa, selecione o destino e abra a navegacao do aparelho quando houver latitude e longitude.
+            Veja a proxima parada, sua localizacao atual e abra a navegacao do aparelho para chegar mais rapido ao cliente.
           </Text>
         </View>
         <View style={styles.heroMetrics}>
           <MetricChip label="No roteiro" value={String(props.points.length)} />
           <MetricChip label="Com coordenada" value={String(mappedPoints.length)} />
+          <MetricChip label="Pendentes" value={String(props.points.filter((point) => point.status !== "completed").length)} />
           <MetricChip label="Sem coordenada" value={String(Math.max(0, pointsWithoutCoordinates))} tone="warning" />
         </View>
       </View>
 
       <View style={styles.actionRow}>
         <ActionButton label="Atualizar minha posicao" onPress={props.onRefreshPromoterLocation} disabled={props.busy} />
-        <ActionButton label="Abrir navegacao" onPress={() => void openExternalNavigation()} disabled={!selectedPoint || !hasRouteMapCoordinates(selectedPoint)} tone="primary" />
+        <ActionButton label="Proxima parada" onPress={focusNextStop} disabled={!nextOperationalPoint} />
+        <ActionButton label="Ver minha posicao" onPress={focusPromoterOnMap} disabled={!props.promoterLocation} />
+        <ActionButton label="Abrir no Google Maps" onPress={() => void openExternalNavigation("google")} disabled={!selectedPoint || !hasRouteMapCoordinates(selectedPoint)} tone="primary" />
+        <ActionButton label="Abrir no Waze" onPress={() => void openExternalNavigation("waze")} disabled={!selectedPoint || !hasRouteMapCoordinates(selectedPoint)} />
+      </View>
+
+      <View style={styles.operationalCard}>
+        <DetailTile
+          label="Proxima parada"
+          value={nextOperationalPoint ? `${nextOperationalPoint.sequence}. ${nextOperationalPoint.clientName}` : "Roteiro concluido"}
+          helper={nextOperationalPoint?.address ?? "Sem cliente pendente no momento"}
+        />
+        <DetailTile
+          label="Minha posicao"
+          value={props.promoterLocation ? "GPS atualizado" : "Sem GPS ativo"}
+          helper={`Leitura: ${promoterLocationCapturedLabel}`}
+        />
+        <DetailTile
+          label="Precisao"
+          value={promoterLocationAccuracyLabel}
+          helper="Baseado na ultima coleta do aparelho"
+        />
+        <DetailTile
+          label="Distancia atual"
+          value={selectedDistanceLabel}
+          helper={selectedPoint ? `Destino selecionado: ${selectedPoint.clientName}` : "Selecione um cliente no mapa"}
+        />
       </View>
 
       <View style={styles.noteCard}>
         <Text style={styles.noteTitle}>Como este mapa funciona</Text>
         <Text style={styles.noteText}>
-          O mapa mostra somente clientes que ja possuem latitude e longitude no cadastro. Sem internet o promotor ainda ve a lista do roteiro, mas o fundo do mapa pode nao carregar as ruas.
+          O mapa mostra somente clientes com latitude e longitude. Sem internet, a lista do roteiro continua funcionando e a navegacao externa abre quando o aparelho tiver acesso ao app de mapas.
         </Text>
       </View>
 
@@ -156,6 +247,7 @@ export function RouteMapScreen(props: RouteMapScreenProps) {
               <Text style={styles.selectedSubtitle}>
                 {[selectedPoint.address, [selectedPoint.city, selectedPoint.state].filter(Boolean).join("/")].filter(Boolean).join(" - ") || "Endereco nao informado"}
               </Text>
+              {selectedIsNextStop ? <Text style={styles.nextStopBadge}>Proxima parada sugerida</Text> : null}
             </View>
             <Text style={[styles.statusPill, selectedPoint.status === "in_progress" ? styles.statusPillBrand : selectedPoint.status === "completed" ? styles.statusPillSuccess : null]}>
               {routeMapStatusLabel(selectedPoint.status)}
@@ -163,25 +255,39 @@ export function RouteMapScreen(props: RouteMapScreenProps) {
           </View>
 
           <View style={styles.detailGrid}>
-            <DetailTile label="Distancia direta" value={formatDistanceLabel(directDistanceKm)} />
-            <DetailTile label="Latitude" value={selectedPoint.latitude !== null && selectedPoint.latitude !== undefined ? selectedPoint.latitude.toFixed(6) : "Nao informada"} />
-            <DetailTile label="Longitude" value={selectedPoint.longitude !== null && selectedPoint.longitude !== undefined ? selectedPoint.longitude.toFixed(6) : "Nao informada"} />
+            <DetailTile label="Distancia direta" value={selectedDistanceLabel} helper="Estimativa reta entre sua posicao e o cliente" />
+            <DetailTile
+              label="Latitude"
+              value={selectedPoint.latitude !== null && selectedPoint.latitude !== undefined ? selectedPoint.latitude.toFixed(6) : "Nao informada"}
+              helper="Coordenada usada pelo mapa"
+            />
+            <DetailTile
+              label="Longitude"
+              value={selectedPoint.longitude !== null && selectedPoint.longitude !== undefined ? selectedPoint.longitude.toFixed(6) : "Nao informada"}
+              helper="Coordenada usada pela navegacao"
+            />
           </View>
 
           <View style={styles.actionRow}>
             <ActionButton label="Atender este cliente" onPress={() => props.onOpenVisit(selectedPoint.routeItemId)} tone="primary" />
-            <ActionButton label="Abrir navegacao" onPress={() => void openExternalNavigation()} disabled={!hasRouteMapCoordinates(selectedPoint)} />
+            <ActionButton label="Google Maps" onPress={() => void openExternalNavigation("google")} disabled={!hasRouteMapCoordinates(selectedPoint)} />
+            <ActionButton label="Waze" onPress={() => void openExternalNavigation("waze")} disabled={!hasRouteMapCoordinates(selectedPoint)} />
           </View>
         </View>
       ) : null}
 
       <View style={styles.listCard}>
         <Text style={styles.listTitle}>Clientes do roteiro</Text>
-        <Text style={styles.listSubtitle}>Toque em um card para destacar o cliente no mapa. Se nao houver coordenada, o card ainda abre o atendimento normalmente.</Text>
+        <Text style={styles.listSubtitle}>Toque em um card para destacar o cliente no mapa. A lista continua operacional mesmo quando o fundo do mapa estiver sem internet.</Text>
         <View style={styles.routeList}>
           {props.points.map((point) => {
             const selected = point.routeItemId === selectedPoint?.routeItemId;
             const hasCoordinates = hasRouteMapCoordinates(point);
+            const pointDistanceLabel =
+              props.promoterLocation && hasCoordinates
+                ? formatDistanceLabel(haversineDistanceKm(props.promoterLocation, point))
+                : "Distancia indisponivel";
+            const isNextOperationalPoint = point.routeItemId === nextOperationalPoint?.routeItemId;
 
             return (
               <TouchableOpacity
@@ -196,10 +302,12 @@ export function RouteMapScreen(props: RouteMapScreenProps) {
                   <Text style={styles.routeCardTitle}>{point.clientName}</Text>
                   <Text style={styles.routeCardSubtitle}>{point.address || "Endereco nao informado"}</Text>
                   <View style={styles.routeCardMetaRow}>
+                    {isNextOperationalPoint ? <Text style={styles.routeMetaPillNext}>Proxima parada</Text> : null}
                     <Text style={[styles.routeMetaPill, hasCoordinates ? styles.routeMetaPillOk : styles.routeMetaPillWarn]}>
                       {hasCoordinates ? "Com mapa" : "Sem coordenada"}
                     </Text>
                     <Text style={styles.routeMetaPill}>{routeMapStatusLabel(point.status)}</Text>
+                    <Text style={styles.routeMetaPill}>{pointDistanceLabel}</Text>
                   </View>
                 </View>
                 <TouchableOpacity style={styles.routeOpenButton} onPress={() => props.onOpenVisit(point.routeItemId)}>
@@ -223,11 +331,12 @@ function MetricChip(props: { label: string; value: string; tone?: "default" | "w
   );
 }
 
-function DetailTile(props: { label: string; value: string }) {
+function DetailTile(props: { label: string; value: string; helper?: string }) {
   return (
     <View style={styles.detailTile}>
       <Text style={styles.detailTileLabel}>{props.label}</Text>
       <Text style={styles.detailTileValue}>{props.value}</Text>
+      {props.helper ? <Text style={styles.detailTileHelper}>{props.helper}</Text> : null}
     </View>
   );
 }
@@ -368,6 +477,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 20
   },
+  operationalCard: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
   mapCard: {
     backgroundColor: "#FFFFFF",
     borderColor: "#E2E8F0",
@@ -437,6 +551,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 20
   },
+  nextStopBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#DBEAFE",
+    borderRadius: 999,
+    color: "#1D4ED8",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
   statusPill: {
     alignSelf: "flex-start",
     backgroundColor: "#E2E8F0",
@@ -482,6 +607,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
     marginTop: 4
+  },
+  detailTileHelper: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+    marginTop: 6
   },
   listCard: {
     backgroundColor: "#FFFFFF",
@@ -569,6 +701,16 @@ const styles = StyleSheet.create({
   routeMetaPillWarn: {
     backgroundColor: "#FEF3C7",
     color: "#B45309"
+  },
+  routeMetaPillNext: {
+    alignSelf: "flex-start",
+    backgroundColor: "#DBEAFE",
+    borderRadius: 999,
+    color: "#1D4ED8",
+    fontSize: 11,
+    fontWeight: "900",
+    paddingHorizontal: 10,
+    paddingVertical: 5
   },
   routeOpenButton: {
     alignItems: "center",

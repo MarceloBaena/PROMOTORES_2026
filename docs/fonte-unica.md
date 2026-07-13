@@ -8,20 +8,23 @@ Use somente este repositorio local para desenvolvimento, deploy e geracao de APK
 cd C:\Promotor
 ```
 
-Este monorepo contem as tres partes do sistema:
+Este e o unico caminho oficial do sistema. Qualquer outra pasta local deve ser tratada apenas como copia paralela e nao pode ser usada para web, API, mobile, deploy ou APK.
+
+Este monorepo contem as partes oficiais do sistema:
 
 - `apps/api`: backend Express/Prisma conectado ao Supabase.
 - `apps/web`: painel web administrativo.
 - `apps/mobile`: app Expo/React Native offline-first para Android.
+- `apps/mobile_flutter`: app Flutter offline-first para Android.
 
-## Projetos duplicados encontrados
+## Regra de validacao
 
-Foram encontradas duas bases locais apontando para o mesmo GitHub:
+Considere sempre esta regra:
 
-- `C:\Promotor`
-- `C:\Users\Marcelo Baena\OneDrive - 浮光浅夏\Área de Trabalho\Projeto-Promotor`
+- caminho oficial do projeto: `C:\Promotor`
+- qualquer outro caminho local: copia paralela, fora da operacao oficial
 
-Isso causa bug operacional porque uma tela pode ser corrigida em uma pasta enquanto o navegador, Vercel ou APK usam outra.
+Se houver diferenca visual entre tela, deploy ou APK, a primeira verificacao deve ser se o comando foi executado em `C:\Promotor`.
 
 ## API unica
 
@@ -34,7 +37,8 @@ https://promotores-2026-api.vercel.app
 Configuracoes:
 
 - Web: `VITE_API_BASE_URL`
-- Mobile: `EXPO_PUBLIC_API_BASE_URL`
+- Mobile Expo: `EXPO_PUBLIC_API_BASE_URL`
+- Mobile Flutter: `API base URL` configurada no app
 - API: `CORS_ORIGIN`, `DATABASE_URL`, `UPLOAD_BASE_URL`
 
 ## Comandos de validacao

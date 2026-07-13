@@ -11,10 +11,15 @@ async function main() {
   }
 
   const result = await bootstrapAccess({
-    resetPasswords: config.BOOTSTRAP_RESET_PASSWORDS
+    resetPasswords: config.BOOTSTRAP_RESET_PASSWORDS,
+    includeMultiCompanyDemo: config.BOOTSTRAP_MULTI_COMPANY_DEMO
   });
 
-  console.log(`Bootstrap completed: ${result.users.join(", ")}`);
+  console.log(
+    `Bootstrap completed: ${result.users.join(", ")} | Empresas: ${result.companies.join(", ")} | Demo multiempresa: ${
+      result.includeMultiCompanyDemo ? "ativo" : "desligado"
+    }`
+  );
 }
 
 main()

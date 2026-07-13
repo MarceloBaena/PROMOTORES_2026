@@ -331,8 +331,10 @@ export function createRouteMapHtml(input: RouteMapHtmlInput) {
         ).addTo(map);
       }
 
+      let promoterCircle = null;
+
       if (payload.promoterLocation && Number.isFinite(payload.promoterLocation.latitude) && Number.isFinite(payload.promoterLocation.longitude)) {
-        const promoterCircle = L.circleMarker(
+        promoterCircle = L.circleMarker(
           [payload.promoterLocation.latitude, payload.promoterLocation.longitude],
           {
             radius: 10,
@@ -363,6 +365,15 @@ export function createRouteMapHtml(input: RouteMapHtmlInput) {
 
       window.setSelectedRouteItem = function(routeItemId) {
         focusRouteItem(routeItemId, true);
+      };
+
+      window.focusPromoterLocation = function() {
+        if (!promoterCircle) {
+          return;
+        }
+
+        map.flyTo(promoterCircle.getLatLng(), Math.max(map.getZoom(), 15), { duration: 0.6 });
+        promoterCircle.openPopup();
       };
 
       if (selectedRouteItemId) {

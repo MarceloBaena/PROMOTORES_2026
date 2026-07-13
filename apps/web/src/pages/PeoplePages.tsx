@@ -32,20 +32,23 @@ export function PromotersPage() {
           apiJson<{ data: Array<Record<string, unknown>> }>("/supervisors"),
           apiJson<{ data: CompanyOption[] }>("/companies")
         ]);
+
         setSupervisorOptions(
           supervisorsResponse.data
             .map((supervisor) => {
-              const user = supervisor.user as { name?: string } | undefined;
+              const profile = supervisor.user as { name?: string } | undefined;
               const id = String(supervisor.id ?? "");
               const code = Number(supervisor.code);
               const displayCode = Number.isFinite(code) && code > 0 ? `SUP-${String(code).padStart(4, "0")}` : id;
+
               return {
                 value: id,
-                label: user?.name ? `${displayCode} - ${user.name}` : displayCode
+                label: profile?.name ? `${displayCode} - ${profile.name}` : displayCode
               };
             })
             .filter((option) => option.value !== "")
         );
+
         setCompanyOptions(toCompanyOptions(companiesResponse.data));
       } catch {
         setSupervisorOptions([]);
@@ -58,7 +61,26 @@ export function PromotersPage() {
     <CrudPage
       title="Promotores"
       endpoint="/promoters"
+      formMode="drawer"
+      createTitle="Incluir promotor"
+      editTitle="Alterar promotor"
+      formSubtitle="Cadastro da equipe de campo com empresa, supervisor responsavel e telefone do aparelho."
+      createButtonLabel="Novo promotor"
+      searchPlaceholder="Buscar por codigo, nome, e-mail, telefone, supervisor ou empresa"
       initialValues={{ name: "", email: "", phone: "", password: "", companyId: user?.companyId ?? "", supervisorId: "" }}
+      fieldSections={[
+        {
+          title: "Identificacao do promotor",
+          description: "Dados usados no acesso e na identificacao da equipe.",
+          fields: ["name", "email", "password"],
+          columns: 1
+        },
+        {
+          title: "Vinculo operacional",
+          description: "Empresa, supervisor direto e telefone do aparelho.",
+          fields: isPlatformAdmin ? ["companyId", "supervisorId", "phone"] : ["supervisorId", "phone"]
+        }
+      ]}
       fields={[
         ...(isPlatformAdmin
           ? [{
@@ -75,20 +97,11 @@ export function PromotersPage() {
         { name: "name", source: "user.name", label: "Nome", placeholder: "Nome do promotor", required: true, fullWidth: true },
         { name: "email", source: "user.email", label: "E-mail", type: "email", placeholder: "email@exemplo.com", required: true, fullWidth: true },
         {
-          name: "phone",
-          label: "Telefone",
-          type: "tel",
-          format: "phone",
-          placeholder: "(65) 99999-9999",
-          description: "Numero do aparelho ou telefone principal do promotor para controle operacional.",
-          fullWidth: true
-        },
-        {
           name: "password",
           label: "Senha",
           type: "password",
-          placeholder: "Mínimo de 8 caracteres",
-          description: "Se deixar em branco, o sistema usa a senha padrão Promotor@123.",
+          placeholder: "Minimo de 8 caracteres",
+          description: "No cadastro informe a senha inicial. Na alteracao, preencha apenas se quiser trocar.",
           minLength: 8,
           fullWidth: true
         },
@@ -98,24 +111,61 @@ export function PromotersPage() {
           type: "select",
           searchable: true,
           placeholder: "Selecione um supervisor",
-          description: "Digite parte do nome para filtrar o supervisor cadastrado.",
           options: supervisorOptions,
+          fullWidth: true
+        },
+        {
+          name: "phone",
+          label: "Telefone",
+          type: "tel",
+          format: "phone",
+          placeholder: "(65) 99999-9999",
           fullWidth: true
         }
       ]}
       columns={[
-        { label: "Código", value: (item) => numericCode(item, "PRO") },
-        { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
-        { label: "Nome", value: userName },
-        { label: "E-mail", value: userEmail },
-        { label: "Telefone", value: (item) => formatPhone(item.phone) || "-" },
-        { label: "Situação", value: userStatus },
         {
-          label: "Supervisor",
+          label: "Promotor",
+          headerClassName: "w-[26%]",
+          className: "min-w-[220px]",
+          value: (item) => (
+            <div className="space-y-1.5">
+              {numericCode(item, "PRO")}
+              <strong className="block text-base leading-tight text-ink">{userName(item)}</strong>
+            </div>
+          )
+        },
+        {
+          label: "Contato",
+          headerClassName: "w-[26%]",
+          className: "min-w-[220px]",
+          value: (item) => (
+            <div className="space-y-1">
+              <strong className="block leading-snug text-ink">{userEmail(item)}</strong>
+              <span className="block text-xs font-semibold text-stone-500">Telefone: {formatPhone(item.phone) || "Nao informado"}</span>
+            </div>
+          )
+        },
+        {
+          label: "Vinculo",
+          headerClassName: "w-[28%]",
+          className: "min-w-[240px]",
           value: (item) => {
             const supervisor = item.supervisor as { user?: { name?: string } } | undefined;
-            return supervisor?.user?.name ?? "-";
+
+            return (
+              <div className="space-y-1">
+                <strong className="block leading-snug text-ink">{companyLabel(item.company as CompanyOption | null | undefined)}</strong>
+                <span className="block text-xs font-semibold text-stone-500">Supervisor: {supervisor?.user?.name ?? "Nao vinculado"}</span>
+              </div>
+            );
           }
+        },
+        {
+          label: "Situacao",
+          headerClassName: "w-[12%]",
+          className: "min-w-[120px]",
+          value: userStatus
         }
       ]}
     />
@@ -142,7 +192,26 @@ export function SupervisorsPage() {
     <CrudPage
       title="Supervisores"
       endpoint="/supervisors"
+      formMode="drawer"
+      createTitle="Incluir supervisor"
+      editTitle="Alterar supervisor"
+      formSubtitle="Cadastro dos supervisores responsaveis pela equipe, regiao e acompanhamento da operacao."
+      createButtonLabel="Novo supervisor"
+      searchPlaceholder="Buscar por codigo, nome, e-mail, regiao ou empresa"
       initialValues={{ name: "", email: "", password: "", companyId: user?.companyId ?? "", region: "" }}
+      fieldSections={[
+        {
+          title: "Identificacao do supervisor",
+          description: "Dados de acesso e identificacao do responsavel.",
+          fields: ["name", "email", "password"],
+          columns: 1
+        },
+        {
+          title: "Cobertura operacional",
+          description: "Empresa vinculada e regiao de atuacao.",
+          fields: isPlatformAdmin ? ["companyId", "region"] : ["region"]
+        }
+      ]}
       fields={[
         ...(isPlatformAdmin
           ? [{
@@ -158,16 +227,50 @@ export function SupervisorsPage() {
           : []),
         { name: "name", source: "user.name", label: "Nome", required: true },
         { name: "email", source: "user.email", label: "E-mail", type: "email", required: true },
-        { name: "password", label: "Senha", type: "password", minLength: 8 },
-        { name: "region", label: "Região" }
+        {
+          name: "password",
+          label: "Senha",
+          type: "password",
+          minLength: 8,
+          description: "Na alteracao, informe apenas se quiser redefinir a senha."
+        },
+        { name: "region", label: "Regiao" }
       ]}
       columns={[
-        { label: "Código", value: (item) => numericCode(item, "SUP") },
-        { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
-        { label: "Nome", value: userName },
-        { label: "E-mail", value: userEmail },
-        { label: "Situação", value: userStatus },
-        { label: "Região", value: (item) => String(item.region ?? "-") }
+        {
+          label: "Supervisor",
+          headerClassName: "w-[28%]",
+          className: "min-w-[220px]",
+          value: (item) => (
+            <div className="space-y-1.5">
+              {numericCode(item, "SUP")}
+              <strong className="block text-base leading-tight text-ink">{userName(item)}</strong>
+            </div>
+          )
+        },
+        {
+          label: "Contato",
+          headerClassName: "w-[24%]",
+          className: "min-w-[220px]",
+          value: (item) => <strong className="block leading-snug text-ink">{userEmail(item)}</strong>
+        },
+        {
+          label: "Cobertura",
+          headerClassName: "w-[28%]",
+          className: "min-w-[220px]",
+          value: (item) => (
+            <div className="space-y-1">
+              <strong className="block leading-snug text-ink">{companyLabel(item.company as CompanyOption | null | undefined)}</strong>
+              <span className="block text-xs font-semibold text-stone-500">Regiao: {String(item.region ?? "Nao informada")}</span>
+            </div>
+          )
+        },
+        {
+          label: "Situacao",
+          headerClassName: "w-[12%]",
+          className: "min-w-[120px]",
+          value: userStatus
+        }
       ]}
     />
   );

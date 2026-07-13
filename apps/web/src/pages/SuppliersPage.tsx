@@ -23,10 +23,6 @@ export function SuppliersPage() {
       : "";
 
   useEffect(() => {
-    if (!canLoadCompanies) {
-      return;
-    }
-
     void (async () => {
       try {
         const categoriesResponse = await apiJson<{ data: Array<Record<string, unknown>> }>("/product-categories");
@@ -35,7 +31,7 @@ export function SuppliersPage() {
             .filter((category) => category.status !== "INACTIVE")
             .map((category) => ({
               value: String(category.id ?? ""),
-              label: `${textValue(category.name, "Categoria")} • ${companyLabel(category.company as CompanyOption | null | undefined)}`
+              label: `${textValue(category.name, "Categoria")} - ${companyLabel(category.company as CompanyOption | null | undefined)}`
             }))
             .filter((option) => option.value !== "")
         );
@@ -43,6 +39,8 @@ export function SuppliersPage() {
         if (canLoadCompanies) {
           const companiesResponse = await apiJson<{ data: CompanyOption[] }>("/companies");
           setCompanyOptions(toCompanyOptions(companiesResponse.data));
+        } else {
+          setCompanyOptions([]);
         }
       } catch {
         setCompanyOptions([]);
@@ -55,6 +53,12 @@ export function SuppliersPage() {
     <CrudPage
       title="Fornecedores"
       endpoint="/suppliers"
+      formMode="drawer"
+      createTitle="Incluir fornecedor"
+      editTitle="Alterar fornecedor"
+      formSubtitle="Fornecedor ativo fica disponivel automaticamente para todos os clientes da empresa/filial."
+      createButtonLabel="Novo fornecedor"
+      searchPlaceholder="Buscar por nome, fantasia, documento, contato, categoria ou empresa"
       initialValues={{
         companyId: user?.companyId ?? "",
         companyDisplay,
@@ -68,6 +72,26 @@ export function SuppliersPage() {
         categoryIds: [],
         status: "ACTIVE"
       }}
+      fieldSections={[
+        {
+          title: "Identificacao do fornecedor",
+          description: "Empresa vinculada e dados principais do cadastro.",
+          fields: shouldShowCompanySelect
+            ? ["companyId", "name", "tradeName", "document", "status"]
+            : ["companyDisplay", "name", "tradeName", "document", "status"]
+        },
+        {
+          title: "Contato comercial",
+          description: "Responsavel, telefone e e-mail para a equipe.",
+          fields: ["contactName", "phone", "email"]
+        },
+        {
+          title: "Cobertura e observacoes",
+          description: "Categorias atendidas e observacoes operacionais.",
+          fields: ["categoryIds", "notes"],
+          columns: 1
+        }
+      ]}
       fields={[
         ...(shouldShowCompanySelect
           ? [{
@@ -118,20 +142,20 @@ export function SuppliersPage() {
       columns={[
         {
           label: "Fornecedor",
-          headerClassName: "w-[34%]",
+          headerClassName: "w-[36%]",
           className: "min-w-[260px]",
           value: (item) => (
             <div className="space-y-1.5">
               <strong className="block text-base leading-tight text-ink">{textValue(item.name)}</strong>
               <div className="text-xs font-semibold text-stone-500">Fantasia: {textValue(item.tradeName, "Nao informado")}</div>
-              <div className="text-xs font-semibold text-stone-500">Documento: {textValue(item.document, "Nao informado")}</div>
               <div className="text-xs font-semibold text-stone-500">Empresa: {companyLabel(item.company as CompanyOption | null | undefined)}</div>
+              <div className="text-xs font-semibold text-stone-500">Documento: {textValue(item.document, "Nao informado")}</div>
             </div>
           )
         },
         {
           label: "Contato",
-          headerClassName: "w-[28%]",
+          headerClassName: "w-[24%]",
           className: "min-w-[220px]",
           value: (item) => (
             <div className="space-y-1">
@@ -143,7 +167,7 @@ export function SuppliersPage() {
         },
         {
           label: "Categorias",
-          headerClassName: "w-[20%]",
+          headerClassName: "w-[22%]",
           className: "min-w-[210px]",
           value: (item) => {
             const categories = Array.isArray(item.categories) ? item.categories as Array<Record<string, unknown>> : [];
@@ -167,19 +191,19 @@ export function SuppliersPage() {
           }
         },
         {
-          label: "Clientes",
-          headerClassName: "w-[12%]",
-          className: "min-w-[110px]",
+          label: "Cobertura",
+          headerClassName: "w-[18%]",
+          className: "min-w-[180px]",
           value: (item) => {
             const count = (item._count as { clients?: number } | undefined)?.clients ?? 0;
-            return <span className="font-black text-ink">{count}</span>;
+
+            return (
+              <div className="space-y-2">
+                <strong className="block text-base leading-tight text-ink">{count} cliente(s)</strong>
+                <StatusPill value={String(item.status ?? "")} />
+              </div>
+            );
           }
-        },
-        {
-          label: "Situacao",
-          headerClassName: "w-[10%]",
-          className: "min-w-[110px]",
-          value: (item) => <StatusPill value={String(item.status ?? "")} />
         }
       ]}
     />

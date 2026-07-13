@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiJson } from "./api";
+import { useCompanyScope } from "../context/CompanyScopeContext";
 
 export interface LivePromoter {
   promoter: {
@@ -164,6 +165,7 @@ export function hasCoordinates<T extends { latitude: number | null; longitude: n
 }
 
 export function useLivePromoters() {
+  const { scopeKey } = useCompanyScope();
   const [items, setItems] = useState<LivePromoter[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -190,7 +192,7 @@ export function useLivePromoters() {
     const intervalId = window.setInterval(() => void loadRef.current(), LIVE_MAP_REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [scopeKey]);
 
   const connectedCount = useMemo(() => items.filter((item) => item.status === "online").length, [items]);
   const inVisitCount = useMemo(() => items.filter((item) => item.activeVisit).length, [items]);

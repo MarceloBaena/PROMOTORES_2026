@@ -4,7 +4,7 @@
 
 Este repositorio `C:\Promotor` e a fonte oficial do sistema Promotores 2026.
 
-Nao desenvolver em copias paralelas como `Projeto-Promotor` sem antes migrar a mudanca para este monorepo.
+Nao desenvolver em copias paralelas ou caminhos alternativos fora de `C:\Promotor` sem antes migrar a mudanca para este monorepo.
 
 ## Objetivo do projeto
 

@@ -14,6 +14,7 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "seed:access": "tsx src/scripts/bootstrap.ts",
+    "check:tenant": "tsx src/scripts/tenant-scope-check.ts",
     "supabase:check": "tsx src/scripts/supabase-check.ts",
     "supabase:setup": "tsx src/scripts/supabase-setup.ts"
   },

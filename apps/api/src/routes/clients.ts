@@ -76,28 +76,6 @@ function normalizeClient(client: Record<string, unknown>) {
   };
 }
 
-async function validateSupplierIds(companyId: string, supplierIds?: string[]) {
-  const uniqueSupplierIds = Array.from(new Set(supplierIds ?? []));
-
-  if (uniqueSupplierIds.length === 0) {
-    return [];
-  }
-
-  const suppliers = await prisma.supplier.findMany({
-    where: {
-      id: { in: uniqueSupplierIds },
-      companyId
-    },
-    select: { id: true }
-  });
-
-  if (suppliers.length !== uniqueSupplierIds.length) {
-    throw new AppError(400, "SUPPLIER_NOT_FOUND", "Um ou mais fornecedores nao existem nesta empresa/filial.");
-  }
-
-  return uniqueSupplierIds;
-}
-
 async function validateActivityIds(companyId: string, activityIds?: string[]) {
   const uniqueActivityIds = Array.from(new Set(activityIds ?? []));
 
@@ -118,41 +96,6 @@ async function validateActivityIds(companyId: string, activityIds?: string[]) {
   }
 
   return uniqueActivityIds;
-}
-
-async function resolveSupplierIdsFromCsv(companyId: string, rawSuppliers?: string) {
-  const tokens = (rawSuppliers ?? "")
-    .split(";")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const supplierIds: string[] = [];
-  const warnings: string[] = [];
-
-  for (const token of tokens) {
-    const supplier = await prisma.supplier.findFirst({
-      where: {
-        companyId,
-        OR: [
-          { id: token },
-          { name: { equals: token, mode: "insensitive" } },
-          { tradeName: { equals: token, mode: "insensitive" } },
-          { document: token }
-        ]
-      },
-      select: { id: true }
-    });
-
-    if (supplier) {
-      supplierIds.push(supplier.id);
-    } else {
-      warnings.push(`Fornecedor nao encontrado: ${token}`);
-    }
-  }
-
-  return {
-    supplierIds: Array.from(new Set(supplierIds)),
-    warnings
-  };
 }
 
 async function resolveActivityIdsFromCsv(companyId: string, rawActivities?: string) {
@@ -230,6 +173,7 @@ clientsRouter.post(
     const input = clientSchema.parse(req.body);
     const companyId = requireCompanyId(req, input.companyId);
     const { supplierIds, activityIds, ...clientInput } = input;
+    void supplierIds;
 
     if (clientInput.defaultPromoterId) {
       const promoter = await prisma.promoter.findUnique({
@@ -243,7 +187,6 @@ clientsRouter.post(
       }
     }
 
-    const validSupplierIds = await validateSupplierIds(companyId, supplierIds);
     const validActivityIds = await validateActivityIds(companyId, activityIds);
 
     const client = await prisma.$transaction(async (tx) => {
@@ -259,9 +202,19 @@ clientsRouter.post(
         include: clientInclude
       });
 
-      if (validSupplierIds.length > 0) {
+      const activeSupplierIds = (
+        await tx.supplier.findMany({
+          where: {
+            companyId,
+            status: "ACTIVE"
+          },
+          select: { id: true }
+        })
+      ).map((supplier) => supplier.id);
+
+      if (activeSupplierIds.length > 0) {
         await tx.clientSupplier.createMany({
-          data: validSupplierIds.map((supplierId) => ({
+          data: activeSupplierIds.map((supplierId) => ({
             clientId: createdClient.id,
             supplierId
           })),
@@ -294,6 +247,7 @@ clientsRouter.put(
   asyncHandler(async (req, res) => {
     const input = clientSchema.partial().parse(req.body);
     const { supplierIds, activityIds, ...clientInput } = input;
+    void supplierIds;
     const existing = await prisma.client.findUnique({
       where: { id: req.params.id },
       select: { companyId: true }
@@ -321,7 +275,6 @@ clientsRouter.put(
       throw new AppError(400, "COMPANY_REQUIRED", "Cliente precisa estar vinculado a uma empresa/filial.");
     }
 
-    const validSupplierIds = await validateSupplierIds(companyId, supplierIds);
     const validActivityIds = await validateActivityIds(companyId, activityIds);
 
     const client = await prisma.$transaction(async (tx) => {
@@ -333,18 +286,26 @@ clientsRouter.put(
         }
       });
 
-      if (supplierIds !== undefined) {
-        await tx.clientSupplier.deleteMany({ where: { clientId: req.params.id } });
+      await tx.clientSupplier.deleteMany({ where: { clientId: req.params.id } });
 
-        if (validSupplierIds.length > 0) {
-          await tx.clientSupplier.createMany({
-            data: validSupplierIds.map((supplierId) => ({
-              clientId: req.params.id,
-              supplierId
-            })),
-            skipDuplicates: true
-          });
-        }
+      const activeSupplierIds = (
+        await tx.supplier.findMany({
+          where: {
+            companyId,
+            status: "ACTIVE"
+          },
+          select: { id: true }
+        })
+      ).map((supplier) => supplier.id);
+
+      if (activeSupplierIds.length > 0) {
+        await tx.clientSupplier.createMany({
+          data: activeSupplierIds.map((supplierId) => ({
+            clientId: req.params.id,
+            supplierId
+          })),
+          skipDuplicates: true
+        });
       }
 
       if (activityIds !== undefined) {
@@ -416,6 +377,15 @@ clientsRouter.post(
     let importedRows = 0;
     const errors: Array<{ row: number; message: string }> = [];
     const warnings: Array<{ row: number; message: string }> = [];
+    const activeSupplierIds = (
+      await prisma.supplier.findMany({
+        where: {
+          companyId,
+          status: "ACTIVE"
+        },
+        select: { id: true }
+      })
+    ).map((supplier) => supplier.id);
 
     for (const [index, row] of records.entries()) {
       try {
@@ -426,7 +396,6 @@ clientsRouter.post(
         }
 
         const code = row.code || row.codigo || `CSV-${Date.now()}-${index}`;
-        const supplierResolution = await resolveSupplierIdsFromCsv(companyId, row.suppliers || row.fornecedores);
         const activityResolution = await resolveActivityIdsFromCsv(companyId, row.activities || row.atividades);
 
         const client = await prisma.client.upsert({
@@ -458,9 +427,13 @@ clientsRouter.post(
           }
         });
 
-        if (supplierResolution.supplierIds.length > 0) {
+        await prisma.clientSupplier.deleteMany({
+          where: { clientId: client.id }
+        });
+
+        if (activeSupplierIds.length > 0) {
           await prisma.clientSupplier.createMany({
-            data: supplierResolution.supplierIds.map((supplierId) => ({
+            data: activeSupplierIds.map((supplierId) => ({
               clientId: client.id,
               supplierId
             })),
@@ -476,10 +449,6 @@ clientsRouter.post(
             })),
             skipDuplicates: true
           });
-        }
-
-        for (const warning of supplierResolution.warnings) {
-          warnings.push({ row: index + 2, message: warning });
         }
 
         for (const warning of activityResolution.warnings) {

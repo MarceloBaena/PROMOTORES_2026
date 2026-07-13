@@ -67,7 +67,8 @@ export function startDatabaseSetupIfEnabled() {
       runMigrateDeploy();
 
       return bootstrapAccess({
-        resetPasswords: config.BOOTSTRAP_RESET_PASSWORDS
+        resetPasswords: config.BOOTSTRAP_RESET_PASSWORDS,
+        includeMultiCompanyDemo: config.BOOTSTRAP_MULTI_COMPANY_DEMO
       });
     })
     .then((result) => {

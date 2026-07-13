@@ -240,6 +240,7 @@ class _PromotorProAppState extends State<PromotorProApp> {
                 MaterialPageRoute(
                   builder: (_) => SyncPage(
                     repository: widget.repository,
+                    promoterName: session!.user.name,
                     onSync: _syncNow,
                     onChanged: _reload,
                   ),
@@ -250,7 +251,11 @@ class _PromotorProAppState extends State<PromotorProApp> {
                   context,
                   MaterialPageRoute(
                     builder: (_) =>
-                        VisitPage(repository: widget.repository, item: item),
+                        VisitPage(
+                          repository: widget.repository,
+                          item: item,
+                          promoterName: session!.user.name,
+                        ),
                   ),
                 );
                 await _reload();
@@ -382,7 +387,11 @@ class HomePage extends StatelessWidget {
     return AppShell(
       child: Column(
         children: [
-          AppTopBar(title: 'Roteiro do promotor', onLogout: onLogout),
+          AppTopBar(
+            title: 'Roteiro do promotor',
+            subtitle: 'Promotor: ${session.user.name}',
+            onLogout: onLogout,
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async => onRefresh(),
@@ -470,10 +479,16 @@ class HomePage extends StatelessWidget {
 }
 
 class VisitPage extends StatefulWidget {
-  const VisitPage({super.key, required this.repository, required this.item});
+  const VisitPage({
+    super.key,
+    required this.repository,
+    required this.item,
+    required this.promoterName,
+  });
 
   final AppRepository repository;
   final RouteItemView item;
+  final String promoterName;
 
   @override
   State<VisitPage> createState() => _VisitPageState();
@@ -588,7 +603,11 @@ class _VisitPageState extends State<VisitPage> {
     return AppShell(
       child: Column(
         children: [
-          AppTopBar(title: 'Atendimento', showBack: true),
+          AppTopBar(
+            title: 'Atendimento',
+            subtitle: 'Promotor: ${widget.promoterName}',
+            showBack: true,
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -660,11 +679,13 @@ class SyncPage extends StatefulWidget {
   const SyncPage({
     super.key,
     required this.repository,
+    required this.promoterName,
     required this.onSync,
     required this.onChanged,
   });
 
   final AppRepository repository;
+  final String promoterName;
   final Future<void> Function() onSync;
   final Future<void> Function({String? nextMessage}) onChanged;
 
@@ -716,7 +737,11 @@ class _SyncPageState extends State<SyncPage> {
     return AppShell(
       child: Column(
         children: [
-          AppTopBar(title: 'Sincronizacao', showBack: true),
+          AppTopBar(
+            title: 'Sincronizacao',
+            subtitle: 'Promotor: ${widget.promoterName}',
+            showBack: true,
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -2082,11 +2107,13 @@ class AppTopBar extends StatelessWidget {
   const AppTopBar({
     super.key,
     required this.title,
+    this.subtitle,
     this.showBack = false,
     this.onLogout,
   });
 
   final String title;
+  final String? subtitle;
   final bool showBack;
   final VoidCallback? onLogout;
 
@@ -2107,13 +2134,32 @@ class AppTopBar extends StatelessWidget {
             Image.asset('assets/promotorpro-icon.png', width: 42, height: 42),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFD6E2FF),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           if (onLogout != null)
