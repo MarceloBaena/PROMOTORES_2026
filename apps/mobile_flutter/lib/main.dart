@@ -18,7 +18,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.0.1 (build 2)';
+const appVersionLabel = 'APK Flutter v1.1.0 (build 3)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -528,17 +528,45 @@ class VisitPage extends StatefulWidget {
 }
 
 class _VisitPageState extends State<VisitPage> {
+  ClientSnapshot? client;
   LocalVisit? visit;
+  List<LocalSupplierExecution> supplierExecutions = [];
   List<LocalPhoto> photos = [];
   final notesController = TextEditingController();
+  final supplierNotesController = TextEditingController();
+  String? activeSupplierId;
+  bool? deliveryReceived;
+  bool? productsReplenished;
+  bool? stockoutFound;
   bool busy = false;
   String message = 'Pronto para iniciar atendimento.';
 
-  bool get hasCheckin => photos.any((photo) => photo.type == 'checkin');
-  bool get hasBefore => photos.any((photo) => photo.type == 'before');
-  bool get hasAfter => photos.any((photo) => photo.type == 'after');
-  bool get hasCheckout => photos.any((photo) => photo.type == 'checkout');
-  bool get requiredReady => hasCheckin && hasBefore && hasAfter && hasCheckout;
+  List<SupplierSnapshot> get clientSuppliers =>
+      suppliersFromPayload(client?.payload);
+  List<LocalPhoto> get visitLevelPhotos =>
+      photos.where((photo) => photo.supplierExecutionLocalId == null).toList();
+  Set<String> get visitPhotoTypes =>
+      visitLevelPhotos.map((photo) => photo.type).toSet();
+  bool get legacyFlowEnabled => clientSuppliers.isEmpty;
+  bool get hasCheckin => visitPhotoTypes.contains('checkin');
+  bool get hasBefore => visitPhotoTypes.contains('before');
+  bool get hasAfter => visitPhotoTypes.contains('after');
+  bool get hasCheckout => visitPhotoTypes.contains('checkout');
+  bool get requiredReady => legacyFlowEnabled
+      ? hasCheckin && hasBefore && hasAfter && hasCheckout
+      : hasCheckin && hasCheckout;
+  LocalSupplierExecution? get activeSupplierExecution =>
+      findSupplierExecution(supplierExecutions, activeSupplierId);
+  SupplierSnapshot? get activeSupplier =>
+      supplierById(clientSuppliers, activeSupplierId);
+  List<SupplierSnapshot> get incompleteSuppliers => clientSuppliers.where((
+    supplier,
+  ) {
+    final execution = findSupplierExecution(supplierExecutions, supplier.id);
+    return execution == null || execution.status != 'completed';
+  }).toList();
+  bool get allSuppliersCompleted =>
+      legacyFlowEnabled || incompleteSuppliers.isEmpty;
 
   @override
   void initState() {
@@ -549,6 +577,7 @@ class _VisitPageState extends State<VisitPage> {
   @override
   void dispose() {
     notesController.dispose();
+    supplierNotesController.dispose();
     super.dispose();
   }
 
@@ -556,16 +585,44 @@ class _VisitPageState extends State<VisitPage> {
     final currentVisit = await widget.repository.getVisitByRouteItem(
       widget.item.id,
     );
+    final currentClient = await widget.repository.getClientSnapshot(
+      widget.item.clientId,
+    );
     final currentPhotos = currentVisit == null
         ? <LocalPhoto>[]
         : await widget.repository.listPhotos(currentVisit.localId);
+    final currentSupplierExecutions = currentVisit == null
+        ? <LocalSupplierExecution>[]
+        : await widget.repository.listSupplierExecutions(currentVisit.localId);
     if (!mounted) return;
+
+    final selectedExecution = findSupplierExecution(
+      currentSupplierExecutions,
+      activeSupplierId,
+    );
+
     setState(() {
+      client = currentClient;
       visit = currentVisit;
       photos = currentPhotos;
+      supplierExecutions = currentSupplierExecutions;
       notesController.text = currentVisit?.notes ?? '';
+      if (selectedExecution != null) {
+        supplierNotesController.text = selectedExecution.notes ?? '';
+        deliveryReceived = selectedExecution.deliveryReceived;
+        productsReplenished = selectedExecution.productsReplenished;
+        stockoutFound = selectedExecution.stockoutFound;
+      } else {
+        activeSupplierId = null;
+        supplierNotesController.clear();
+        deliveryReceived = null;
+        productsReplenished = null;
+        stockoutFound = null;
+      }
       message = currentVisit == null
           ? 'Inicie o atendimento para liberar as evidencias.'
+          : currentVisit.status == 'completed'
+          ? 'Atendimento concluido localmente. Sincronize quando houver internet.'
           : 'Atendimento salvo localmente.';
     });
   }
@@ -576,8 +633,9 @@ class _VisitPageState extends State<VisitPage> {
       final created = await widget.repository.startVisit(widget.item);
       await _load();
       setState(
-        () => message =
-            'Atendimento iniciado offline. Agora capture check-in, antes, depois e check-out.',
+        () => message = legacyFlowEnabled
+            ? 'Atendimento iniciado offline. Agora capture check-in, antes, depois e check-out.'
+            : 'Atendimento iniciado offline. Capture check-in, passe por todos os fornecedores e finalize com o check-out.',
       );
       unawaited(widget.repository.sendHeartbeatFromVisit(created));
     } catch (error) {
@@ -587,20 +645,234 @@ class _VisitPageState extends State<VisitPage> {
     }
   }
 
-  Future<void> _capture(String type) async {
+  Future<void> _openSupplierExecution(SupplierSnapshot supplier) async {
+    final currentVisit = visit;
+    if (currentVisit == null) {
+      setState(() {
+        message = 'Inicie o atendimento antes de registrar o fornecedor.';
+      });
+      return;
+    }
+
+    setState(() => busy = true);
+    try {
+      final execution = await widget.repository.ensureSupplierExecution(
+        currentVisit,
+        supplier.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        activeSupplierId = supplier.id;
+        supplierNotesController.text = execution.notes ?? '';
+        deliveryReceived = execution.deliveryReceived;
+        productsReplenished = execution.productsReplenished;
+        stockoutFound = execution.stockoutFound;
+        message =
+            'Fornecedor ${supplierLabel(supplier)} aberto. Informe entrega e registre as fotos obrigatorias.';
+      });
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => message = normalizedError(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _saveSupplierDraft({
+    bool? nextDeliveryReceived,
+    bool? nextProductsReplenished,
+    bool? nextStockoutFound,
+    String? nextNotes,
+  }) async {
+    final currentVisit = visit;
+    final supplier = activeSupplier;
+    if (currentVisit == null || supplier == null) {
+      return;
+    }
+
+    final execution =
+        activeSupplierExecution ??
+        await widget.repository.ensureSupplierExecution(
+          currentVisit,
+          supplier.id,
+        );
+
+    final effectiveDelivery = nextDeliveryReceived ?? deliveryReceived;
+    final normalizedProducts = effectiveDelivery == false
+        ? false
+        : nextProductsReplenished ?? productsReplenished;
+    final normalizedStockout = effectiveDelivery == false
+        ? false
+        : nextStockoutFound ?? stockoutFound;
+
+    final nextExecution = execution.copyWith(
+      status: execution.status == 'pending' ? 'in_progress' : execution.status,
+      deliveryReceived: effectiveDelivery,
+      productsReplenished: normalizedProducts,
+      stockoutFound: normalizedStockout,
+      notes: nextNotes ?? supplierNotesController.text,
+      syncStatus: 'pending',
+      updatedAt: DateTime.now().toUtc().toIso8601String(),
+    );
+
+    await widget.repository.saveSupplierExecution(nextExecution);
+    await _load();
+  }
+
+  Future<void> _completeSupplierExecution() async {
+    final supplier = activeSupplier;
+    final execution = activeSupplierExecution;
+    if (supplier == null || execution == null) {
+      setState(() => message = 'Selecione um fornecedor para concluir.');
+      return;
+    }
+
+    if (deliveryReceived == null) {
+      setState(
+        () => message =
+            'Informe primeiro se o fornecedor ${supplierLabel(supplier)} recebeu mercadoria.',
+      );
+      return;
+    }
+
+    final executionPhotos = photos
+        .where((photo) => photo.supplierExecutionLocalId == execution.localId)
+        .toList();
+    final executionTypes = executionPhotos.map((photo) => photo.type).toSet();
+    final requiresDeliveryFlow = supplierRequiresDeliveryFlow(deliveryReceived);
+
+    if (requiresDeliveryFlow &&
+        (!executionTypes.contains('supplier_before') ||
+            !executionTypes.contains('supplier_after'))) {
+      setState(
+        () => message =
+            'Conclua o fornecedor ${supplierLabel(supplier)} com foto antes e foto depois.',
+      );
+      return;
+    }
+
+    if (requiresDeliveryFlow &&
+        (productsReplenished == null || stockoutFound == null)) {
+      setState(
+        () => message =
+            'Responda abastecimento e ruptura do fornecedor ${supplierLabel(supplier)} antes de concluir.',
+      );
+      return;
+    }
+
+    setState(() => busy = true);
+    try {
+      await widget.repository.saveSupplierExecution(
+        execution.copyWith(
+          status: 'completed',
+          deliveryReceived: deliveryReceived,
+          productsReplenished: requiresDeliveryFlow
+              ? productsReplenished
+              : false,
+          stockoutFound: requiresDeliveryFlow ? stockoutFound : false,
+          notes: supplierNotesController.text.trim(),
+          finishedAtDevice: DateTime.now().toUtc().toIso8601String(),
+          syncStatus: 'pending',
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      await widget.repository.addSyncLog(
+        'pending',
+        'Fornecedor ${supplierLabel(supplier)} concluido offline para ${widget.item.clientName}.',
+      );
+      await _load();
+      if (!mounted) return;
+      setState(() {
+        message =
+            'Fornecedor ${supplierLabel(supplier)} concluido. Agora siga para o proximo fornecedor ou finalize com check-out.';
+        activeSupplierId = null;
+        supplierNotesController.clear();
+        deliveryReceived = null;
+        productsReplenished = null;
+        stockoutFound = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => message = normalizedError(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _capture(String type, {SupplierSnapshot? supplier}) async {
     final currentVisit = visit;
     if (currentVisit == null) {
       setState(() => message = 'Inicie o atendimento antes de capturar fotos.');
       return;
     }
 
-    setState(() => busy = true);
-    try {
-      await widget.repository.capturePhoto(currentVisit, type);
-      await _load();
+    if (currentVisit.status == 'completed') {
       setState(
         () => message =
-            '${photoLabel(type)} salva localmente com data, hora e GPS quando disponivel.',
+            'Esta visita ja foi concluida localmente. Volte ao menu principal para sincronizar.',
+      );
+      return;
+    }
+
+    LocalSupplierExecution? execution;
+    if (supplier != null) {
+      execution = await widget.repository.ensureSupplierExecution(
+        currentVisit,
+        supplier.id,
+      );
+    }
+
+    final scopedPhotos = photos
+        .where(
+          (photo) => execution == null
+              ? photo.supplierExecutionLocalId == null
+              : photo.supplierExecutionLocalId == execution.localId,
+        )
+        .toList();
+    final scopedTypes = scopedPhotos.map((photo) => photo.type).toSet();
+
+    if (execution == null &&
+        type != 'occurrence_extra' &&
+        scopedTypes.contains(type)) {
+      setState(
+        () => message =
+            'A evidencia ${photoLabel(type).toLowerCase()} ja foi capturada nesta visita.',
+      );
+      return;
+    }
+
+    if (execution != null &&
+        (type == 'supplier_before' || type == 'supplier_after') &&
+        scopedTypes.contains(type)) {
+      setState(
+        () => message =
+            'A ${photoLabel(type).toLowerCase()} do fornecedor ${supplierLabel(supplier!)} ja foi capturada.',
+      );
+      return;
+    }
+
+    if (execution == null && type == 'checkout' && !allSuppliersCompleted) {
+      setState(
+        () => message =
+            'Conclua primeiro os ${incompleteSuppliers.length} fornecedor(es) pendentes antes do check-out.',
+      );
+      return;
+    }
+
+    setState(() => busy = true);
+    try {
+      await widget.repository.capturePhoto(
+        currentVisit,
+        type,
+        supplierExecutionLocalId: execution?.localId,
+        supplierId: supplier?.id,
+      );
+      await _load();
+      setState(
+        () => message = execution == null
+            ? '${photoLabel(type)} salva localmente com data, hora e GPS quando disponivel.'
+            : '${photoLabel(type)} do fornecedor ${supplierLabel(supplier!)} salva localmente.',
       );
     } catch (error) {
       setState(() => message = normalizedError(error));
@@ -614,8 +886,17 @@ class _VisitPageState extends State<VisitPage> {
     if (currentVisit == null) return;
     if (!requiredReady) {
       setState(
+        () => message = legacyFlowEnabled
+            ? 'Obrigatorio capturar check-in, foto antes, foto depois e check-out antes de encerrar.'
+            : 'Obrigatorio capturar check-in, concluir todos os fornecedores e registrar o check-out antes de encerrar.',
+      );
+      return;
+    }
+
+    if (!legacyFlowEnabled && !allSuppliersCompleted) {
+      setState(
         () => message =
-            'Obrigatorio capturar check-in, foto antes, foto depois e check-out antes de encerrar.',
+            'Ainda existem ${incompleteSuppliers.length} fornecedor(es) sem conclusao. Passe por todos antes de encerrar a visita.',
       );
       return;
     }
@@ -663,20 +944,146 @@ class _VisitPageState extends State<VisitPage> {
                     onPressed: busy ? null : () => _capture('checkin'),
                   ),
                   EvidenceButton(
-                    label: 'Foto antes',
-                    ok: hasBefore,
-                    onPressed: busy ? null : () => _capture('before'),
-                  ),
-                  EvidenceButton(
-                    label: 'Foto depois',
-                    ok: hasAfter,
-                    onPressed: busy ? null : () => _capture('after'),
-                  ),
-                  EvidenceButton(
                     label: 'Check-out com foto',
                     ok: hasCheckout,
-                    onPressed: busy ? null : () => _capture('checkout'),
+                    onPressed: busy
+                        ? null
+                        : allSuppliersCompleted
+                        ? () => _capture('checkout')
+                        : null,
                   ),
+                  if (legacyFlowEnabled) ...[
+                    EvidenceButton(
+                      label: 'Foto antes',
+                      ok: hasBefore,
+                      onPressed: busy ? null : () => _capture('before'),
+                    ),
+                    EvidenceButton(
+                      label: 'Foto depois',
+                      ok: hasAfter,
+                      onPressed: busy ? null : () => _capture('after'),
+                    ),
+                  ],
+                  if (!legacyFlowEnabled) ...[
+                    const SizedBox(height: 8),
+                    InfoCard(
+                      title: 'Execucao por fornecedor',
+                      body:
+                          'Conclua ${clientSuppliers.length} fornecedor(es) deste cliente. Se nao houve entrega, marque "Nao" em recebeu mercadoria para liberar a conclusao sem fotos do fornecedor.',
+                    ),
+                    const SizedBox(height: 12),
+                    ...clientSuppliers.map((supplier) {
+                      final execution = findSupplierExecution(
+                        supplierExecutions,
+                        supplier.id,
+                      );
+                      final executionPhotos = execution == null
+                          ? <LocalPhoto>[]
+                          : photos
+                                .where(
+                                  (photo) =>
+                                      photo.supplierExecutionLocalId ==
+                                      execution.localId,
+                                )
+                                .toList();
+                      final executionTypes = executionPhotos
+                          .map((photo) => photo.type)
+                          .toSet();
+                      return SupplierExecutionTile(
+                        supplier: supplier,
+                        status: execution?.status ?? 'pending',
+                        hasBefore: executionTypes.contains('supplier_before'),
+                        hasAfter: executionTypes.contains('supplier_after'),
+                        deliveryReceivedAnswered:
+                            execution?.deliveryReceived != null,
+                        productsReplenishedAnswered:
+                            execution?.productsReplenished != null,
+                        stockoutFoundAnswered: execution?.stockoutFound != null,
+                        active: activeSupplierId == supplier.id,
+                        onTap: busy
+                            ? null
+                            : () => _openSupplierExecution(supplier),
+                      );
+                    }),
+                    const SizedBox(height: 12),
+                    if (activeSupplier != null &&
+                        activeSupplierExecution != null)
+                      SupplierExecutionEditor(
+                        supplier: activeSupplier!,
+                        hasBefore: photos.any(
+                          (photo) =>
+                              photo.supplierExecutionLocalId ==
+                                  activeSupplierExecution!.localId &&
+                              photo.type == 'supplier_before',
+                        ),
+                        hasAfter: photos.any(
+                          (photo) =>
+                              photo.supplierExecutionLocalId ==
+                                  activeSupplierExecution!.localId &&
+                              photo.type == 'supplier_after',
+                        ),
+                        deliveryReceived: deliveryReceived,
+                        productsReplenished: productsReplenished,
+                        stockoutFound: stockoutFound,
+                        notesController: supplierNotesController,
+                        busy: busy,
+                        onCaptureBefore: () => _capture(
+                          'supplier_before',
+                          supplier: activeSupplier!,
+                        ),
+                        onCaptureAfter: () => _capture(
+                          'supplier_after',
+                          supplier: activeSupplier!,
+                        ),
+                        onDeliveryChanged: (value) async {
+                          setState(() {
+                            deliveryReceived = value;
+                            if (value == false) {
+                              productsReplenished = false;
+                              stockoutFound = false;
+                            }
+                          });
+                          await _saveSupplierDraft(
+                            nextDeliveryReceived: value,
+                            nextProductsReplenished: value == false
+                                ? false
+                                : productsReplenished,
+                            nextStockoutFound: value == false
+                                ? false
+                                : stockoutFound,
+                          );
+                        },
+                        onProductsChanged: (value) async {
+                          setState(() => productsReplenished = value);
+                          await _saveSupplierDraft(
+                            nextProductsReplenished: value,
+                          );
+                        },
+                        onStockoutChanged: (value) async {
+                          setState(() => stockoutFound = value);
+                          await _saveSupplierDraft(nextStockoutFound: value);
+                        },
+                        onNotesChanged: (value) async {
+                          await _saveSupplierDraft(nextNotes: value);
+                        },
+                        onComplete: _completeSupplierExecution,
+                        onClose: () {
+                          setState(() {
+                            activeSupplierId = null;
+                            supplierNotesController.clear();
+                            deliveryReceived = null;
+                            productsReplenished = null;
+                            stockoutFound = null;
+                          });
+                        },
+                      )
+                    else
+                      const InfoCard(
+                        title: 'Selecione um fornecedor',
+                        body:
+                            'Toque em um fornecedor para responder entrega, registrar foto antes e foto depois quando houver mercadoria, e concluir esse atendimento.',
+                      ),
+                  ],
                   const SizedBox(height: 12),
                   TextField(
                     controller: notesController,
@@ -704,7 +1111,10 @@ class _VisitPageState extends State<VisitPage> {
                 ),
                 const SizedBox(height: 8),
                 if (photos.isEmpty) const Text('Nenhuma foto capturada ainda.'),
-                ...photos.map((photo) => PhotoTile(photo: photo)),
+                ...photos.map(
+                  (photo) =>
+                      PhotoTile(photo: photo, suppliers: clientSuppliers),
+                ),
               ],
             ),
           ),
@@ -885,15 +1295,22 @@ class AppRepository {
       api.downloadSnapshot(accessToken);
   Future<void> saveSnapshot(MobileSnapshot snapshot) =>
       db.saveSnapshot(snapshot);
+  Future<ClientSnapshot?> getClientSnapshot(String clientId) =>
+      db.getClientSnapshot(clientId);
   Future<List<RouteItemView>> listRouteItems() => db.listRouteItems();
   Future<LocalVisit?> getVisitByRouteItem(String routeItemId) =>
       db.getVisitByRouteItem(routeItemId);
+  Future<List<LocalSupplierExecution>> listSupplierExecutions(
+    String visitLocalId,
+  ) => db.listSupplierExecutions(visitLocalId);
   Future<List<LocalPhoto>> listPhotos(String visitLocalId) =>
       db.listPhotos(visitLocalId);
   Future<QueueSummary> getQueueSummary() => db.getQueueSummary();
   Future<List<QueueDiagnostic>> listQueueDiagnostics() =>
       db.listQueueDiagnostics();
   Future<List<SyncLog>> listSyncLogs() => db.listSyncLogs();
+  Future<void> addSyncLog(String status, String message) =>
+      db.addSyncLog(status, message);
   Future<void> clearLocalOperationalData() => db.clearLocalOperationalData();
 
   Future<LocalVisit> startVisit(RouteItemView item) async {
@@ -921,7 +1338,59 @@ class AppRepository {
     return visit;
   }
 
-  Future<void> capturePhoto(LocalVisit visit, String type) async {
+  Future<LocalSupplierExecution> ensureSupplierExecution(
+    LocalVisit visit,
+    String supplierId,
+  ) async {
+    final existing = await db.getSupplierExecutionBySupplier(
+      visit.localId,
+      supplierId,
+    );
+
+    if (existing != null) {
+      if (existing.status == 'pending' || existing.status == 'skipped') {
+        final reopened = existing.copyWith(
+          status: 'in_progress',
+          syncStatus: 'pending',
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+        );
+        await db.upsertSupplierExecution(reopened);
+        await db.enqueue('supplierExecution', reopened.localId);
+        return reopened;
+      }
+      return existing;
+    }
+
+    final execution = LocalSupplierExecution(
+      localId: const Uuid().v4(),
+      visitLocalId: visit.localId,
+      clientId: visit.clientId,
+      supplierId: supplierId,
+      status: 'in_progress',
+      startedAtDevice: DateTime.now().toUtc().toIso8601String(),
+      syncStatus: 'pending',
+      updatedAt: DateTime.now().toUtc().toIso8601String(),
+    );
+    await db.upsertSupplierExecution(execution);
+    await db.enqueue('supplierExecution', execution.localId);
+    return execution;
+  }
+
+  Future<void> saveSupplierExecution(LocalSupplierExecution execution) async {
+    final nextExecution = execution.copyWith(
+      syncStatus: 'pending',
+      updatedAt: DateTime.now().toUtc().toIso8601String(),
+    );
+    await db.upsertSupplierExecution(nextExecution);
+    await db.enqueue('supplierExecution', nextExecution.localId);
+  }
+
+  Future<void> capturePhoto(
+    LocalVisit visit,
+    String type, {
+    String? supplierExecutionLocalId,
+    String? supplierId,
+  }) async {
     final picker = ImagePicker();
     final result = await picker.pickImage(
       source: ImageSource.camera,
@@ -948,6 +1417,8 @@ class AppRepository {
       type: type,
       uri: targetPath,
       capturedAt: DateTime.now().toUtc().toIso8601String(),
+      supplierExecutionLocalId: supplierExecutionLocalId,
+      supplierId: supplierId,
       gpsLatitude: gps?.latitude,
       gpsLongitude: gps?.longitude,
       syncStatus: 'pending',
@@ -963,16 +1434,7 @@ class AppRepository {
   }
 
   Future<void> finishVisit(LocalVisit visit, String notes) async {
-    final photos = await db.listPhotos(visit.localId);
-    final types = photos.map((photo) => photo.type).toSet();
-    if (!types.contains('checkin') ||
-        !types.contains('before') ||
-        !types.contains('after') ||
-        !types.contains('checkout')) {
-      throw Exception(
-        'Nao e permitido encerrar sem check-in, foto antes, foto depois e check-out.',
-      );
-    }
+    await _assertVisitReadyForCompletion(visit);
 
     await db.upsertVisit(
       visit.copyWith(
@@ -1001,6 +1463,8 @@ class AppRepository {
         await db.setQueueStatus(item.id, 'syncing');
         if (item.kind == 'visit') {
           await _syncVisit(accessToken, item.entityLocalId);
+        } else if (item.kind == 'supplierExecution') {
+          await _syncSupplierExecution(accessToken, item.entityLocalId);
         } else {
           await _syncPhoto(accessToken, item.entityLocalId);
         }
@@ -1020,6 +1484,80 @@ class AppRepository {
     return SyncResult(synced: synced, failed: failed);
   }
 
+  Future<void> _assertVisitReadyForCompletion(LocalVisit visit) async {
+    final photos = await db.listPhotos(visit.localId);
+    final visitLevelTypes = photos
+        .where((photo) => photo.supplierExecutionLocalId == null)
+        .map((photo) => photo.type)
+        .toSet();
+    final client = await db.getClientSnapshot(visit.clientId);
+    final suppliers = suppliersFromPayload(client?.payload);
+
+    final hasCheckin = visitLevelTypes.contains('checkin');
+    final hasCheckout = visitLevelTypes.contains('checkout');
+    if (!hasCheckin || !hasCheckout) {
+      throw Exception(
+        'Nao e permitido encerrar sem check-in e check-out da visita.',
+      );
+    }
+
+    if (suppliers.isEmpty) {
+      if (!visitLevelTypes.contains('before') ||
+          !visitLevelTypes.contains('after')) {
+        throw Exception(
+          'Nao e permitido encerrar sem check-in, foto antes, foto depois e check-out.',
+        );
+      }
+      return;
+    }
+
+    final executions = await db.listSupplierExecutions(visit.localId);
+    for (final supplier in suppliers) {
+      final execution = findSupplierExecution(executions, supplier.id);
+      if (execution == null || execution.status != 'completed') {
+        throw Exception(
+          'Fornecedor pendente: ${supplierLabel(supplier)}. Conclua todos os fornecedores antes de encerrar a visita.',
+        );
+      }
+
+      final executionPhotos = photos
+          .where((photo) => photo.supplierExecutionLocalId == execution.localId)
+          .toList();
+      _assertSupplierExecutionReady(execution, executionPhotos, supplier);
+    }
+  }
+
+  void _assertSupplierExecutionReady(
+    LocalSupplierExecution execution,
+    List<LocalPhoto> executionPhotos,
+    SupplierSnapshot supplier,
+  ) {
+    if (execution.deliveryReceived == null) {
+      throw Exception(
+        'Informe se houve entrega para o fornecedor ${supplierLabel(supplier)}.',
+      );
+    }
+
+    if (!supplierRequiresDeliveryFlow(execution.deliveryReceived)) {
+      return;
+    }
+
+    final photoTypes = executionPhotos.map((photo) => photo.type).toSet();
+    if (!photoTypes.contains('supplier_before') ||
+        !photoTypes.contains('supplier_after')) {
+      throw Exception(
+        'Fornecedor ${supplierLabel(supplier)} precisa de foto antes e foto depois.',
+      );
+    }
+
+    if (execution.productsReplenished == null ||
+        execution.stockoutFound == null) {
+      throw Exception(
+        'Responda abastecimento e ruptura do fornecedor ${supplierLabel(supplier)}.',
+      );
+    }
+  }
+
   Future<void> _syncVisit(String accessToken, String localId) async {
     final visit = await db.getVisit(localId);
     if (visit == null) return;
@@ -1031,16 +1569,7 @@ class AppRepository {
       return;
     }
 
-    final photos = await db.listPhotos(visit.localId);
-    final types = photos.map((photo) => photo.type).toSet();
-    if (!types.contains('checkin') ||
-        !types.contains('before') ||
-        !types.contains('after') ||
-        !types.contains('checkout')) {
-      throw Exception(
-        'Visita concluida localmente sem todas as fotos obrigatorias, incluindo check-out.',
-      );
-    }
+    await _assertVisitReadyForCompletion(visit);
 
     final serverVisitId =
         visit.serverId ??
@@ -1050,6 +1579,26 @@ class AppRepository {
         );
     await db.updateVisitServerId(localId, serverVisitId, 'pending');
 
+    final client = await db.getClientSnapshot(visit.clientId);
+    final suppliers = suppliersFromPayload(client?.payload);
+    if (suppliers.isNotEmpty) {
+      final executions = await db.listSupplierExecutions(visit.localId);
+      for (final supplier in suppliers) {
+        final execution = findSupplierExecution(executions, supplier.id);
+        if (execution == null) {
+          throw Exception(
+            'Fornecedor ${supplierLabel(supplier)} ainda nao tem execucao salva localmente.',
+          );
+        }
+        await _syncSupplierExecutionRecord(
+          accessToken,
+          serverVisitId,
+          execution,
+        );
+      }
+    }
+
+    final photos = await db.listPhotos(visit.localId);
     for (final photo in photos) {
       await _uploadPhoto(accessToken, serverVisitId, photo);
     }
@@ -1060,6 +1609,66 @@ class AppRepository {
       refreshed.copyWith(serverId: serverVisitId, status: 'completed'),
     );
     await db.updateVisitServerId(localId, finalServerId, 'synced');
+  }
+
+  Future<void> _syncSupplierExecution(
+    String accessToken,
+    String localId,
+  ) async {
+    final execution = await db.getSupplierExecution(localId);
+    if (execution == null) return;
+    if (execution.serverId != null && execution.syncStatus == 'synced') {
+      return;
+    }
+
+    final visit = await db.getVisit(execution.visitLocalId);
+    if (visit == null) {
+      throw Exception('Visita do fornecedor nao encontrada localmente.');
+    }
+
+    final serverVisitId =
+        visit.serverId ??
+        await api.sendVisit(
+          accessToken,
+          visit.copyWith(status: 'in_progress', finishedAt: null),
+        );
+    await db.updateVisitServerId(visit.localId, serverVisitId, 'pending');
+    await _syncSupplierExecutionRecord(accessToken, serverVisitId, execution);
+  }
+
+  Future<String> _syncSupplierExecutionRecord(
+    String accessToken,
+    String serverVisitId,
+    LocalSupplierExecution execution,
+  ) async {
+    if (execution.serverId != null && execution.syncStatus == 'synced') {
+      return execution.serverId!;
+    }
+
+    final client = await db.getClientSnapshot(execution.clientId);
+    final supplier = supplierById(
+      suppliersFromPayload(client?.payload),
+      execution.supplierId,
+    );
+    if (execution.status == 'completed' && supplier != null) {
+      final executionPhotos = (await db.listPhotos(execution.visitLocalId))
+          .where((photo) => photo.supplierExecutionLocalId == execution.localId)
+          .toList();
+      _assertSupplierExecutionReady(execution, executionPhotos, supplier);
+    }
+
+    await db.updateSupplierExecutionSyncStatus(execution.localId, 'syncing');
+    final serverId = await api.sendSupplierExecution(
+      accessToken,
+      serverVisitId,
+      execution,
+    );
+    await db.updateSupplierExecutionServerId(
+      execution.localId,
+      serverId,
+      'synced',
+    );
+    return serverId;
   }
 
   Future<void> _syncPhoto(String accessToken, String localId) async {
@@ -1088,7 +1697,31 @@ class AppRepository {
   ) async {
     if (photo.serverId != null || photo.syncStatus == 'synced') return;
     await db.updatePhotoSyncStatus(photo.localId, 'syncing');
-    final serverPhotoId = await api.uploadPhoto(accessToken, visitId, photo);
+    String? supplierExecutionServerId;
+    String? supplierId = photo.supplierId;
+
+    if (photo.supplierExecutionLocalId != null) {
+      final execution = await db.getSupplierExecution(
+        photo.supplierExecutionLocalId!,
+      );
+      if (execution == null) {
+        throw Exception('Execucao do fornecedor da foto nao foi encontrada.');
+      }
+      supplierExecutionServerId = await _syncSupplierExecutionRecord(
+        accessToken,
+        visitId,
+        execution,
+      );
+      supplierId ??= execution.supplierId;
+    }
+
+    final serverPhotoId = await api.uploadPhoto(
+      accessToken,
+      visitId,
+      photo,
+      supplierExecutionId: supplierExecutionServerId,
+      supplierId: supplierId,
+    );
     await db.updatePhotoServerId(photo.localId, serverPhotoId, 'synced');
   }
 
@@ -1196,11 +1829,43 @@ class ApiClient {
     return (body['data'] as Map<String, dynamic>)['id'] as String;
   }
 
+  Future<String> sendSupplierExecution(
+    String accessToken,
+    String visitId,
+    LocalSupplierExecution execution,
+  ) async {
+    final payload = {
+      'clientGeneratedId': execution.localId,
+      'supplierId': execution.supplierId,
+      'clientId': execution.clientId,
+      'status': execution.status,
+      'deliveryReceived': execution.deliveryReceived,
+      'productsReplenished': execution.productsReplenished,
+      'stockoutFound': execution.stockoutFound,
+      'notes': execution.notes,
+      'startedAtDevice': execution.startedAtDevice,
+      'finishedAtDevice': execution.finishedAtDevice,
+    };
+    final response = await _request(
+      execution.serverId == null
+          ? '/visits/$visitId/supplier-executions'
+          : '/visits/$visitId/supplier-executions/${execution.serverId}',
+      method: execution.serverId == null ? 'POST' : 'PUT',
+      accessToken: accessToken,
+      body: payload,
+      timeout: const Duration(seconds: 90),
+    );
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['data'] as Map<String, dynamic>)['id'] as String;
+  }
+
   Future<String> uploadPhoto(
     String accessToken,
     String visitId,
-    LocalPhoto photo,
-  ) async {
+    LocalPhoto photo, {
+    String? supplierExecutionId,
+    String? supplierId,
+  }) async {
     final bytes = await File(photo.uri).readAsBytes();
     final response = await _request(
       '/visits/$visitId/photos/base64',
@@ -1212,6 +1877,10 @@ class ApiClient {
         'capturedAt': photo.capturedAt,
         'gpsLatitude': photo.gpsLatitude,
         'gpsLongitude': photo.gpsLongitude,
+        ...?supplierExecutionId == null
+            ? null
+            : {'supplierExecutionId': supplierExecutionId},
+        ...?supplierId == null ? null : {'supplierId': supplierId},
         'contentType': 'image/jpeg',
         'base64Image': base64Encode(bytes),
       },
@@ -1259,7 +1928,7 @@ class LocalDatabase {
     final path = p.join(directory.path, 'promotorpro_flutter.db');
     _db = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE clients (id TEXT PRIMARY KEY, code TEXT, name TEXT NOT NULL, address TEXT, city TEXT, state TEXT, latitude REAL, longitude REAL, payload_json TEXT NOT NULL)',
@@ -1274,7 +1943,10 @@ class LocalDatabase {
           'CREATE TABLE visits (local_id TEXT PRIMARY KEY, server_id TEXT, route_id TEXT, route_item_id TEXT, client_id TEXT NOT NULL, status TEXT NOT NULL, started_at TEXT, finished_at TEXT, gps_latitude REAL, gps_longitude REAL, notes TEXT, sync_status TEXT NOT NULL, updated_at TEXT NOT NULL)',
         );
         await db.execute(
-          'CREATE TABLE photos (local_id TEXT PRIMARY KEY, visit_local_id TEXT NOT NULL, server_id TEXT, type TEXT NOT NULL, uri TEXT NOT NULL, captured_at TEXT NOT NULL, gps_latitude REAL, gps_longitude REAL, sync_status TEXT NOT NULL)',
+          'CREATE TABLE supplier_executions (local_id TEXT PRIMARY KEY, server_id TEXT, visit_local_id TEXT NOT NULL, client_id TEXT NOT NULL, supplier_id TEXT NOT NULL, status TEXT NOT NULL, delivery_received INTEGER, products_replenished INTEGER, stockout_found INTEGER, notes TEXT, started_at_device TEXT, finished_at_device TEXT, sync_status TEXT NOT NULL, updated_at TEXT NOT NULL)',
+        );
+        await db.execute(
+          'CREATE TABLE photos (local_id TEXT PRIMARY KEY, visit_local_id TEXT NOT NULL, server_id TEXT, type TEXT NOT NULL, uri TEXT NOT NULL, captured_at TEXT NOT NULL, supplier_execution_local_id TEXT, supplier_id TEXT, gps_latitude REAL, gps_longitude REAL, sync_status TEXT NOT NULL)',
         );
         await db.execute(
           'CREATE TABLE sync_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, entity_local_id TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
@@ -1290,6 +1962,19 @@ class LocalDatabase {
           } catch (_) {}
           try {
             await db.execute('ALTER TABLE clients ADD COLUMN longitude REAL');
+          } catch (_) {}
+        }
+        if (oldVersion < 3) {
+          await db.execute(
+            'CREATE TABLE IF NOT EXISTS supplier_executions (local_id TEXT PRIMARY KEY, server_id TEXT, visit_local_id TEXT NOT NULL, client_id TEXT NOT NULL, supplier_id TEXT NOT NULL, status TEXT NOT NULL, delivery_received INTEGER, products_replenished INTEGER, stockout_found INTEGER, notes TEXT, started_at_device TEXT, finished_at_device TEXT, sync_status TEXT NOT NULL, updated_at TEXT NOT NULL)',
+          );
+          try {
+            await db.execute(
+              'ALTER TABLE photos ADD COLUMN supplier_execution_local_id TEXT',
+            );
+          } catch (_) {}
+          try {
+            await db.execute('ALTER TABLE photos ADD COLUMN supplier_id TEXT');
           } catch (_) {}
         }
       },
@@ -1333,6 +2018,17 @@ class LocalDatabase {
         'created_at': nowIso(),
       });
     });
+  }
+
+  Future<ClientSnapshot?> getClientSnapshot(String clientId) async {
+    final db = await database;
+    final rows = await db.query(
+      'clients',
+      where: 'id = ?',
+      whereArgs: [clientId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : ClientSnapshot.fromDb(rows.first);
   }
 
   Future<List<RouteItemView>> listRouteItems() async {
@@ -1397,6 +2093,54 @@ class LocalDatabase {
       visit.toDb(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  Future<void> upsertSupplierExecution(LocalSupplierExecution execution) async {
+    final db = await database;
+    await db.insert(
+      'supplier_executions',
+      execution.toDb(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<LocalSupplierExecution?> getSupplierExecution(String localId) async {
+    final db = await database;
+    final rows = await db.query(
+      'supplier_executions',
+      where: 'local_id = ?',
+      whereArgs: [localId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : LocalSupplierExecution.fromDb(rows.first);
+  }
+
+  Future<LocalSupplierExecution?> getSupplierExecutionBySupplier(
+    String visitLocalId,
+    String supplierId,
+  ) async {
+    final db = await database;
+    final rows = await db.query(
+      'supplier_executions',
+      where: 'visit_local_id = ? AND supplier_id = ?',
+      whereArgs: [visitLocalId, supplierId],
+      orderBy: 'updated_at DESC',
+      limit: 1,
+    );
+    return rows.isEmpty ? null : LocalSupplierExecution.fromDb(rows.first);
+  }
+
+  Future<List<LocalSupplierExecution>> listSupplierExecutions(
+    String visitLocalId,
+  ) async {
+    final db = await database;
+    final rows = await db.query(
+      'supplier_executions',
+      where: 'visit_local_id = ?',
+      whereArgs: [visitLocalId],
+      orderBy: 'updated_at ASC',
+    );
+    return rows.map(LocalSupplierExecution.fromDb).toList();
   }
 
   Future<void> addPhoto(LocalPhoto photo) async {
@@ -1517,6 +2261,33 @@ class LocalDatabase {
     );
   }
 
+  Future<void> updateSupplierExecutionServerId(
+    String localId,
+    String serverId,
+    String status,
+  ) async {
+    final db = await database;
+    await db.update(
+      'supplier_executions',
+      {'server_id': serverId, 'sync_status': status, 'updated_at': nowIso()},
+      where: 'local_id = ?',
+      whereArgs: [localId],
+    );
+  }
+
+  Future<void> updateSupplierExecutionSyncStatus(
+    String localId,
+    String status,
+  ) async {
+    final db = await database;
+    await db.update(
+      'supplier_executions',
+      {'sync_status': status, 'updated_at': nowIso()},
+      where: 'local_id = ?',
+      whereArgs: [localId],
+    );
+  }
+
   Future<void> updatePhotoServerId(
     String localId,
     String serverId,
@@ -1567,14 +2338,30 @@ class LocalDatabase {
         sync_queue.attempts,
         sync_queue.last_error AS lastError,
         sync_queue.updated_at AS updatedAt,
+        clients.payload_json AS clientPayloadJson,
         clients.name AS clientName,
-        photos.type AS photoType
+        photos.type AS photoType,
+        COALESCE(
+          supplier_executions.supplier_id,
+          photo_execution.supplier_id,
+          photos.supplier_id
+        ) AS supplierId
       FROM sync_queue
+      LEFT JOIN photos
+        ON sync_queue.kind = 'photo'
+        AND photos.local_id = sync_queue.entity_local_id
+      LEFT JOIN supplier_executions
+        ON sync_queue.kind = 'supplierExecution'
+        AND supplier_executions.local_id = sync_queue.entity_local_id
+      LEFT JOIN supplier_executions photo_execution
+        ON sync_queue.kind = 'photo'
+        AND photo_execution.local_id = photos.supplier_execution_local_id
       LEFT JOIN visits
         ON (sync_queue.kind = 'visit' AND visits.local_id = sync_queue.entity_local_id)
-        OR (sync_queue.kind = 'photo' AND visits.local_id = (SELECT visit_local_id FROM photos WHERE photos.local_id = sync_queue.entity_local_id LIMIT 1))
-      LEFT JOIN clients ON clients.id = visits.client_id
-      LEFT JOIN photos ON photos.local_id = sync_queue.entity_local_id
+        OR (sync_queue.kind = 'photo' AND visits.local_id = photos.visit_local_id)
+        OR (sync_queue.kind = 'supplierExecution' AND visits.local_id = supplier_executions.visit_local_id)
+      LEFT JOIN clients
+        ON clients.id = COALESCE(visits.client_id, supplier_executions.client_id, photo_execution.client_id)
       WHERE sync_queue.status IN ('pending', 'syncing', 'failed')
       ORDER BY CASE sync_queue.status WHEN 'failed' THEN 0 WHEN 'syncing' THEN 1 ELSE 2 END, sync_queue.updated_at DESC
     ''');
@@ -1601,6 +2388,7 @@ class LocalDatabase {
     await db.transaction((txn) async {
       for (final table in [
         'photos',
+        'supplier_executions',
         'visits',
         'sync_queue',
         'sync_logs',
@@ -1721,6 +2509,22 @@ class ClientSnapshot {
     payload: json,
   );
 
+  factory ClientSnapshot.fromDb(Map<String, Object?> row) {
+    final payloadJson = row['payload_json'] as String? ?? '{}';
+    final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+    return ClientSnapshot(
+      id: row['id'] as String,
+      code: row['code']?.toString(),
+      name: row['name'] as String,
+      address: row['address'] as String?,
+      city: row['city'] as String?,
+      state: row['state'] as String?,
+      latitude: asDouble(row['latitude']),
+      longitude: asDouble(row['longitude']),
+      payload: payload,
+    );
+  }
+
   Map<String, Object?> toDb() => {
     'id': id,
     'code': code,
@@ -1732,6 +2536,46 @@ class ClientSnapshot {
     'longitude': longitude,
     'payload_json': jsonEncode(payload),
   };
+}
+
+class SupplierSnapshot {
+  SupplierSnapshot({
+    required this.id,
+    this.code,
+    required this.name,
+    this.tradeName,
+    this.document,
+    required this.payload,
+  });
+
+  final String id;
+  final String? code;
+  final String name;
+  final String? tradeName;
+  final String? document;
+  final Map<String, dynamic> payload;
+
+  String get displayName {
+    final preferred = (tradeName?.trim().isNotEmpty ?? false)
+        ? tradeName!.trim()
+        : name.trim();
+    if ((code?.trim().isNotEmpty ?? false)) {
+      return '${code!.trim()} - $preferred';
+    }
+    return preferred;
+  }
+
+  factory SupplierSnapshot.fromJson(Map<String, dynamic> json) =>
+      SupplierSnapshot(
+        id: json['id'] as String,
+        code: json['code']?.toString(),
+        name: (json['name'] as String?)?.trim().isNotEmpty == true
+            ? (json['name'] as String).trim()
+            : ((json['tradeName'] as String?) ?? 'Fornecedor').trim(),
+        tradeName: json['tradeName'] as String?,
+        document: json['document']?.toString(),
+        payload: json,
+      );
 }
 
 class RouteSnapshot {
@@ -1948,6 +2792,115 @@ class LocalVisit {
   };
 }
 
+class LocalSupplierExecution {
+  LocalSupplierExecution({
+    required this.localId,
+    this.serverId,
+    required this.visitLocalId,
+    required this.clientId,
+    required this.supplierId,
+    required this.status,
+    this.deliveryReceived,
+    this.productsReplenished,
+    this.stockoutFound,
+    this.notes,
+    this.startedAtDevice,
+    this.finishedAtDevice,
+    required this.syncStatus,
+    required this.updatedAt,
+  });
+
+  final String localId;
+  final String? serverId;
+  final String visitLocalId;
+  final String clientId;
+  final String supplierId;
+  final String status;
+  final bool? deliveryReceived;
+  final bool? productsReplenished;
+  final bool? stockoutFound;
+  final String? notes;
+  final String? startedAtDevice;
+  final String? finishedAtDevice;
+  final String syncStatus;
+  final String updatedAt;
+
+  LocalSupplierExecution copyWith({
+    String? serverId,
+    String? status,
+    Object? deliveryReceived = _keepValue,
+    Object? productsReplenished = _keepValue,
+    Object? stockoutFound = _keepValue,
+    Object? notes = _keepValue,
+    Object? startedAtDevice = _keepValue,
+    Object? finishedAtDevice = _keepValue,
+    String? syncStatus,
+    String? updatedAt,
+  }) {
+    return LocalSupplierExecution(
+      localId: localId,
+      serverId: serverId ?? this.serverId,
+      visitLocalId: visitLocalId,
+      clientId: clientId,
+      supplierId: supplierId,
+      status: status ?? this.status,
+      deliveryReceived: identical(deliveryReceived, _keepValue)
+          ? this.deliveryReceived
+          : deliveryReceived as bool?,
+      productsReplenished: identical(productsReplenished, _keepValue)
+          ? this.productsReplenished
+          : productsReplenished as bool?,
+      stockoutFound: identical(stockoutFound, _keepValue)
+          ? this.stockoutFound
+          : stockoutFound as bool?,
+      notes: identical(notes, _keepValue) ? this.notes : notes as String?,
+      startedAtDevice: identical(startedAtDevice, _keepValue)
+          ? this.startedAtDevice
+          : startedAtDevice as String?,
+      finishedAtDevice: identical(finishedAtDevice, _keepValue)
+          ? this.finishedAtDevice
+          : finishedAtDevice as String?,
+      syncStatus: syncStatus ?? this.syncStatus,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  factory LocalSupplierExecution.fromDb(Map<String, Object?> row) =>
+      LocalSupplierExecution(
+        localId: row['local_id'] as String,
+        serverId: row['server_id'] as String?,
+        visitLocalId: row['visit_local_id'] as String,
+        clientId: row['client_id'] as String,
+        supplierId: row['supplier_id'] as String,
+        status: row['status'] as String,
+        deliveryReceived: asBool(row['delivery_received']),
+        productsReplenished: asBool(row['products_replenished']),
+        stockoutFound: asBool(row['stockout_found']),
+        notes: row['notes'] as String?,
+        startedAtDevice: row['started_at_device'] as String?,
+        finishedAtDevice: row['finished_at_device'] as String?,
+        syncStatus: row['sync_status'] as String,
+        updatedAt: row['updated_at'] as String,
+      );
+
+  Map<String, Object?> toDb() => {
+    'local_id': localId,
+    'server_id': serverId,
+    'visit_local_id': visitLocalId,
+    'client_id': clientId,
+    'supplier_id': supplierId,
+    'status': status,
+    'delivery_received': boolToDb(deliveryReceived),
+    'products_replenished': boolToDb(productsReplenished),
+    'stockout_found': boolToDb(stockoutFound),
+    'notes': notes,
+    'started_at_device': startedAtDevice,
+    'finished_at_device': finishedAtDevice,
+    'sync_status': syncStatus,
+    'updated_at': updatedAt,
+  };
+}
+
 class LocalPhoto {
   LocalPhoto({
     required this.localId,
@@ -1956,6 +2909,8 @@ class LocalPhoto {
     required this.type,
     required this.uri,
     required this.capturedAt,
+    this.supplierExecutionLocalId,
+    this.supplierId,
     this.gpsLatitude,
     this.gpsLongitude,
     required this.syncStatus,
@@ -1967,6 +2922,8 @@ class LocalPhoto {
   final String type;
   final String uri;
   final String capturedAt;
+  final String? supplierExecutionLocalId;
+  final String? supplierId;
   final double? gpsLatitude;
   final double? gpsLongitude;
   final String syncStatus;
@@ -1978,6 +2935,8 @@ class LocalPhoto {
     type: row['type'] as String,
     uri: row['uri'] as String,
     capturedAt: row['captured_at'] as String,
+    supplierExecutionLocalId: row['supplier_execution_local_id'] as String?,
+    supplierId: row['supplier_id'] as String?,
     gpsLatitude: asDouble(row['gps_latitude']),
     gpsLongitude: asDouble(row['gps_longitude']),
     syncStatus: row['sync_status'] as String,
@@ -1990,6 +2949,8 @@ class LocalPhoto {
     'type': type,
     'uri': uri,
     'captured_at': capturedAt,
+    'supplier_execution_local_id': supplierExecutionLocalId,
+    'supplier_id': supplierId,
     'gps_latitude': gpsLatitude,
     'gps_longitude': gpsLongitude,
     'sync_status': syncStatus,
@@ -2025,6 +2986,7 @@ class QueueDiagnostic {
     this.lastError,
     this.clientName,
     this.photoType,
+    this.supplierName,
   });
 
   final String kind;
@@ -2033,15 +2995,31 @@ class QueueDiagnostic {
   final String? lastError;
   final String? clientName;
   final String? photoType;
+  final String? supplierName;
 
-  factory QueueDiagnostic.fromDb(Map<String, Object?> row) => QueueDiagnostic(
-    kind: row['kind'] as String,
-    status: row['status'] as String,
-    attempts: asInt(row['attempts']),
-    lastError: row['lastError'] as String?,
-    clientName: row['clientName'] as String?,
-    photoType: row['photoType'] as String?,
-  );
+  factory QueueDiagnostic.fromDb(Map<String, Object?> row) {
+    final supplierId = row['supplierId'] as String?;
+    String? supplierName;
+    final payloadJson = row['clientPayloadJson'] as String?;
+    if (supplierId != null && payloadJson != null && payloadJson.isNotEmpty) {
+      try {
+        final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+        supplierName = supplierById(
+          suppliersFromPayload(payload),
+          supplierId,
+        )?.displayName;
+      } catch (_) {}
+    }
+    return QueueDiagnostic(
+      kind: row['kind'] as String,
+      status: row['status'] as String,
+      attempts: asInt(row['attempts']),
+      lastError: row['lastError'] as String?,
+      clientName: row['clientName'] as String?,
+      photoType: row['photoType'] as String?,
+      supplierName: supplierName,
+    );
+  }
 }
 
 class SyncLog {
@@ -2163,11 +3141,81 @@ int asInt(Object? value) {
   return int.tryParse(value.toString()) ?? 0;
 }
 
+bool? asBool(Object? value) {
+  if (value == null) return null;
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final normalized = value.toString().trim().toLowerCase();
+  if (normalized == 'true' || normalized == '1' || normalized == 'sim') {
+    return true;
+  }
+  if (normalized == 'false' || normalized == '0' || normalized == 'nao') {
+    return false;
+  }
+  return null;
+}
+
+int? boolToDb(bool? value) {
+  if (value == null) return null;
+  return value ? 1 : 0;
+}
+
 double? asDouble(Object? value) {
   if (value == null) return null;
   if (value is double) return value;
   if (value is num) return value.toDouble();
   return double.tryParse(value.toString());
+}
+
+List<SupplierSnapshot> suppliersFromPayload(Map<String, dynamic>? payload) {
+  final raw = payload?['suppliers'];
+  if (raw is! List) {
+    return const <SupplierSnapshot>[];
+  }
+  return raw
+      .whereType<Map>()
+      .map(
+        (item) => SupplierSnapshot.fromJson(
+          item.map((key, value) => MapEntry(key.toString(), value)),
+        ),
+      )
+      .toList();
+}
+
+SupplierSnapshot? supplierById(
+  List<SupplierSnapshot> suppliers,
+  String? supplierId,
+) {
+  if (supplierId == null) return null;
+  for (final supplier in suppliers) {
+    if (supplier.id == supplierId) {
+      return supplier;
+    }
+  }
+  return null;
+}
+
+LocalSupplierExecution? findSupplierExecution(
+  List<LocalSupplierExecution> executions,
+  String? supplierId,
+) {
+  if (supplierId == null) return null;
+  for (final execution in executions) {
+    if (execution.supplierId == supplierId) {
+      return execution;
+    }
+  }
+  return null;
+}
+
+String supplierLabel(SupplierSnapshot supplier) => supplier.displayName;
+
+bool supplierRequiresDeliveryFlow(bool? deliveryReceived) =>
+    deliveryReceived != false;
+
+String answerLabel(bool? value) {
+  if (value == null) return 'Nao informado';
+  return value ? 'Sim' : 'Nao';
 }
 
 String photoLabel(String type) {
@@ -2176,6 +3224,9 @@ String photoLabel(String type) {
     'before' => 'Foto antes',
     'after' => 'Foto depois',
     'checkout' => 'Check-out',
+    'supplier_before' => 'Foto antes',
+    'supplier_after' => 'Foto depois',
+    'occurrence_extra' => 'Foto complementar',
     _ => 'Ocorrencia',
   };
 }
@@ -2744,13 +3795,448 @@ class EvidenceButton extends StatelessWidget {
   }
 }
 
-class PhotoTile extends StatelessWidget {
-  const PhotoTile({super.key, required this.photo});
+class SupplierExecutionTile extends StatelessWidget {
+  const SupplierExecutionTile({
+    super.key,
+    required this.supplier,
+    required this.status,
+    required this.hasBefore,
+    required this.hasAfter,
+    required this.deliveryReceivedAnswered,
+    required this.productsReplenishedAnswered,
+    required this.stockoutFoundAnswered,
+    required this.active,
+    required this.onTap,
+  });
 
-  final LocalPhoto photo;
+  final SupplierSnapshot supplier;
+  final String status;
+  final bool hasBefore;
+  final bool hasAfter;
+  final bool deliveryReceivedAnswered;
+  final bool productsReplenishedAnswered;
+  final bool stockoutFoundAnswered;
+  final bool active;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final statusLabel = switch (status) {
+      'completed' => 'Concluido',
+      'in_progress' => 'Em andamento',
+      _ => 'Pendente',
+    };
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: active ? brandBlue : line),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      supplierLabel(supplier),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: brandNavy,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  Chip(
+                    label: Text(
+                      statusLabel,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    backgroundColor: status == 'completed'
+                        ? const Color(0xFFD1FAE5)
+                        : status == 'in_progress'
+                        ? const Color(0xFFDBEAFE)
+                        : const Color(0xFFF8FAFC),
+                  ),
+                ],
+              ),
+              if ((supplier.document?.trim().isNotEmpty ?? false))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Documento: ${supplier.document}',
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MiniStatusChip(
+                    label: 'Entrega',
+                    done: deliveryReceivedAnswered,
+                  ),
+                  _MiniStatusChip(label: 'Antes', done: hasBefore),
+                  _MiniStatusChip(label: 'Depois', done: hasAfter),
+                  _MiniStatusChip(
+                    label: 'Abastecido',
+                    done: productsReplenishedAnswered,
+                  ),
+                  _MiniStatusChip(
+                    label: 'Ruptura',
+                    done: stockoutFoundAnswered,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SupplierExecutionEditor extends StatelessWidget {
+  const SupplierExecutionEditor({
+    super.key,
+    required this.supplier,
+    required this.hasBefore,
+    required this.hasAfter,
+    required this.deliveryReceived,
+    required this.productsReplenished,
+    required this.stockoutFound,
+    required this.notesController,
+    required this.busy,
+    required this.onCaptureBefore,
+    required this.onCaptureAfter,
+    required this.onDeliveryChanged,
+    required this.onProductsChanged,
+    required this.onStockoutChanged,
+    required this.onNotesChanged,
+    required this.onComplete,
+    required this.onClose,
+  });
+
+  final SupplierSnapshot supplier;
+  final bool hasBefore;
+  final bool hasAfter;
+  final bool? deliveryReceived;
+  final bool? productsReplenished;
+  final bool? stockoutFound;
+  final TextEditingController notesController;
+  final bool busy;
+  final VoidCallback onCaptureBefore;
+  final VoidCallback onCaptureAfter;
+  final FutureOr<void> Function(bool? value) onDeliveryChanged;
+  final FutureOr<void> Function(bool? value) onProductsChanged;
+  final FutureOr<void> Function(bool? value) onStockoutChanged;
+  final FutureOr<void> Function(String value) onNotesChanged;
+  final FutureOr<void> Function() onComplete;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final requiresDeliveryFlow = supplierRequiresDeliveryFlow(deliveryReceived);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Fornecedor em execucao',
+                      style: TextStyle(
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      supplierLabel(supplier),
+                      style: const TextStyle(
+                        color: brandNavy,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: busy ? null : onClose,
+                icon: const Icon(Icons.close, color: brandNavy),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          BooleanAnswerField(
+            label: 'Recebeu mercadoria hoje?',
+            value: deliveryReceived,
+            enabled: !busy,
+            onChanged: onDeliveryChanged,
+          ),
+          if (requiresDeliveryFlow) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: EvidenceButton(
+                    label: 'Foto antes do fornecedor',
+                    ok: hasBefore,
+                    onPressed: busy ? null : onCaptureBefore,
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: EvidenceButton(
+                    label: 'Foto depois do fornecedor',
+                    ok: hasAfter,
+                    onPressed: busy ? null : onCaptureAfter,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            BooleanAnswerField(
+              label: 'Produtos foram abastecidos?',
+              value: productsReplenished,
+              enabled: !busy,
+              onChanged: onProductsChanged,
+            ),
+            const SizedBox(height: 10),
+            BooleanAnswerField(
+              label: 'Encontrou ruptura?',
+              value: stockoutFound,
+              enabled: !busy,
+              onChanged: onStockoutChanged,
+            ),
+          ] else ...[
+            const SizedBox(height: 10),
+            const InfoCard(
+              title: 'Sem entrega no fornecedor',
+              body:
+                  'Quando nao houve mercadoria, nao exigimos foto antes/depois. Basta registrar a situacao e concluir este fornecedor.',
+            ),
+          ],
+          const SizedBox(height: 12),
+          TextField(
+            controller: notesController,
+            minLines: 2,
+            maxLines: 4,
+            onChanged: (value) {
+              final result = onNotesChanged(value);
+              if (result is Future<void>) {
+                unawaited(result);
+              }
+            },
+            decoration: const InputDecoration(
+              labelText: 'Observacoes do fornecedor',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          PrimaryButton(
+            label: busy ? 'Salvando...' : 'Concluir fornecedor',
+            onPressed: busy
+                ? null
+                : () {
+                    final result = onComplete();
+                    if (result is Future<void>) {
+                      unawaited(result);
+                    }
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class BooleanAnswerField extends StatelessWidget {
+  const BooleanAnswerField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool? value;
+  final bool enabled;
+  final FutureOr<void> Function(bool? value) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: brandNavy, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _BooleanChoiceButton(
+                label: 'Sim',
+                selected: value == true,
+                enabled: enabled,
+                onTap: () {
+                  final result = onChanged(true);
+                  if (result is Future<void>) {
+                    unawaited(result);
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _BooleanChoiceButton(
+                label: 'Nao',
+                selected: value == false,
+                enabled: enabled,
+                onTap: () {
+                  final result = onChanged(false);
+                  if (result is Future<void>) {
+                    unawaited(result);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        if (value != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Resposta atual: ${answerLabel(value)}',
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _BooleanChoiceButton extends StatelessWidget {
+  const _BooleanChoiceButton({
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: OutlinedButton(
+        onPressed: enabled ? onTap : null,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: selected ? const Color(0xFFDBEAFE) : Colors.white,
+          side: BorderSide(color: selected ? brandBlue : line),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? brandBlue : brandNavy,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniStatusChip extends StatelessWidget {
+  const _MiniStatusChip({required this.label, required this.done});
+
+  final String label;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: done ? const Color(0xFFD1FAE5) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: done ? const Color(0xFF6EE7B7) : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            done ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 14,
+            color: done ? brandGreen : const Color(0xFF94A3B8),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: done ? const Color(0xFF047857) : const Color(0xFF64748B),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PhotoTile extends StatelessWidget {
+  const PhotoTile({super.key, required this.photo, required this.suppliers});
+
+  final LocalPhoto photo;
+  final List<SupplierSnapshot> suppliers;
+
+  @override
+  Widget build(BuildContext context) {
+    final supplier = supplierById(suppliers, photo.supplierId);
+    final supplierText = supplier == null
+        ? null
+        : 'Fornecedor: ${supplierLabel(supplier)}';
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -2760,11 +4246,13 @@ class PhotoTile extends StatelessWidget {
       child: ListTile(
         leading: const Icon(Icons.photo_camera, color: brandBlue),
         title: Text(
-          photoLabel(photo.type),
+          supplier == null
+              ? photoLabel(photo.type)
+              : '${photoLabel(photo.type)} - ${supplierLabel(supplier)}',
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         subtitle: Text(
-          'Capturada: ${formatDate(photo.capturedAt)}\nGPS: ${photo.gpsLatitude?.toStringAsFixed(6) ?? 'sem gps'}, ${photo.gpsLongitude?.toStringAsFixed(6) ?? 'sem gps'}',
+          '${supplierText == null ? '' : '$supplierText\n'}Capturada: ${formatDate(photo.capturedAt)}\nGPS: ${photo.gpsLatitude?.toStringAsFixed(6) ?? 'sem gps'}, ${photo.gpsLongitude?.toStringAsFixed(6) ?? 'sem gps'}',
         ),
       ),
     );
@@ -2778,6 +4266,20 @@ class DiagnosticCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final entityLabel = switch (item.kind) {
+      'visit' => 'Visita',
+      'supplierExecution' =>
+        item.supplierName == null
+            ? 'Fornecedor'
+            : 'Fornecedor ${item.supplierName}',
+      'photo' =>
+        item.supplierName == null
+            ? item.photoType == null
+                  ? 'Foto'
+                  : 'Foto ${photoLabel(item.photoType!).toLowerCase()}'
+            : 'Foto ${photoLabel(item.photoType ?? 'occurrence_extra').toLowerCase()} de ${item.supplierName}',
+      _ => item.kind,
+    };
     return Card(
       elevation: 0,
       color: const Color(0xFFFFFBEB),
@@ -2787,7 +4289,7 @@ class DiagnosticCard extends StatelessWidget {
       ),
       child: ListTile(
         title: Text(
-          '${item.kind == 'visit' ? 'Visita' : 'Foto'} - ${item.clientName ?? 'cliente'}',
+          '$entityLabel - ${item.clientName ?? 'cliente'}',
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         subtitle: Text(

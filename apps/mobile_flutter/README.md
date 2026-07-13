@@ -9,11 +9,15 @@ Aplicativo Flutter offline-first para operacao de campo dos promotores.
 - Persistencia local em SQLite.
 - Lista de clientes liberados no roteiro.
 - Inicio de atendimento offline.
-- Captura de check-in, foto antes e foto depois.
+- Captura obrigatoria de check-in e check-out da visita.
+- Fluxo por fornecedor dentro do cliente.
+- Resposta obrigatoria se houve entrega para cada fornecedor.
+- Foto antes e foto depois por fornecedor quando houve entrega.
+- Liberacao de conclusao sem fotos do fornecedor quando nao houve entrega.
 - Registro de data/hora e GPS quando disponivel.
-- Encerramento bloqueado sem as fotos obrigatorias.
+- Encerramento bloqueado sem todas as evidencias minimas do cliente e dos fornecedores.
 - Fila local persistente de sincronizacao.
-- Upload idempotente de visita e fotos usando `clientGeneratedId`.
+- Upload idempotente de visita, execucao por fornecedor e fotos usando `clientGeneratedId`.
 - Heartbeat de localizacao para o mapa ao vivo enquanto houver roteiro aberto.
 
 ## Comandos
@@ -50,4 +54,10 @@ Neste workspace, a ultima build tambem foi copiada para:
 
 ```text
 artifacts\android\promotorpro-flutter-release.apk
+```
+
+Versao atual desta entrega:
+
+```text
+1.1.0+3
 ```
