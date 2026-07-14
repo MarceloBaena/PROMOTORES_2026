@@ -49,7 +49,9 @@ export function ClientActivitiesPage() {
   return (
     <CrudPage
       title="Atividades"
+      subtitle="Atividades padrao da visita que podem ser liberadas para clientes conforme o fluxo de atendimento."
       endpoint="/client-activities"
+      searchHint="Busque por codigo, atividade, descricao, empresa ou situacao."
       formMode="drawer"
       createTitle="Incluir atividade"
       editTitle="Alterar atividade"

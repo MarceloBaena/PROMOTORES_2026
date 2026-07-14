@@ -3,7 +3,6 @@ import { CrudPage, userEmail, userName, userStatus } from "./CrudPage";
 import { useAuth } from "../context/AuthContext";
 import { apiJson } from "../lib/api";
 import { companyLabel, toCompanyOptions, type CompanyOption } from "../lib/company-options";
-import { formatPhone } from "../lib/phone";
 
 function numericCode(item: Record<string, unknown>, prefix: "PRO" | "SUP") {
   const code = Number(item.code);
@@ -16,6 +15,20 @@ function numericCode(item: Record<string, unknown>, prefix: "PRO" | "SUP") {
     <span className="inline-flex h-8 items-center rounded-full border border-line bg-field px-3 font-mono text-xs font-black tracking-[0.12em] text-graphite">
       {prefix}-{String(code).padStart(4, "0")}
     </span>
+  );
+}
+
+function promoterPhone(item: Record<string, unknown>) {
+  const phone = String(item.phone ?? "").trim();
+  return phone.length > 0 ? phone : "Nao informado";
+}
+
+function promoterContact(item: Record<string, unknown>) {
+  return (
+    <div className="space-y-1">
+      <strong className="block leading-snug text-ink">{userEmail(item)}</strong>
+      <span className="block text-xs font-semibold text-stone-500">Telefone: {promoterPhone(item)}</span>
+    </div>
   );
 }
 
@@ -32,23 +45,20 @@ export function PromotersPage() {
           apiJson<{ data: Array<Record<string, unknown>> }>("/supervisors"),
           apiJson<{ data: CompanyOption[] }>("/companies")
         ]);
-
         setSupervisorOptions(
           supervisorsResponse.data
             .map((supervisor) => {
-              const profile = supervisor.user as { name?: string } | undefined;
+              const supervisorUser = supervisor.user as { name?: string } | undefined;
               const id = String(supervisor.id ?? "");
               const code = Number(supervisor.code);
               const displayCode = Number.isFinite(code) && code > 0 ? `SUP-${String(code).padStart(4, "0")}` : id;
-
               return {
                 value: id,
-                label: profile?.name ? `${displayCode} - ${profile.name}` : displayCode
+                label: supervisorUser?.name ? `${displayCode} - ${supervisorUser.name}` : displayCode
               };
             })
             .filter((option) => option.value !== "")
         );
-
         setCompanyOptions(toCompanyOptions(companiesResponse.data));
       } catch {
         setSupervisorOptions([]);
@@ -60,27 +70,11 @@ export function PromotersPage() {
   return (
     <CrudPage
       title="Promotores"
+      subtitle="Cadastro da equipe de campo com supervisor vinculado, telefone do aparelho e credenciais do aplicativo."
       endpoint="/promoters"
-      formMode="drawer"
-      createTitle="Incluir promotor"
-      editTitle="Alterar promotor"
-      formSubtitle="Cadastro da equipe de campo com empresa, supervisor responsavel e telefone do aparelho."
-      createButtonLabel="Novo promotor"
-      searchPlaceholder="Buscar por codigo, nome, e-mail, telefone, supervisor ou empresa"
-      initialValues={{ name: "", email: "", phone: "", password: "", companyId: user?.companyId ?? "", supervisorId: "" }}
-      fieldSections={[
-        {
-          title: "Identificacao do promotor",
-          description: "Dados usados no acesso e na identificacao da equipe.",
-          fields: ["name", "email", "password"],
-          columns: 1
-        },
-        {
-          title: "Vinculo operacional",
-          description: "Empresa, supervisor direto e telefone do aparelho.",
-          fields: isPlatformAdmin ? ["companyId", "supervisorId", "phone"] : ["supervisorId", "phone"]
-        }
-      ]}
+      searchHint="Busque por codigo, nome, e-mail, telefone, empresa ou supervisor responsavel."
+      formSubtitle="Use este cadastro para liberar o promotor no aplicativo, registrar o telefone e definir quem acompanha a operacao."
+      initialValues={{ name: "", email: "", password: "", phone: "", companyId: user?.companyId ?? "", supervisorId: "" }}
       fields={[
         ...(isPlatformAdmin
           ? [{
@@ -97,11 +91,18 @@ export function PromotersPage() {
         { name: "name", source: "user.name", label: "Nome", placeholder: "Nome do promotor", required: true, fullWidth: true },
         { name: "email", source: "user.email", label: "E-mail", type: "email", placeholder: "email@exemplo.com", required: true, fullWidth: true },
         {
+          name: "phone",
+          label: "Telefone do promotor",
+          placeholder: "(00) 00000-0000",
+          description: "Numero usado para controle do aparelho ou contato operacional.",
+          fullWidth: true
+        },
+        {
           name: "password",
           label: "Senha",
           type: "password",
           placeholder: "Minimo de 8 caracteres",
-          description: "No cadastro informe a senha inicial. Na alteracao, preencha apenas se quiser trocar.",
+          description: "Se deixar em branco, o sistema usa a senha padrao Promotor@123.",
           minLength: 8,
           fullWidth: true
         },
@@ -111,61 +112,23 @@ export function PromotersPage() {
           type: "select",
           searchable: true,
           placeholder: "Selecione um supervisor",
+          description: "Digite parte do nome para filtrar o supervisor cadastrado.",
           options: supervisorOptions,
-          fullWidth: true
-        },
-        {
-          name: "phone",
-          label: "Telefone",
-          type: "tel",
-          format: "phone",
-          placeholder: "(65) 99999-9999",
           fullWidth: true
         }
       ]}
       columns={[
+        { label: "Codigo", value: (item) => numericCode(item, "PRO") },
+        { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
+        { label: "Nome", value: userName },
+        { label: "Contato", value: promoterContact },
+        { label: "Situacao", value: userStatus },
         {
-          label: "Promotor",
-          headerClassName: "w-[26%]",
-          className: "min-w-[220px]",
-          value: (item) => (
-            <div className="space-y-1.5">
-              {numericCode(item, "PRO")}
-              <strong className="block text-base leading-tight text-ink">{userName(item)}</strong>
-            </div>
-          )
-        },
-        {
-          label: "Contato",
-          headerClassName: "w-[26%]",
-          className: "min-w-[220px]",
-          value: (item) => (
-            <div className="space-y-1">
-              <strong className="block leading-snug text-ink">{userEmail(item)}</strong>
-              <span className="block text-xs font-semibold text-stone-500">Telefone: {formatPhone(item.phone) || "Nao informado"}</span>
-            </div>
-          )
-        },
-        {
-          label: "Vinculo",
-          headerClassName: "w-[28%]",
-          className: "min-w-[240px]",
+          label: "Supervisor",
           value: (item) => {
             const supervisor = item.supervisor as { user?: { name?: string } } | undefined;
-
-            return (
-              <div className="space-y-1">
-                <strong className="block leading-snug text-ink">{companyLabel(item.company as CompanyOption | null | undefined)}</strong>
-                <span className="block text-xs font-semibold text-stone-500">Supervisor: {supervisor?.user?.name ?? "Nao vinculado"}</span>
-              </div>
-            );
+            return supervisor?.user?.name ?? "-";
           }
-        },
-        {
-          label: "Situacao",
-          headerClassName: "w-[12%]",
-          className: "min-w-[120px]",
-          value: userStatus
         }
       ]}
     />
@@ -191,27 +154,11 @@ export function SupervisorsPage() {
   return (
     <CrudPage
       title="Supervisores"
+      subtitle="Cadastro da lideranca de campo responsavel por acompanhar promotores, rotas, auditorias e produtividade."
       endpoint="/supervisors"
-      formMode="drawer"
-      createTitle="Incluir supervisor"
-      editTitle="Alterar supervisor"
-      formSubtitle="Cadastro dos supervisores responsaveis pela equipe, regiao e acompanhamento da operacao."
-      createButtonLabel="Novo supervisor"
-      searchPlaceholder="Buscar por codigo, nome, e-mail, regiao ou empresa"
+      searchHint="Busque por codigo, nome, e-mail, empresa ou regiao."
+      formSubtitle="Cadastre os supervisores que vao acompanhar a operacao e responder pela equipe em campo."
       initialValues={{ name: "", email: "", password: "", companyId: user?.companyId ?? "", region: "" }}
-      fieldSections={[
-        {
-          title: "Identificacao do supervisor",
-          description: "Dados de acesso e identificacao do responsavel.",
-          fields: ["name", "email", "password"],
-          columns: 1
-        },
-        {
-          title: "Cobertura operacional",
-          description: "Empresa vinculada e regiao de atuacao.",
-          fields: isPlatformAdmin ? ["companyId", "region"] : ["region"]
-        }
-      ]}
       fields={[
         ...(isPlatformAdmin
           ? [{
@@ -227,50 +174,16 @@ export function SupervisorsPage() {
           : []),
         { name: "name", source: "user.name", label: "Nome", required: true },
         { name: "email", source: "user.email", label: "E-mail", type: "email", required: true },
-        {
-          name: "password",
-          label: "Senha",
-          type: "password",
-          minLength: 8,
-          description: "Na alteracao, informe apenas se quiser redefinir a senha."
-        },
+        { name: "password", label: "Senha", type: "password", minLength: 8 },
         { name: "region", label: "Regiao" }
       ]}
       columns={[
-        {
-          label: "Supervisor",
-          headerClassName: "w-[28%]",
-          className: "min-w-[220px]",
-          value: (item) => (
-            <div className="space-y-1.5">
-              {numericCode(item, "SUP")}
-              <strong className="block text-base leading-tight text-ink">{userName(item)}</strong>
-            </div>
-          )
-        },
-        {
-          label: "Contato",
-          headerClassName: "w-[24%]",
-          className: "min-w-[220px]",
-          value: (item) => <strong className="block leading-snug text-ink">{userEmail(item)}</strong>
-        },
-        {
-          label: "Cobertura",
-          headerClassName: "w-[28%]",
-          className: "min-w-[220px]",
-          value: (item) => (
-            <div className="space-y-1">
-              <strong className="block leading-snug text-ink">{companyLabel(item.company as CompanyOption | null | undefined)}</strong>
-              <span className="block text-xs font-semibold text-stone-500">Regiao: {String(item.region ?? "Nao informada")}</span>
-            </div>
-          )
-        },
-        {
-          label: "Situacao",
-          headerClassName: "w-[12%]",
-          className: "min-w-[120px]",
-          value: userStatus
-        }
+        { label: "Codigo", value: (item) => numericCode(item, "SUP") },
+        { label: "Empresa/Filial", value: (item) => companyLabel(item.company as CompanyOption | null | undefined) },
+        { label: "Nome", value: userName },
+        { label: "E-mail", value: userEmail },
+        { label: "Situacao", value: userStatus },
+        { label: "Regiao", value: (item) => String(item.region ?? "-") }
       ]}
     />
   );

@@ -9,8 +9,6 @@ import {
   LogOut,
   Map,
   MapPinned,
-  Package,
-  Tags,
   Route,
   ShieldCheck,
   Store,
@@ -20,9 +18,7 @@ import {
 import { NavLink, Outlet } from "react-router-dom";
 import { BrandMark } from "./BrandMark";
 import { useAuth } from "../context/AuthContext";
-import { useCompanyScope } from "../context/CompanyScopeContext";
 import { roleLabel } from "../lib/labels";
-import { companyLabel } from "../lib/company-options";
 
 const navSections = [
   {
@@ -31,7 +27,7 @@ const navSections = [
       { to: "/", label: "Painel", icon: BarChart3 },
       { to: "/roteirizacao", label: "Roteirizacao", icon: Route },
       { to: "/visitas", label: "Visitas", icon: Map },
-      { to: "/mapa", label: "Mapa ao vivo", icon: MapPinned },
+      { to: "/mapa", label: "Acompanhamento do dia", icon: MapPinned },
       { to: "/auditoria", label: "Auditoria", icon: Flag },
       { to: "/relatorios", label: "Relatorios", icon: ClipboardList }
     ]
@@ -40,10 +36,7 @@ const navSections = [
     label: "Cadastros",
     items: [
       { to: "/empresas", label: "Empresas/Filiais", icon: Building },
-      { to: "/atividades", label: "Atividades", icon: ClipboardList },
-      { to: "/categorias-produtos", label: "Categorias", icon: Tags },
       { to: "/clientes", label: "Clientes", icon: Store },
-      { to: "/fornecedores", label: "Fornecedores", icon: Package },
       { to: "/promotores", label: "Promotores", icon: Users },
       { to: "/supervisores", label: "Supervisores", icon: ShieldCheck },
       { to: "/importacao", label: "Importacao", icon: FileSpreadsheet }
@@ -55,7 +48,6 @@ const navItems = navSections.flatMap((section) => section.items);
 
 export function Layout() {
   const { user, logout } = useAuth();
-  const { isGlobalAdmin, companies, selectedCompanyId, setSelectedCompanyId, companyScopeLabel } = useCompanyScope();
   const today = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
     day: "2-digit",
@@ -78,13 +70,15 @@ export function Layout() {
               </span>
             </div>
             <div className="mt-2 font-display text-sm font-bold capitalize text-white">{today}</div>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-white/10 bg-white/[0.08] px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-white/70">
-                Operacao de campo
-              </span>
-              <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-[11px] font-bold text-white/60">
-                Tempo real
-              </span>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl bg-white/[0.08] p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Operacao</div>
+                <div className="mt-1 text-sm font-black text-white">Campo</div>
+              </div>
+              <div className="rounded-2xl bg-white/[0.08] p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Dados</div>
+                <div className="mt-1 text-sm font-black text-execution">Tempo real</div>
+              </div>
             </div>
           </div>
         </div>
@@ -101,7 +95,7 @@ export function Layout() {
                       key={item.to}
                       to={item.to}
                       className={({ isActive }) =>
-                        `relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-bold transition ${
+                        `relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-bold transition ${
                           isActive
                             ? "bg-white text-navy shadow-lg shadow-black/10 before:absolute before:left-0 before:top-2.5 before:h-6 before:w-1 before:rounded-r before:bg-brand"
                             : "text-white/65 hover:bg-white/10 hover:text-white"
@@ -127,9 +121,6 @@ export function Layout() {
               <div className="min-w-0">
                 <div className="truncate text-sm font-bold">{user?.name}</div>
                 <div className="truncate text-xs font-medium text-white/55">{user?.email}</div>
-                <div className="mt-1 truncate text-[11px] font-bold uppercase tracking-[0.12em] text-white/45">
-                  {companyScopeLabel}
-                </div>
               </div>
             </div>
           </div>
@@ -182,27 +173,6 @@ export function Layout() {
             </nav>
 
             <div className="hidden items-center gap-2 lg:flex">
-              {isGlobalAdmin ? (
-                <label className="min-w-[280px]">
-                  <span className="sr-only">Empresa/filial</span>
-                  <select
-                    className="input-control h-11 min-w-[280px] bg-white"
-                    value={selectedCompanyId}
-                    onChange={(event) => setSelectedCompanyId(event.target.value)}
-                  >
-                    <option value="">Todas as empresas</option>
-                    {companies.map((company) => (
-                      <option key={company.id} value={company.id}>
-                        {companyLabel(company)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <span className="rounded-full border border-line bg-field px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-slateText">
-                  {companyScopeLabel}
-                </span>
-              )}
               <button type="button" className="icon-button" title="Notificacoes">
                 <Bell className="h-4 w-4" />
               </button>

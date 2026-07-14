@@ -20,7 +20,9 @@ export function CompaniesPage() {
   return (
     <CrudPage
       title="Empresas/Filiais"
+      subtitle="Base estrutural da operacao. Cada empresa organiza clientes, fornecedores, categorias, atividades e equipe."
       endpoint="/companies"
+      searchHint="Busque por codigo, nome da empresa, CNPJ, contato, bairro, cidade ou situacao."
       formMode="drawer"
       createTitle="Incluir empresa/filial"
       editTitle="Alterar empresa/filial"

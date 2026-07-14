@@ -3,19 +3,17 @@ import type { ReactNode } from "react";
 import { Check, Edit3, Plus, RefreshCcw, Search, Trash2, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
-import { useCompanyScope } from "../context/CompanyScopeContext";
 import { apiJson } from "../lib/api";
-import { formatPhone } from "../lib/phone";
 
-type FormValue = string | string[];
+type FieldOption = string | { value: string; label: string };
+type FieldValue = string | string[];
 
 interface Field {
   name: string;
   label: string;
   source?: string;
-  type?: "text" | "email" | "password" | "select" | "search" | "multiselect" | "tel";
-  format?: "phone";
-  options?: Array<string | { value: string; label: string }>;
+  type?: "text" | "email" | "password" | "select" | "search" | "multiselect";
+  options?: FieldOption[];
   placeholder?: string;
   description?: string;
   noSubmit?: boolean;
@@ -35,6 +33,7 @@ interface FieldSection {
 
 interface CrudPageProps {
   title: string;
+  subtitle?: string;
   endpoint: string;
   fields: Field[];
   columns: Array<{
@@ -43,127 +42,98 @@ interface CrudPageProps {
     className?: string;
     headerClassName?: string;
   }>;
-  initialValues: Record<string, FormValue>;
-  searchMode?: "search-first" | "always";
-  searchMinLength?: number;
-  formMode?: "sidebar" | "drawer";
+  initialValues: Record<string, FieldValue>;
+  searchHint?: string;
+  searchPlaceholder?: string;
+  formSubtitle?: string;
+  formMode?: "panel" | "drawer";
+  fieldSections?: FieldSection[];
   createTitle?: string;
   editTitle?: string;
-  formSubtitle?: string;
   createButtonLabel?: string;
-  fieldSections?: FieldSection[];
-  searchPlaceholder?: string;
-  searchHint?: string;
 }
 
 export function CrudPage({
   title,
+  subtitle,
   endpoint,
   fields,
   columns,
   initialValues,
-  searchMode = "search-first",
-  searchMinLength = 2,
-  formMode = "sidebar",
+  searchHint,
+  searchPlaceholder,
+  formSubtitle,
+  formMode = "panel",
+  fieldSections,
   createTitle,
   editTitle,
-  formSubtitle,
-  createButtonLabel,
-  fieldSections,
-  searchPlaceholder,
-  searchHint
+  createButtonLabel
 }: CrudPageProps) {
-  const { scopeKey } = useCompanyScope();
   const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
-  const [form, setForm] = useState(initialValues);
+  const [form, setForm] = useState<Record<string, FieldValue>>(initialValues);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
-  const [submittedSearch, setSubmittedSearch] = useState("");
-  const [searchRequested, setSearchRequested] = useState(searchMode !== "search-first");
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
-  const [isFormOpen, setIsFormOpen] = useState(formMode === "sidebar");
 
-  const actionLabel = useMemo(() => (editingId ? "Salvar alteracao" : "Salvar cadastro"), [editingId]);
-  const requiresSearch = searchMode === "search-first";
-  const hasActiveSearch = !requiresSearch || searchRequested;
-  const resolvedSearchPlaceholder = searchPlaceholder ?? (title === "Clientes"
-    ? "Buscar cliente por codigo, nome, documento, representante, endereco, bairro, cidade, empresa, promotor ou atividade"
-    : `Buscar em ${title.toLowerCase()}`);
-  const resolvedCreateTitle = createTitle ?? (title === "Clientes" ? "Incluir cliente" : "Incluir registro");
-  const resolvedEditTitle = editTitle ?? (title === "Clientes" ? "Alterar ficha do cliente" : "Alterar registro");
-  const resolvedFormSubtitle = formSubtitle ?? (title === "Clientes"
-    ? "Cadastro completo para roteiro e atendimento em campo."
-    : undefined);
-  const resolvedCreateButtonLabel = createButtonLabel ?? (title === "Clientes" ? "Novo cliente" : "Novo cadastro");
-  const formTitle = editingId ? resolvedEditTitle : resolvedCreateTitle;
-  const resolvedSearchHint = searchHint ?? (requiresSearch
-    ? `Digite ${searchMinLength}+ caracteres ou use a busca vazia para listar tudo.`
-    : "Busca vazia lista todos os registros.");
+  const filteredItems = useMemo(() => {
+    const search = tableSearch.trim().toLowerCase();
 
-  const resolvedFieldSections = useMemo(() => {
-    if (!fieldSections || fieldSections.length === 0) {
-      return [{
-        title: "Dados do cadastro",
-        fields: fields.map((field) => field.name),
-        columns: 2 as const
-      }];
+    if (!search) {
+      return items;
     }
 
-    const configuredFieldNames = new Set(fieldSections.flatMap((section) => section.fields));
-    const remainingFields = fields
-      .filter((field) => !configuredFieldNames.has(field.name))
-      .map((field) => field.name);
+    return items.filter((item) => JSON.stringify(item).toLowerCase().includes(search));
+  }, [items, tableSearch]);
 
-    if (remainingFields.length === 0) {
+  const resolvedSearchPlaceholder =
+    searchPlaceholder ??
+    (title === "Clientes"
+      ? "Buscar cliente por codigo, nome, documento, endereco, bairro, cidade, empresa ou promotor"
+      : `Buscar em ${title.toLowerCase()}`);
+
+  const resolvedFormTitle = useMemo(() => {
+    if (editingId) {
+      return editTitle ?? (title === "Clientes" ? "Alterar ficha do cliente" : "Alterar registro");
+    }
+
+    return createTitle ?? (title === "Clientes" ? "Incluir cliente" : "Incluir registro");
+  }, [createTitle, editTitle, editingId, title]);
+
+  const actionLabel = useMemo(() => {
+    if (editingId) {
+      return "Salvar alteracao";
+    }
+
+    return createButtonLabel ?? "Incluir";
+  }, [createButtonLabel, editingId]);
+
+  const sections = useMemo(() => {
+    if (fieldSections && fieldSections.length > 0) {
       return fieldSections;
     }
 
     return [
-      ...fieldSections,
       {
-        title: "Outros dados",
-        fields: remainingFields,
+        title: "Dados do cadastro",
+        description: "Preencha os campos abaixo e confirme a gravacao.",
+        fields: fields.map((field) => field.name),
         columns: 2 as const
       }
     ];
   }, [fieldSections, fields]);
 
-  useEffect(() => {
-    if (formMode === "sidebar") {
-      setIsFormOpen(true);
-    }
-  }, [formMode]);
+  const fieldMap = useMemo(() => {
+    return new Map(fields.map((field) => [field.name, field]));
+  }, [fields]);
 
-  async function load(searchValue = submittedSearch, allowBlankSearch = false) {
-    const normalizedSearch = searchValue.trim();
-
-    if (requiresSearch && normalizedSearch.length === 0 && !allowBlankSearch) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-
-    if (requiresSearch && normalizedSearch.length > 0 && normalizedSearch.length < searchMinLength) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-
+  async function load() {
     setLoading(true);
     setMessage(null);
 
     try {
-      const params = new URLSearchParams();
-
-      if (normalizedSearch) {
-        params.set("q", normalizedSearch);
-      }
-
-      const response = await apiJson<{ data: Array<Record<string, unknown>> }>(
-        params.size > 0 ? `${endpoint}?${params.toString()}` : endpoint
-      );
+      const response = await apiJson<{ data: Array<Record<string, unknown>> }>(endpoint);
       setItems(response.data);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Nao foi possivel carregar.");
@@ -173,47 +143,29 @@ export function CrudPage({
   }
 
   useEffect(() => {
-    if (requiresSearch) {
-      setItems([]);
-      setSearchRequested(false);
-      return;
-    }
-
-    void load("");
-  }, [endpoint, requiresSearch, scopeKey]);
-
-  function softDeleteMode(item: Record<string, unknown>) {
-    return typeof item.status === "string";
-  }
-
-  function removeActionLabel(item: Record<string, unknown>) {
-    return softDeleteMode(item) ? "Inativar" : "Excluir";
-  }
-
-  function removeSuccessMessage(item: Record<string, unknown>) {
-    return softDeleteMode(item) ? "Registro inativado com sucesso." : "Registro removido com sucesso.";
-  }
-
-  function removeConfirmMessage(item: Record<string, unknown>) {
-    return softDeleteMode(item)
-      ? "Deseja inativar este registro? Ele deixara de ficar ativo nos cadastros, mas continuara preservado no historico."
-      : "Deseja excluir este registro?";
-  }
+    void load();
+  }, [endpoint]);
 
   function validateForm() {
     for (const field of fields) {
       const rawValue = form[field.name];
-      const value = Array.isArray(rawValue) ? rawValue : rawValue?.trim() ?? "";
+      const value = Array.isArray(rawValue) ? rawValue : String(rawValue ?? "").trim();
 
-      if (field.required && (Array.isArray(value) ? value.length === 0 : value === "")) {
-        return `Preencha o campo ${field.label}.`;
+      if (field.required) {
+        if (Array.isArray(value) && value.length === 0) {
+          return `Preencha o campo ${field.label}.`;
+        }
+
+        if (!Array.isArray(value) && value === "") {
+          return `Preencha o campo ${field.label}.`;
+        }
       }
 
-      if (!Array.isArray(value) && field.minLength && value !== "" && value.length < field.minLength) {
+      if (field.minLength && !Array.isArray(value) && value !== "" && value.length < field.minLength) {
         return `${field.label} precisa ter pelo menos ${field.minLength} caracteres.`;
       }
 
-      if (!Array.isArray(value) && field.type === "email" && value !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      if (field.type === "email" && !Array.isArray(value) && value !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
         return `Informe um e-mail valido em ${field.label}.`;
       }
     }
@@ -231,59 +183,43 @@ export function CrudPage({
     }, item);
   }
 
+  function normalizeOption(option: FieldOption) {
+    return typeof option === "string" ? { value: option, label: option } : option;
+  }
+
+  function normalizeMultiselectValue(value: unknown) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .map((entry) => {
+        if (entry && typeof entry === "object" && "id" in (entry as Record<string, unknown>)) {
+          return String((entry as Record<string, unknown>).id ?? "");
+        }
+
+        return String(entry ?? "");
+      })
+      .filter((entry) => entry !== "");
+  }
+
   function formFromItem(item: Record<string, unknown>) {
-    return fields.reduce<Record<string, FormValue>>((acc, field) => {
+    return fields.reduce<Record<string, FieldValue>>((acc, field) => {
       if (field.type === "password") {
         acc[field.name] = "";
         return acc;
       }
 
       const value = valueFromPath(item, field.source ?? field.name) ?? valueFromPath(item, field.name);
-      if (field.type === "multiselect") {
-        acc[field.name] = Array.isArray(value)
-          ? value
-              .map((entry) => {
-                if (entry && typeof entry === "object") {
-                  return String((entry as Record<string, unknown>).id ?? "");
-                }
 
-                return String(entry ?? "");
-              })
-              .filter(Boolean)
-          : [];
+      if (field.type === "multiselect") {
+        acc[field.name] = normalizeMultiselectValue(value);
         return acc;
       }
 
       acc[field.name] = value == null ? "" : String(value);
       return acc;
     }, { ...initialValues });
-  }
-
-  function resetForm() {
-    setEditingId(null);
-    setForm(initialValues);
-    setSearchFilters({});
-  }
-
-  function closeForm() {
-    resetForm();
-    if (formMode === "drawer") {
-      setIsFormOpen(false);
-    }
-  }
-
-  function openCreateForm() {
-    resetForm();
-    setMessage(null);
-    setIsFormOpen(true);
-  }
-
-  function openEditForm(item: Record<string, unknown>) {
-    setEditingId(String(item.id));
-    setForm(formFromItem(item));
-    setSearchFilters({});
-    setMessage(null);
-    setIsFormOpen(true);
   }
 
   async function onSubmit(event: FormEvent) {
@@ -302,12 +238,13 @@ export function CrudPage({
     const payload = Object.fromEntries(
       Object.entries(form).filter(([key, value]) => {
         const field = fields.find((entry) => entry.name === key);
+
         if (field?.noSubmit) {
           return false;
         }
 
         if (Array.isArray(value)) {
-          return field?.type === "multiselect" || value.length > 0;
+          return value.length > 0;
         }
 
         return value !== "";
@@ -319,11 +256,9 @@ export function CrudPage({
         method: editingId ? "PUT" : "POST",
         body: JSON.stringify(payload)
       });
-      resetForm();
-      if (formMode === "drawer") {
-        setIsFormOpen(false);
-      }
-      await load(submittedSearch);
+      setForm(initialValues);
+      setEditingId(null);
+      await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Operacao nao concluida.");
     } finally {
@@ -331,14 +266,13 @@ export function CrudPage({
     }
   }
 
-  async function remove(item: Record<string, unknown>) {
+  async function remove(id: string) {
     setLoading(true);
     setMessage(null);
 
     try {
-      await apiJson(`${endpoint}/${String(item.id)}`, { method: "DELETE" });
-      setMessage(removeSuccessMessage(item));
-      await load(submittedSearch);
+      await apiJson(`${endpoint}/${id}`, { method: "DELETE" });
+      await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Nao foi possivel remover.");
     } finally {
@@ -346,27 +280,38 @@ export function CrudPage({
     }
   }
 
+  function updateField(name: string, nextValue: FieldValue) {
+    setForm((current) => ({ ...current, [name]: nextValue }));
+  }
+
+  function toggleMultiselectValue(fieldName: string, optionValue: string) {
+    const currentValues = Array.isArray(form[fieldName]) ? form[fieldName] : [];
+    const nextValues = currentValues.includes(optionValue)
+      ? currentValues.filter((entry) => entry !== optionValue)
+      : [...currentValues, optionValue];
+
+    updateField(fieldName, nextValues);
+  }
+
   function renderField(field: Field) {
     const wrapperClass = field.fullWidth ? "sm:col-span-2" : "";
     const labelClass = `block ${wrapperClass}`.trim();
-    const selectOptions = field.options ?? [];
-    const fieldValue = form[field.name];
-    const filteredOptions = field.searchable && searchFilters[field.name]
-      ? selectOptions.filter((option) => {
-          const label = typeof option === "string" ? option : option.label;
-          return label.toLowerCase().includes(searchFilters[field.name].toLowerCase());
-        })
+    const selectOptions = (field.options ?? []).map(normalizeOption);
+    const filterValue = searchFilters[field.name] ?? "";
+    const filteredOptions = field.searchable && filterValue
+      ? selectOptions.filter((option) => option.label.toLowerCase().includes(filterValue.toLowerCase()))
       : selectOptions;
 
     return (
       <label key={field.name} className={labelClass}>
         <span className="field-label">{field.label}</span>
+
         {field.searchable ? (
           <input
             className="input-control mb-3"
             type="search"
             placeholder={`Buscar ${field.label.toLowerCase()}`}
-            value={searchFilters[field.name] ?? ""}
+            value={filterValue}
             onChange={(event) =>
               setSearchFilters((current) => ({
                 ...current,
@@ -375,233 +320,128 @@ export function CrudPage({
             }
           />
         ) : null}
+
         {field.type === "select" ? (
           <select
             className="input-control"
-            value={String(form[field.name] ?? "")}
-            onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
+            value={Array.isArray(form[field.name]) ? "" : String(form[field.name] ?? "")}
+            onChange={(event) => updateField(field.name, event.target.value)}
           >
             <option value="">{field.placeholder ?? "-"}</option>
-            {filteredOptions.map((option) => {
-              const value = typeof option === "string" ? option : option.value;
-              const label = typeof option === "string" ? option : option.label;
-              return (
-                <option key={value} value={value}>{label}</option>
-              );
-            })}
+            {filteredOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </select>
-        ) : field.type === "multiselect" ? (
-          <div className="max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-line bg-white p-2">
-            {filteredOptions.length === 0 ? (
-              <div className="px-3 py-2 text-sm font-semibold text-stone-500">Nenhuma opcao encontrada.</div>
-            ) : null}
-            {filteredOptions.map((option) => {
-              const value = typeof option === "string" ? option : option.value;
-              const label = typeof option === "string" ? option : option.label;
-              const currentValues = Array.isArray(form[field.name]) ? form[field.name] as string[] : [];
-              const checked = currentValues.includes(value);
+        ) : null}
 
-              return (
-                <label
-                  key={value}
-                  className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm font-bold transition ${
-                    checked ? "border-brand bg-blue-50 text-brand" : "border-transparent bg-field/50 text-ink hover:bg-field"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-blue-600"
-                    checked={checked}
-                    onChange={(event) => {
-                      setForm((current) => {
-                        const selected = Array.isArray(current[field.name]) ? current[field.name] as string[] : [];
-                        return {
-                          ...current,
-                          [field.name]: event.target.checked
-                            ? Array.from(new Set([...selected, value]))
-                            : selected.filter((item) => item !== value)
-                        };
-                      });
-                    }}
-                  />
-                  <span>{label}</span>
-                </label>
-              );
-            })}
+        {field.type === "multiselect" ? (
+          <div className="rounded-2xl border border-line bg-white p-3">
+            <div className="mb-3 flex flex-wrap gap-2">
+              {Array.isArray(form[field.name]) && form[field.name].length > 0 ? (
+                (form[field.name] as string[]).map((selectedValue: string) => {
+                  const option = selectOptions.find((entry) => entry.value === selectedValue);
+                  return (
+                    <button
+                      key={selectedValue}
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-full border border-line bg-field px-3 py-2 text-xs font-black text-graphite"
+                      onClick={() => toggleMultiselectValue(field.name, selectedValue)}
+                    >
+                      {option?.label ?? selectedValue}
+                      <X className="h-3 w-3" />
+                    </button>
+                  );
+                })
+              ) : (
+                <span className="text-sm font-semibold text-stone-500">Nenhuma opcao selecionada.</span>
+              )}
+            </div>
+
+            <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+              {filteredOptions.map((option) => {
+                const selected = Array.isArray(form[field.name]) && form[field.name].includes(option.value);
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`w-full rounded-xl border px-3 py-3 text-left text-sm font-bold transition ${
+                      selected ? "border-moss bg-emerald-50 text-forest" : "border-line bg-white text-ink hover:bg-muted"
+                    }`}
+                    onClick={() => toggleMultiselectValue(field.name, option.value)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+
+              {filteredOptions.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-line bg-muted/40 px-3 py-4 text-center text-sm font-semibold text-stone-500">
+                  Nenhuma opcao encontrada.
+                </div>
+              ) : null}
+            </div>
           </div>
-        ) : (
+        ) : null}
+
+        {!field.type || field.type === "text" || field.type === "email" || field.type === "password" || field.type === "search" ? (
           <input
             className="input-control"
             type={field.type ?? "text"}
             placeholder={field.placeholder}
             readOnly={field.readOnly}
-            inputMode={field.type === "tel" ? "numeric" : undefined}
-            autoComplete={field.type === "tel" ? "tel" : undefined}
-            value={field.format === "phone" ? formatPhone(fieldValue) : String(fieldValue ?? "")}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                [field.name]: field.format === "phone" ? formatPhone(event.target.value) : event.target.value
-              }))
-            }
+            value={Array.isArray(form[field.name]) ? "" : String(form[field.name] ?? "")}
+            onChange={(event) => updateField(field.name, event.target.value)}
           />
-        )}
+        ) : null}
+
         {field.description ? (
-          <p className="mt-2 text-xs leading-5 text-stone-500">{field.description}</p>
+          <p className="mt-2 text-sm text-stone-500">{field.description}</p>
         ) : null}
       </label>
     );
   }
 
-  function renderFormContents() {
-    return (
-      <div className="space-y-4">
-        {resolvedFieldSections.map((section) => {
-          const sectionFields = section.fields
-            .map((fieldName) => fields.find((field) => field.name === fieldName))
-            .filter((field): field is Field => Boolean(field));
-          const columnsClass = section.columns === 1 ? "grid-cols-1" : "sm:grid-cols-2";
-          const showSectionHeader =
-            Boolean(section.description) ||
-            resolvedFieldSections.length > 1 ||
-            section.title !== "Dados do cadastro";
-
-          if (sectionFields.length === 0) {
-            return null;
-          }
-
-          return (
-            <section key={section.title} className="rounded-[1.25rem] border border-line/80 bg-white p-4 shadow-sm">
-              {showSectionHeader ? (
-                <div className="mb-3">
-                  <h3 className="text-base font-black tracking-tight text-ink">{section.title}</h3>
-                  {section.description ? (
-                    <p className="mt-1 text-xs leading-5 text-slateText">{section.description}</p>
-                  ) : null}
-                </div>
-              ) : null}
-              <div className={`grid gap-5 ${columnsClass}`}>
-                {sectionFields.map((field) => renderField(field))}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-    );
-  }
-
-  const formElement = (
-    <form
-      onSubmit={onSubmit}
-      className={formMode === "drawer" ? "flex h-full flex-col" : "panel overflow-hidden xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:self-start"}
-    >
-      <div className="panel-header">
-        <div>
-          <h2 className="panel-title">{formTitle}</h2>
-          {resolvedFormSubtitle ? (
-            <p className="panel-subtitle">{resolvedFormSubtitle}</p>
-          ) : null}
-        </div>
-        {(editingId || formMode === "drawer") ? (
-          <button
-            type="button"
-            title="Fechar"
-            className="icon-button"
-            onClick={closeForm}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        ) : null}
-      </div>
-
-      <div className={formMode === "drawer" ? "flex-1 overflow-y-auto p-5 sm:p-6" : "overflow-y-auto p-6"}>
-        {message && formMode === "drawer" ? <div className="notice notice-warning">{message}</div> : null}
-
-        {renderFormContents()}
-
-        <div className={`mt-5 flex gap-3 ${formMode === "drawer" ? "flex-col-reverse sm:flex-row sm:justify-end" : "flex-col"}`}>
-          {formMode === "drawer" ? (
-            <button type="button" className="secondary-button w-full sm:w-auto" onClick={closeForm}>
-              Cancelar
-            </button>
-          ) : null}
-          <button type="submit" title={actionLabel} disabled={loading} className={`primary-button ${formMode === "drawer" ? "w-full sm:w-auto" : "w-full"}`}>
-            {editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {actionLabel}
-          </button>
-        </div>
-      </div>
-    </form>
-  );
-
   return (
     <section>
       <PageHeader
         title={title}
-        action={
-          <>
-            {formMode === "drawer" ? (
-              <button
-                type="button"
-                title={resolvedCreateButtonLabel}
-                onClick={openCreateForm}
-                className="primary-button"
-              >
-                <Plus className="h-4 w-4" />
-                {resolvedCreateButtonLabel}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              title="Atualizar"
-              onClick={() => {
-                const nextSearch = tableSearch.trim() || submittedSearch;
-                const allowBlankSearch = requiresSearch && nextSearch.length === 0;
-
-                if (allowBlankSearch) {
-                  setSubmittedSearch("");
-                  setSearchRequested(true);
-                }
-
-                void load(nextSearch, allowBlankSearch || searchRequested);
-              }}
-              className="secondary-button"
-            >
-              <RefreshCcw className="h-4 w-4" />
-              Atualizar
-            </button>
-          </>
-        }
+        subtitle={subtitle}
+        action={(
+          <button
+            type="button"
+            title="Atualizar"
+            onClick={() => void load()}
+            className="secondary-button"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            Atualizar
+          </button>
+        )}
       />
 
-      {message && !(formMode === "drawer" && isFormOpen) ? <div className="notice notice-warning">{message}</div> : null}
+      {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className={formMode === "drawer" ? "space-y-4" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]"}>
+      <div className={`grid gap-4 ${formMode === "drawer" ? "2xl:grid-cols-[minmax(0,1fr)_400px]" : "2xl:grid-cols-[minmax(0,1fr)_340px]"}`}>
         <div className="table-wrap">
-          <div className="border-b border-line/80 bg-gradient-to-r from-white to-skywash/40 p-4">
-            <form
-              className="flex flex-col gap-3 xl:flex-row"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const nextSearch = tableSearch.trim();
+          <div className="border-b border-line/80 bg-white/90 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <h2 className="text-sm font-black uppercase tracking-[0.12em] text-slateText">Busca guiada</h2>
+                <p className="text-sm font-semibold text-slateText">
+                  {searchHint ?? "Use a busca para localizar rapidamente o registro antes de alterar ou excluir."}
+                </p>
+              </div>
+              <span className="rounded-full border border-line bg-field px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-graphite">
+                {filteredItems.length} registro(s)
+              </span>
+            </div>
 
-                if (requiresSearch && nextSearch.length > 0 && nextSearch.length < searchMinLength) {
-                  setItems([]);
-                  setSubmittedSearch("");
-                  setSearchRequested(false);
-                  setMessage(`Digite pelo menos ${searchMinLength} caracteres para pesquisar em ${title.toLowerCase()}.`);
-                  return;
-                }
-
-                setSubmittedSearch(nextSearch);
-                setSearchRequested(true);
-                void load(nextSearch, nextSearch.length === 0);
-              }}
-            >
-              <label className="relative block flex-1">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
+              <label className="relative block">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                 <input
-                  className="input-control h-11 pl-11 pr-24"
+                  className="input-control h-12 pl-11 pr-24"
                   type="search"
                   placeholder={resolvedSearchPlaceholder}
                   value={tableSearch}
@@ -611,30 +451,15 @@ export function CrudPage({
                   <button
                     type="button"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-[0.12em] text-forest"
-                    onClick={() => {
-                      setTableSearch("");
-                      setSubmittedSearch("");
-                      setSearchRequested(false);
-                      setItems([]);
-                      setMessage(null);
-                    }}
+                    onClick={() => setTableSearch("")}
                   >
                     Limpar
                   </button>
                 ) : null}
               </label>
-
-              <button type="submit" className="secondary-button h-11 min-w-[132px]">
-                <Search className="h-4 w-4" />
-                Buscar
-              </button>
-            </form>
-            <div className="mt-3 text-xs font-semibold text-stone-500">
-              {hasActiveSearch
-                ? submittedSearch
-                  ? `Total encontrado: ${items.length} registro(s).`
-                  : `Total exibido: ${items.length} registro(s).`
-                : resolvedSearchHint}
+              <div className="flex items-center justify-center rounded-2xl border border-line bg-field px-4 py-3 text-sm font-semibold text-slateText">
+                Exibindo <span className="ml-1 font-black text-ink">{filteredItems.length}</span>
+              </div>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -648,7 +473,7 @@ export function CrudPage({
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {filteredItems.map((item) => (
                   <tr key={String(item.id)} className="align-top">
                     {columns.map((column) => (
                       <td key={column.label} className={column.className ?? ""}>{column.value(item)}</td>
@@ -659,38 +484,35 @@ export function CrudPage({
                           type="button"
                           title="Alterar"
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-graphite shadow-sm transition hover:-translate-y-0.5 hover:bg-muted"
-                          onClick={() => openEditForm(item)}
+                          onClick={() => {
+                            setEditingId(String(item.id));
+                            setForm(formFromItem(item));
+                          }}
                         >
                           <Edit3 className="h-4 w-4" />
                           <span className="hidden sm:inline">Alterar</span>
                         </button>
                         <button
                           type="button"
-                          title={removeActionLabel(item)}
+                          title="Excluir"
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-berry shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-50"
                           onClick={() => {
-                            if (window.confirm(removeConfirmMessage(item))) {
-                              void remove(item);
+                            if (window.confirm("Deseja excluir/inativar este registro?")) {
+                              void remove(String(item.id));
                             }
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
-                          <span className="hidden sm:inline">{removeActionLabel(item)}</span>
+                          <span className="hidden sm:inline">Excluir</span>
                         </button>
                       </div>
                     </td>
                   </tr>
                 ))}
-                {items.length === 0 ? (
+                {filteredItems.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-10 text-center text-stone-500" colSpan={columns.length + 1}>
-                      {loading
-                        ? "Pesquisando..."
-                        : !hasActiveSearch
-                          ? resolvedSearchHint
-                          : submittedSearch
-                            ? "Nenhum registro encontrado para a busca."
-                            : "Nenhum registro encontrado."}
+                    <td className="px-4 py-8 text-center text-stone-500" colSpan={columns.length + 1}>
+                      {loading ? "Carregando..." : tableSearch ? "Nenhum registro encontrado para a busca." : "Nenhum registro encontrado."}
                     </td>
                   </tr>
                 ) : null}
@@ -699,16 +521,59 @@ export function CrudPage({
           </div>
         </div>
 
-        {formMode === "sidebar" ? formElement : null}
-      </div>
-
-      {formMode === "drawer" && isFormOpen ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/35 p-3 backdrop-blur-[2px] sm:p-5">
-          <div className="panel flex h-full w-full max-w-[1040px] overflow-hidden shadow-[0_28px_90px_rgba(15,23,42,0.28)]">
-            {formElement}
+        <form onSubmit={onSubmit} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
+          <div className="panel-header">
+            <div>
+              <div className="mb-2">
+                <span className={`${editingId ? "execution-chip" : "brand-chip"}`}>
+                  {editingId ? "Alteracao em andamento" : "Novo cadastro"}
+                </span>
+              </div>
+              <h2 className="panel-title">{resolvedFormTitle}</h2>
+              <p className="panel-subtitle">
+                {formSubtitle ?? (title === "Clientes" ? "Cadastro completo para roteiro e atendimento em campo." : "Preencha os dados e confirme a gravacao do registro.")}
+              </p>
+            </div>
+            {editingId ? (
+              <button
+                type="button"
+                title="Cancelar"
+                className="icon-button"
+                onClick={() => {
+                  setEditingId(null);
+                  setForm(initialValues);
+                }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
-        </div>
-      ) : null}
+
+          <div className="space-y-5 p-6">
+            {sections.map((section) => (
+              <div key={section.title} className="rounded-[1.35rem] border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
+                <div className="mb-4">
+                  <h3 className="text-sm font-black uppercase tracking-[0.12em] text-ink">{section.title}</h3>
+                  {section.description ? (
+                    <p className="mt-1 text-sm font-semibold leading-6 text-slateText">{section.description}</p>
+                  ) : null}
+                </div>
+                <div className={`grid gap-5 ${section.columns === 1 ? "grid-cols-1" : "sm:grid-cols-2"}`}>
+                  {section.fields.map((fieldName) => {
+                    const field = fieldMap.get(fieldName);
+                    return field ? renderField(field) : null;
+                  })}
+                </div>
+              </div>
+            ))}
+
+            <button type="submit" title={actionLabel} disabled={loading} className="primary-button w-full">
+              {editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {actionLabel}
+            </button>
+          </div>
+        </form>
+      </div>
     </section>
   );
 }

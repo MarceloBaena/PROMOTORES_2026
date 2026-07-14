@@ -52,7 +52,9 @@ export function SuppliersPage() {
   return (
     <CrudPage
       title="Fornecedores"
+      subtitle="Cadastro das industrias e marcas atendidas pela operacao, com categorias e contato comercial vinculados."
       endpoint="/suppliers"
+      searchHint="Busque por fornecedor, fantasia, documento, telefone, empresa, categoria ou situacao."
       formMode="drawer"
       createTitle="Incluir fornecedor"
       editTitle="Alterar fornecedor"

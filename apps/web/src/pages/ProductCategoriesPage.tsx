@@ -49,7 +49,9 @@ export function ProductCategoriesPage() {
   return (
     <CrudPage
       title="Categorias de produtos"
+      subtitle="Classificacao comercial usada para organizar fornecedores, sortimento e leitura operacional da base."
       endpoint="/product-categories"
+      searchHint="Busque por codigo, categoria, descricao, empresa ou situacao."
       formMode="drawer"
       createTitle="Incluir categoria"
       editTitle="Alterar categoria"
