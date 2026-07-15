@@ -12,7 +12,7 @@ interface Field {
   name: string;
   label: string;
   source?: string;
-  type?: "text" | "email" | "password" | "select" | "search" | "multiselect";
+  type?: "text" | "email" | "password" | "select" | "search" | "multiselect" | "tags";
   options?: FieldOption[];
   placeholder?: string;
   description?: string;
@@ -76,6 +76,7 @@ export function CrudPage({
   const [message, setMessage] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
 
   const filteredItems = useMemo(() => {
     const search = tableSearch.trim().toLowerCase();
@@ -203,6 +204,16 @@ export function CrudPage({
       .filter((entry) => entry !== "");
   }
 
+  function normalizeTagValue(value: unknown) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .map((entry) => String(entry ?? "").trim())
+      .filter((entry, index, list) => entry !== "" && list.indexOf(entry) === index);
+  }
+
   function formFromItem(item: Record<string, unknown>) {
     return fields.reduce<Record<string, FieldValue>>((acc, field) => {
       if (field.type === "password") {
@@ -214,6 +225,11 @@ export function CrudPage({
 
       if (field.type === "multiselect") {
         acc[field.name] = normalizeMultiselectValue(value);
+        return acc;
+      }
+
+      if (field.type === "tags") {
+        acc[field.name] = normalizeTagValue(value);
         return acc;
       }
 
@@ -257,6 +273,7 @@ export function CrudPage({
         body: JSON.stringify(payload)
       });
       setForm(initialValues);
+      setTagDrafts({});
       setEditingId(null);
       await load();
     } catch (error) {
@@ -291,6 +308,34 @@ export function CrudPage({
       : [...currentValues, optionValue];
 
     updateField(fieldName, nextValues);
+  }
+
+  function addTagValue(fieldName: string) {
+    const draft = String(tagDrafts[fieldName] ?? "").trim();
+
+    if (draft.length < 2) {
+      return;
+    }
+
+    const currentValues = Array.isArray(form[fieldName]) ? form[fieldName] : [];
+    const alreadyExists = currentValues.some((entry) => entry.toLowerCase() === draft.toLowerCase());
+
+    if (!alreadyExists) {
+      updateField(fieldName, [...currentValues, draft]);
+    }
+
+    setTagDrafts((current) => ({
+      ...current,
+      [fieldName]: ""
+    }));
+  }
+
+  function removeTagValue(fieldName: string, tagValue: string) {
+    const currentValues = Array.isArray(form[fieldName]) ? form[fieldName] : [];
+    updateField(
+      fieldName,
+      currentValues.filter((entry) => entry !== tagValue)
+    );
   }
 
   function renderField(field: Field) {
@@ -380,6 +425,56 @@ export function CrudPage({
                   Nenhuma opcao encontrada.
                 </div>
               ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {field.type === "tags" ? (
+          <div className="rounded-2xl border border-line bg-white p-3">
+            <div className="mb-3 flex flex-wrap gap-2">
+              {Array.isArray(form[field.name]) && form[field.name].length > 0 ? (
+                (form[field.name] as string[]).map((selectedValue: string) => (
+                  <button
+                    key={selectedValue}
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-full border border-line bg-field px-3 py-2 text-xs font-black text-graphite"
+                    onClick={() => removeTagValue(field.name, selectedValue)}
+                  >
+                    {selectedValue}
+                    <X className="h-3 w-3" />
+                  </button>
+                ))
+              ) : (
+                <span className="text-sm font-semibold text-stone-500">Nenhuma atividade nova adicionada.</span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                className="input-control"
+                type="text"
+                placeholder={field.placeholder ?? "Digite a atividade e confirme"}
+                value={tagDrafts[field.name] ?? ""}
+                onChange={(event) =>
+                  setTagDrafts((current) => ({
+                    ...current,
+                    [field.name]: event.target.value
+                  }))
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === ",") {
+                    event.preventDefault();
+                    addTagValue(field.name);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-line bg-field px-4 text-sm font-black text-forest transition hover:bg-muted"
+                onClick={() => addTagValue(field.name)}
+              >
+                Adicionar
+              </button>
             </div>
           </div>
         ) : null}
@@ -487,6 +582,7 @@ export function CrudPage({
                           onClick={() => {
                             setEditingId(String(item.id));
                             setForm(formFromItem(item));
+                            setTagDrafts({});
                           }}
                         >
                           <Edit3 className="h-4 w-4" />
@@ -542,6 +638,7 @@ export function CrudPage({
                 onClick={() => {
                   setEditingId(null);
                   setForm(initialValues);
+                  setTagDrafts({});
                 }}
               >
                 <X className="h-4 w-4" />

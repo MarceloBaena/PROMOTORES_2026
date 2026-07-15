@@ -49,13 +49,13 @@ export function ClientActivitiesPage() {
   return (
     <CrudPage
       title="Atividades"
-      subtitle="Atividades padrao da visita que podem ser liberadas para clientes conforme o fluxo de atendimento."
+      subtitle="Atividades padrao executadas pela equipe em campo e vinculadas aos fornecedores da operacao."
       endpoint="/client-activities"
       searchHint="Busque por codigo, atividade, descricao, empresa ou situacao."
       formMode="drawer"
       createTitle="Incluir atividade"
       editTitle="Alterar atividade"
-      formSubtitle="Atividades padrao que podem ser liberadas para cada cliente na operacao de campo."
+      formSubtitle="Atividades padrao que podem ser vinculadas aos fornecedores e reaproveitadas no atendimento de cada cliente."
       createButtonLabel="Nova atividade"
       searchPlaceholder="Buscar por codigo, atividade, descricao, empresa ou situacao"
       initialValues={{
@@ -76,7 +76,7 @@ export function ClientActivitiesPage() {
         },
         {
           title: "Descricao operacional",
-          description: "Explique rapidamente quando a atividade deve ser usada.",
+          description: "Explique rapidamente quando a atividade deve ser usada pelo promotor no fornecedor.",
           fields: ["description"],
           columns: 1
         }
@@ -159,12 +159,12 @@ export function ClientActivitiesPage() {
           headerClassName: "w-[20%]",
           className: "min-w-[170px]",
           value: (item) => {
-            const count = (item._count as { clients?: number } | undefined)?.clients ?? 0;
+            const count = (item._count as { suppliers?: number } | undefined)?.suppliers ?? 0;
 
             return (
               <div className="space-y-2">
-                <strong className="block text-base leading-tight text-ink">{count} cliente(s)</strong>
-                <span className="block text-xs font-semibold text-stone-500">vinculados</span>
+                <strong className="block text-base leading-tight text-ink">{count} fornecedor(es)</strong>
+                <span className="block text-xs font-semibold text-stone-500">com esta atividade</span>
               </div>
             );
           }

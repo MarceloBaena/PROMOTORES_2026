@@ -9,9 +9,11 @@ import {
   LogOut,
   Map,
   MapPinned,
+  Package,
   Route,
   ShieldCheck,
   Store,
+  Tag,
   Users,
   Wifi
 } from "lucide-react";
@@ -36,6 +38,9 @@ const navSections = [
     label: "Cadastros",
     items: [
       { to: "/empresas", label: "Empresas/Filiais", icon: Building },
+      { to: "/categorias", label: "Categorias", icon: Tag },
+      { to: "/atividades", label: "Atividades", icon: ClipboardList },
+      { to: "/fornecedores", label: "Fornecedores", icon: Package },
       { to: "/clientes", label: "Clientes", icon: Store },
       { to: "/promotores", label: "Promotores", icon: Users },
       { to: "/supervisores", label: "Supervisores", icon: ShieldCheck },

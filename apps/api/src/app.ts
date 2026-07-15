@@ -7,9 +7,9 @@ import { authRouter } from "./routes/auth";
 import { supervisorsRouter } from "./routes/supervisors";
 import { promotersRouter } from "./routes/promoters";
 import { companiesRouter } from "./routes/companies";
-import { clientActivitiesRouter } from "./routes/client-activities";
-import { productCategoriesRouter } from "./routes/product-categories";
 import { clientsRouter } from "./routes/clients";
+import { productCategoriesRouter } from "./routes/product-categories";
+import { clientActivitiesRouter } from "./routes/client-activities";
 import { suppliersRouter } from "./routes/suppliers";
 import { routePlansRouter } from "./routes/route-plans";
 import { visitsRouter } from "./routes/visits";
@@ -129,12 +129,12 @@ export function createApp() {
 
   app.use("/auth", authLimiter, authRouter);
   app.use("/companies", authenticate, authorizeRoles("ADMIN"), companiesRouter);
-  app.use("/client-activities", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), clientActivitiesRouter);
-  app.use("/product-categories", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), productCategoriesRouter);
   app.use("/supervisors", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), supervisorsRouter);
   app.use("/promoters", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), promotersRouter);
-  app.use("/clients", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), clientsRouter);
+  app.use("/product-categories", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), productCategoriesRouter);
+  app.use("/client-activities", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), clientActivitiesRouter);
   app.use("/suppliers", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), suppliersRouter);
+  app.use("/clients", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), clientsRouter);
   app.use("/routes", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), routePlansRouter);
   app.use("/visits", authenticate, authorizeRoles("ADMIN", "SUPERVISOR", "PROMOTOR"), visitsRouter);
   app.use("/locations", authenticate, authorizeRoles("ADMIN", "SUPERVISOR", "PROMOTOR"), promoterLocationsRouter);

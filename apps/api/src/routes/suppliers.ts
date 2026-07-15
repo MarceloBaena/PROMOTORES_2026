@@ -25,6 +25,8 @@ const supplierSchema = z.object({
   contactName: z.preprocess(emptyStringToUndefined, z.string().trim().optional()),
   notes: z.preprocess(emptyStringToUndefined, z.string().trim().optional()),
   categoryIds: z.array(z.string().uuid()).optional(),
+  activityIds: z.array(z.string().uuid()).optional(),
+  activityNames: z.array(z.string().trim().min(2, "Informe pelo menos 2 caracteres para a atividade.")).optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional()
 });
 
@@ -73,6 +75,91 @@ async function validateCategoryIds(companyId: string, categoryIds?: string[]) {
   return uniqueCategoryIds;
 }
 
+async function validateActivityIds(companyId: string, activityIds?: string[]) {
+  const uniqueActivityIds = Array.from(new Set(activityIds ?? []));
+
+  if (uniqueActivityIds.length === 0) {
+    return [];
+  }
+
+  const activities = await prisma.clientActivityType.findMany({
+    where: {
+      id: { in: uniqueActivityIds },
+      companyId
+    },
+    select: { id: true }
+  });
+
+  if (activities.length !== uniqueActivityIds.length) {
+    throw new AppError(400, "ACTIVITY_NOT_FOUND", "Uma ou mais atividades nao existem nesta empresa/filial.");
+  }
+
+  return uniqueActivityIds;
+}
+
+async function resolveActivityIds(
+  tx: Pick<typeof prisma, "clientActivityType">,
+  companyId: string,
+  activityIds?: string[],
+  activityNames?: string[]
+) {
+  const validActivityIds = await validateActivityIds(companyId, activityIds);
+  const normalizedNames = Array.from(
+    new Set(
+      (activityNames ?? [])
+        .map((name) => name.trim())
+        .filter((name) => name.length >= 2)
+    )
+  );
+
+  if (normalizedNames.length === 0) {
+    return validActivityIds;
+  }
+
+  const existingActivities = await tx.clientActivityType.findMany({
+    where: {
+      companyId,
+      OR: normalizedNames.map((name) => ({
+        name: {
+          equals: name,
+          mode: "insensitive"
+        }
+      }))
+    },
+    select: {
+      id: true,
+      name: true
+    }
+  });
+
+  const existingByName = new Map(
+    existingActivities.map((activity) => [activity.name.trim().toLowerCase(), activity.id])
+  );
+
+  const missingNames = normalizedNames.filter((name) => !existingByName.has(name.toLowerCase()));
+
+  const createdActivities = await Promise.all(
+    missingNames.map((name) =>
+      tx.clientActivityType.create({
+        data: {
+          companyId,
+          name,
+          status: "ACTIVE"
+        },
+        select: {
+          id: true
+        }
+      })
+    )
+  );
+
+  return Array.from(new Set([
+    ...validActivityIds,
+    ...existingActivities.map((activity) => activity.id),
+    ...createdActivities.map((activity) => activity.id)
+  ]));
+}
+
 function supplierInclude() {
   return {
     company: true,
@@ -81,22 +168,32 @@ function supplierInclude() {
         category: true
       }
     },
+    activities: {
+      include: {
+        activity: true
+      }
+    },
     _count: {
       select: {
         clients: true,
-        categories: true
+        categories: true,
+        activities: true
       }
     }
   } as const;
 }
 
 function normalizeSupplier(supplier: Record<string, unknown>) {
-  const links = Array.isArray(supplier.categories) ? supplier.categories : [];
+  const categoryLinks = Array.isArray(supplier.categories) ? supplier.categories : [];
+  const activityLinks = Array.isArray(supplier.activities) ? supplier.activities : [];
 
   return {
     ...supplier,
-    categories: links
+    categories: categoryLinks
       .map((link) => (link as { category?: unknown }).category)
+      .filter(Boolean),
+    activities: activityLinks
+      .map((link) => (link as { activity?: unknown }).activity)
       .filter(Boolean)
   };
 }
@@ -124,6 +221,7 @@ suppliersRouter.get(
                 { phone: { contains: q, mode: "insensitive" } },
                 { email: { contains: q, mode: "insensitive" } },
                 { categories: { some: { category: { name: { contains: q, mode: "insensitive" } } } } },
+                { activities: { some: { activity: { name: { contains: q, mode: "insensitive" } } } } },
                 { company: { name: { contains: q, mode: "insensitive" } } },
                 ...(numericCode ? [{ company: { code: numericCode } }] : [])
               ]
@@ -169,12 +267,13 @@ suppliersRouter.post(
   asyncHandler(async (req, res) => {
     const input = supplierSchema.parse(req.body);
     const companyId = requireCompanyId(req, input.companyId);
-    const { categoryIds, ...supplierInput } = input;
+    const { categoryIds, activityIds, activityNames, ...supplierInput } = input;
 
     await assertUniqueDocument(companyId, supplierInput.document);
     const validCategoryIds = await validateCategoryIds(companyId, categoryIds);
 
     const supplier = await prisma.$transaction(async (tx) => {
+      const resolvedActivityIds = await resolveActivityIds(tx, companyId, activityIds, activityNames);
       const createdSupplier = await tx.supplier.create({
         data: {
           ...supplierInput,
@@ -189,6 +288,16 @@ suppliersRouter.post(
           data: validCategoryIds.map((categoryId) => ({
             supplierId: createdSupplier.id,
             categoryId
+          })),
+          skipDuplicates: true
+        });
+      }
+
+      if (resolvedActivityIds.length > 0) {
+        await tx.supplierActivityAssignment.createMany({
+          data: resolvedActivityIds.map((activityId) => ({
+            supplierId: createdSupplier.id,
+            activityId
           })),
           skipDuplicates: true
         });
@@ -225,7 +334,7 @@ suppliersRouter.put(
   "/:id",
   asyncHandler(async (req, res) => {
     const input = supplierSchema.partial().parse(req.body);
-    const { categoryIds, ...supplierInput } = input;
+    const { categoryIds, activityIds, activityNames, ...supplierInput } = input;
     const existing = await prisma.supplier.findUnique({
       where: { id: req.params.id },
       select: { id: true, companyId: true }
@@ -237,6 +346,7 @@ suppliersRouter.put(
 
     assertSameCompany(req, existing.companyId);
     const companyId = input.companyId ? requireCompanyId(req, input.companyId) : existing.companyId;
+    const companyChanged = companyId !== existing.companyId;
 
     if (!companyId) {
       throw new AppError(400, "COMPANY_REQUIRED", "Fornecedor precisa estar vinculado a uma empresa/filial.");
@@ -244,8 +354,13 @@ suppliersRouter.put(
 
     await assertUniqueDocument(companyId, supplierInput.document, existing.id);
     const validCategoryIds = categoryIds === undefined ? undefined : await validateCategoryIds(companyId, categoryIds);
+    const nextCategoryIds = companyChanged ? (validCategoryIds ?? []) : validCategoryIds;
 
     const supplier = await prisma.$transaction(async (tx) => {
+      const resolvedActivityIds = companyChanged || activityIds !== undefined || activityNames !== undefined
+        ? await resolveActivityIds(tx, companyId, activityIds, activityNames)
+        : undefined;
+
       await tx.supplier.update({
         where: { id: existing.id },
         data: {
@@ -254,16 +369,32 @@ suppliersRouter.put(
         }
       });
 
-      if (validCategoryIds !== undefined) {
+      if (nextCategoryIds !== undefined) {
         await tx.supplierProductCategory.deleteMany({
           where: { supplierId: existing.id }
         });
 
-        if (validCategoryIds.length > 0) {
+        if (nextCategoryIds.length > 0) {
           await tx.supplierProductCategory.createMany({
-            data: validCategoryIds.map((categoryId) => ({
+            data: nextCategoryIds.map((categoryId) => ({
               supplierId: existing.id,
               categoryId
+            })),
+            skipDuplicates: true
+          });
+        }
+      }
+
+      if (resolvedActivityIds !== undefined) {
+        await tx.supplierActivityAssignment.deleteMany({
+          where: { supplierId: existing.id }
+        });
+
+        if (resolvedActivityIds.length > 0) {
+          await tx.supplierActivityAssignment.createMany({
+            data: resolvedActivityIds.map((activityId) => ({
+              supplierId: existing.id,
+              activityId
             })),
             skipDuplicates: true
           });

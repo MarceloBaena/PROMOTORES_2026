@@ -1,15 +1,14 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { CompanyScopeProvider, useCompanyScope } from "./context/CompanyScopeContext";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { PromotersPage, SupervisorsPage } from "./pages/PeoplePages";
 import { CompaniesPage } from "./pages/CompaniesPage";
-import { ClientsPage } from "./pages/ClientsPage";
-import { ClientActivitiesPage } from "./pages/ClientActivitiesPage";
 import { ProductCategoriesPage } from "./pages/ProductCategoriesPage";
+import { ClientActivitiesPage } from "./pages/ClientActivitiesPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
+import { ClientsPage } from "./pages/ClientsPage";
 import { ClientImportPage } from "./pages/ClientImportPage";
 import { RoutingPage } from "./pages/RoutingPage";
 import { VisitsPage } from "./pages/VisitsPage";
@@ -19,9 +18,8 @@ import { ReportsPage } from "./pages/ReportsPage";
 
 function ProtectedApp() {
   const { user, initialized } = useAuth();
-  const { initialized: companyScopeInitialized } = useCompanyScope();
 
-  if (!initialized || !companyScopeInitialized) {
+  if (!initialized) {
     return <div className="grid min-h-screen place-items-center bg-field text-sm font-semibold text-stone-600">Carregando...</div>;
   }
 
@@ -34,12 +32,12 @@ function ProtectedApp() {
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="/empresas" element={<CompaniesPage />} />
+        <Route path="/categorias" element={<ProductCategoriesPage />} />
         <Route path="/atividades" element={<ClientActivitiesPage />} />
-        <Route path="/categorias-produtos" element={<ProductCategoriesPage />} />
+        <Route path="/fornecedores" element={<SuppliersPage />} />
         <Route path="/promotores" element={<PromotersPage />} />
         <Route path="/supervisores" element={<SupervisorsPage />} />
         <Route path="/clientes" element={<ClientsPage />} />
-        <Route path="/fornecedores" element={<SuppliersPage />} />
         <Route path="/importacao" element={<ClientImportPage />} />
         <Route path="/roteirizacao" element={<RoutingPage />} />
         <Route path="/visitas" element={<VisitsPage />} />
@@ -55,11 +53,9 @@ function ProtectedApp() {
 export function App() {
   return (
     <AuthProvider>
-      <CompanyScopeProvider>
-        <BrowserRouter>
-          <ProtectedApp />
-        </BrowserRouter>
-      </CompanyScopeProvider>
+      <BrowserRouter>
+        <ProtectedApp />
+      </BrowserRouter>
     </AuthProvider>
   );
 }

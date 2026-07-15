@@ -329,6 +329,7 @@ model Supplier {
   status      SupplierStatus   @default(ACTIVE)
   clients     ClientSupplier[]
   categories  SupplierProductCategory[]
+  activities  SupplierActivityAssignment[]
   supplierExecutions SupplierExecution[]
   photos      VisitPhoto[]
   createdAt   DateTime         @default(now()) @map("created_at")
@@ -368,6 +369,7 @@ model ClientActivityType {
   description String?
   status      ActivityStatus           @default(ACTIVE)
   clients     ClientActivityAssignment[]
+  suppliers   SupplierActivityAssignment[]
   createdAt   DateTime                 @default(now()) @map("created_at")
   updatedAt   DateTime                 @updatedAt @map("updated_at")
 
@@ -390,6 +392,20 @@ model SupplierProductCategory {
   @@unique([supplierId, categoryId])
   @@index([categoryId])
   @@map("supplier_product_categories")
+}
+
+model SupplierActivityAssignment {
+  id         String             @id @default(uuid())
+  supplierId String             @map("supplier_id")
+  supplier   Supplier           @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  activityId String             @map("activity_id")
+  activity   ClientActivityType @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  @@unique([supplierId, activityId])
+  @@index([activityId])
+  @@map("supplier_activity_assignments")
 }
 
 model ClientSupplier {

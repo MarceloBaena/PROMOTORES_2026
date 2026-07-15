@@ -83,7 +83,25 @@ mobileRouter.get(
               include: {
                 suppliers: {
                   include: {
-                    supplier: true
+                    supplier: {
+                      include: {
+                        activities: {
+                          where: {
+                            activity: {
+                              status: "ACTIVE"
+                            }
+                          },
+                          include: {
+                            activity: true
+                          },
+                          orderBy: {
+                            activity: {
+                              name: "asc"
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 },
                 activities: {
@@ -105,7 +123,10 @@ mobileRouter.get(
               ...item,
               client: {
                 ...item.client,
-                suppliers: item.client.suppliers.map((link) => link.supplier),
+                suppliers: item.client.suppliers.map((link) => ({
+                  ...link.supplier,
+                  activities: link.supplier.activities.map((activityLink) => activityLink.activity)
+                })),
                 activities: item.client.activities.map((link) => link.activity)
               }
             }))

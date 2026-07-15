@@ -1034,6 +1034,10 @@ class _VisitPageState extends State<VisitPage> {
                     ),
                     const SizedBox(height: 12),
                     ...clientSuppliers.map((supplier) {
+                      final supplierActivities = activitiesForSupplier(
+                        supplier,
+                        client,
+                      );
                       final execution = findSupplierExecution(
                         supplierExecutions,
                         supplier.id,
@@ -1052,6 +1056,7 @@ class _VisitPageState extends State<VisitPage> {
                           .toSet();
                       return SupplierExecutionTile(
                         supplier: supplier,
+                        activityCount: supplierActivities.length,
                         status: execution?.status ?? 'pending',
                         hasBefore: executionTypes.contains('supplier_before'),
                         hasAfter: executionTypes.contains('supplier_after'),
@@ -1071,6 +1076,10 @@ class _VisitPageState extends State<VisitPage> {
                         activeSupplierExecution != null)
                       SupplierExecutionEditor(
                         supplier: activeSupplier!,
+                        activities: activitiesForSupplier(
+                          activeSupplier!,
+                          client,
+                        ),
                         hasBefore: photos.any(
                           (photo) =>
                               photo.supplierExecutionLocalId ==
@@ -2599,6 +2608,44 @@ class ClientSnapshot {
   };
 }
 
+class ActivitySnapshot {
+  ActivitySnapshot({
+    required this.id,
+    this.code,
+    required this.name,
+    this.description,
+    this.status,
+    required this.payload,
+  });
+
+  final String id;
+  final String? code;
+  final String name;
+  final String? description;
+  final String? status;
+  final Map<String, dynamic> payload;
+
+  String get displayName {
+    final normalizedName = name.trim().isEmpty ? 'Atividade' : name.trim();
+    if ((code?.trim().isNotEmpty ?? false)) {
+      return '${code!.trim()} - $normalizedName';
+    }
+    return normalizedName;
+  }
+
+  factory ActivitySnapshot.fromJson(Map<String, dynamic> json) =>
+      ActivitySnapshot(
+        id: json['id'] as String,
+        code: json['code']?.toString(),
+        name: (json['name'] as String?)?.trim().isNotEmpty == true
+            ? (json['name'] as String).trim()
+            : 'Atividade',
+        description: json['description'] as String?,
+        status: json['status']?.toString(),
+        payload: json,
+      );
+}
+
 class SupplierSnapshot {
   SupplierSnapshot({
     required this.id,
@@ -2615,6 +2662,7 @@ class SupplierSnapshot {
   final String? tradeName;
   final String? document;
   final Map<String, dynamic> payload;
+  List<ActivitySnapshot> get activities => activitiesFromRaw(payload['activities']);
 
   String get displayName {
     final preferred = (tradeName?.trim().isNotEmpty ?? false)
@@ -3228,6 +3276,24 @@ double? asDouble(Object? value) {
   return double.tryParse(value.toString());
 }
 
+List<ActivitySnapshot> activitiesFromRaw(Object? raw) {
+  if (raw is! List) {
+    return const <ActivitySnapshot>[];
+  }
+
+  return raw
+      .whereType<Map>()
+      .map(
+        (item) => ActivitySnapshot.fromJson(
+          item.map((key, value) => MapEntry(key.toString(), value)),
+        ),
+      )
+      .toList();
+}
+
+List<ActivitySnapshot> clientActivitiesFromPayload(Map<String, dynamic>? payload) =>
+    activitiesFromRaw(payload?['activities']);
+
 List<SupplierSnapshot> suppliersFromPayload(Map<String, dynamic>? payload) {
   final raw = payload?['suppliers'];
   if (raw is! List) {
@@ -3270,6 +3336,17 @@ LocalSupplierExecution? findSupplierExecution(
 }
 
 String supplierLabel(SupplierSnapshot supplier) => supplier.displayName;
+
+List<ActivitySnapshot> activitiesForSupplier(
+  SupplierSnapshot supplier,
+  ClientSnapshot? client,
+) {
+  if (supplier.activities.isNotEmpty) {
+    return supplier.activities;
+  }
+
+  return clientActivitiesFromPayload(client?.payload);
+}
 
 bool supplierRequiresDeliveryFlow(bool? deliveryReceived) =>
     deliveryReceived != false;
@@ -3920,6 +3997,7 @@ class SupplierExecutionTile extends StatelessWidget {
   const SupplierExecutionTile({
     super.key,
     required this.supplier,
+    required this.activityCount,
     required this.status,
     required this.hasBefore,
     required this.hasAfter,
@@ -3931,6 +4009,7 @@ class SupplierExecutionTile extends StatelessWidget {
   });
 
   final SupplierSnapshot supplier;
+  final int activityCount;
   final String status;
   final bool hasBefore;
   final bool hasAfter;
@@ -3997,6 +4076,17 @@ class SupplierExecutionTile extends StatelessWidget {
                       color: Color(0xFF64748B),
                       fontWeight: FontWeight.w600,
                     ),
+                    ),
+                  ),
+              if (activityCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '$activityCount atividade(s) previstas neste fornecedor',
+                    style: const TextStyle(
+                      color: Color(0xFF2563EB),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               const SizedBox(height: 10),
@@ -4032,6 +4122,7 @@ class SupplierExecutionEditor extends StatelessWidget {
   const SupplierExecutionEditor({
     super.key,
     required this.supplier,
+    required this.activities,
     required this.hasBefore,
     required this.hasAfter,
     required this.deliveryReceived,
@@ -4050,6 +4141,7 @@ class SupplierExecutionEditor extends StatelessWidget {
   });
 
   final SupplierSnapshot supplier;
+  final List<ActivitySnapshot> activities;
   final bool hasBefore;
   final bool hasAfter;
   final bool? deliveryReceived;
@@ -4111,6 +4203,10 @@ class SupplierExecutionEditor extends StatelessWidget {
               ),
             ],
           ),
+          if (activities.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            SupplierActivitiesPanel(activities: activities),
+          ],
           const SizedBox(height: 14),
           BooleanAnswerField(
             label: 'Recebeu mercadoria hoje?',
@@ -4191,6 +4287,92 @@ class SupplierExecutionEditor extends StatelessWidget {
                       unawaited(result);
                     }
                   },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SupplierActivitiesPanel extends StatelessWidget {
+  const SupplierActivitiesPanel({super.key, required this.activities});
+
+  final List<ActivitySnapshot> activities;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Atividades previstas para este fornecedor',
+            style: TextStyle(
+              color: brandNavy,
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Use esta lista como guia da execucao antes de concluir o fornecedor.',
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...activities.map(
+            (activity) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    height: 9,
+                    width: 9,
+                    decoration: const BoxDecoration(
+                      color: brandGreen,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          activity.displayName,
+                          style: const TextStyle(
+                            color: brandNavy,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if ((activity.description?.trim().isNotEmpty ?? false))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              activity.description!.trim(),
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),

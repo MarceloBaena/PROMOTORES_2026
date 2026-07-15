@@ -22,7 +22,7 @@ const activitySchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE"]).optional()
 });
 
-async function assertUniqueActivityName(companyId: string, name?: string, ignoreActivityId?: string) {
+async function assertUniqueActivityName(companyId: string, name?: string, ignoreId?: string) {
   if (!name) {
     return;
   }
@@ -30,14 +30,14 @@ async function assertUniqueActivityName(companyId: string, name?: string, ignore
   const existing = await prisma.clientActivityType.findFirst({
     where: {
       companyId,
-      name: { equals: name, mode: "insensitive" },
-      ...(ignoreActivityId ? { id: { not: ignoreActivityId } } : {})
+      name,
+      ...(ignoreId ? { id: { not: ignoreId } } : {})
     },
     select: { id: true }
   });
 
   if (existing) {
-    throw new AppError(409, "ACTIVITY_NAME_DUPLICATED", "Ja existe atividade com este nome nesta empresa/filial.");
+    throw new AppError(409, "ACTIVITY_ALREADY_EXISTS", "Ja existe atividade com este nome nesta empresa/filial.");
   }
 }
 
@@ -46,7 +46,8 @@ function activityInclude() {
     company: true,
     _count: {
       select: {
-        clients: true
+        clients: true,
+        suppliers: true
       }
     }
   } as const;
@@ -57,14 +58,10 @@ clientActivitiesRouter.get(
   asyncHandler(async (req, res) => {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
     const numericCode = /^\d+$/.test(q) ? Number(q) : undefined;
-    const status = typeof req.query.status === "string" && ["ACTIVE", "INACTIVE"].includes(req.query.status)
-      ? req.query.status as "ACTIVE" | "INACTIVE"
-      : undefined;
 
     const activities = await prisma.clientActivityType.findMany({
       where: {
         ...scopedCompanyWhere(req),
-        ...(status ? { status } : {}),
         ...(q
           ? {
               OR: [
@@ -77,36 +74,11 @@ clientActivitiesRouter.get(
           : {})
       },
       orderBy: [{ status: "asc" }, { code: "asc" }],
-      take: 80,
+      take: 120,
       include: activityInclude()
     });
 
     res.json({ data: activities });
-  })
-);
-
-clientActivitiesRouter.get(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    const activity = await prisma.clientActivityType.findUnique({
-      where: { id: req.params.id },
-      include: {
-        ...activityInclude(),
-        clients: {
-          include: {
-            client: true
-          },
-          orderBy: { createdAt: "desc" }
-        }
-      }
-    });
-
-    if (!activity) {
-      throw new AppError(404, "ACTIVITY_NOT_FOUND", "Atividade nao encontrada.");
-    }
-
-    assertSameCompany(req, activity.companyId);
-    res.json({ data: activity });
   })
 );
 

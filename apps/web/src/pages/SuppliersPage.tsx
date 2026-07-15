@@ -14,6 +14,7 @@ export function SuppliersPage() {
   const { user } = useAuth();
   const [companyOptions, setCompanyOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [activityOptions, setActivityOptions] = useState<Array<{ value: string; label: string }>>([]);
   const canLoadCompanies = user?.role === "ADMIN";
   const shouldShowCompanySelect = user?.role === "ADMIN";
   const companyDisplay = user?.company
@@ -26,12 +27,22 @@ export function SuppliersPage() {
     void (async () => {
       try {
         const categoriesResponse = await apiJson<{ data: Array<Record<string, unknown>> }>("/product-categories");
+        const activitiesResponse = await apiJson<{ data: Array<Record<string, unknown>> }>("/client-activities");
         setCategoryOptions(
           categoriesResponse.data
             .filter((category) => category.status !== "INACTIVE")
             .map((category) => ({
               value: String(category.id ?? ""),
               label: `${textValue(category.name, "Categoria")} - ${companyLabel(category.company as CompanyOption | null | undefined)}`
+            }))
+            .filter((option) => option.value !== "")
+        );
+        setActivityOptions(
+          activitiesResponse.data
+            .filter((activity) => activity.status !== "INACTIVE")
+            .map((activity) => ({
+              value: String(activity.id ?? ""),
+              label: `${textValue(activity.name, "Atividade")} - ${companyLabel(activity.company as CompanyOption | null | undefined)}`
             }))
             .filter((option) => option.value !== "")
         );
@@ -45,6 +56,7 @@ export function SuppliersPage() {
       } catch {
         setCompanyOptions([]);
         setCategoryOptions([]);
+        setActivityOptions([]);
       }
     })();
   }, [canLoadCompanies]);
@@ -52,15 +64,15 @@ export function SuppliersPage() {
   return (
     <CrudPage
       title="Fornecedores"
-      subtitle="Cadastro das industrias e marcas atendidas pela operacao, com categorias e contato comercial vinculados."
+      subtitle="Cadastro das industrias e marcas atendidas pela operacao, concentrando categorias, contato comercial e atividades executadas em campo."
       endpoint="/suppliers"
-      searchHint="Busque por fornecedor, fantasia, documento, telefone, empresa, categoria ou situacao."
+      searchHint="Busque por fornecedor, fantasia, documento, telefone, empresa, categoria, atividade ou situacao."
       formMode="drawer"
       createTitle="Incluir fornecedor"
       editTitle="Alterar fornecedor"
-      formSubtitle="Fornecedor ativo fica disponivel automaticamente para todos os clientes da empresa/filial."
+      formSubtitle="Fornecedor ativo fica disponivel automaticamente para todos os clientes da empresa/filial, com atividades que orientam o trabalho do promotor no cliente."
       createButtonLabel="Novo fornecedor"
-      searchPlaceholder="Buscar por nome, fantasia, documento, contato, categoria ou empresa"
+      searchPlaceholder="Buscar por nome, fantasia, documento, contato, categoria, atividade ou empresa"
       initialValues={{
         companyId: user?.companyId ?? "",
         companyDisplay,
@@ -72,6 +84,8 @@ export function SuppliersPage() {
         email: "",
         notes: "",
         categoryIds: [],
+        activityIds: [],
+        activityNames: [],
         status: "ACTIVE"
       }}
       fieldSections={[
@@ -88,9 +102,9 @@ export function SuppliersPage() {
           fields: ["contactName", "phone", "email"]
         },
         {
-          title: "Cobertura e observacoes",
-          description: "Categorias atendidas e observacoes operacionais.",
-          fields: ["categoryIds", "notes"],
+          title: "Cobertura e atividades",
+          description: "Selecione atividades ja cadastradas ou crie novas atividades diretamente neste fornecedor.",
+          fields: ["categoryIds", "activityIds", "activityNames", "notes"],
           columns: 1
         }
       ]}
@@ -128,6 +142,24 @@ export function SuppliersPage() {
           searchable: true,
           options: categoryOptions,
           description: "Selecione uma ou mais categorias atendidas por este fornecedor.",
+          fullWidth: true
+        },
+        {
+          name: "activityIds",
+          source: "activities",
+          label: "Atividades executadas neste fornecedor",
+          type: "multiselect",
+          searchable: true,
+          options: activityOptions,
+          description: "Estas atividades aparecerao para o promotor dentro do atendimento deste fornecedor.",
+          fullWidth: true
+        },
+        {
+          name: "activityNames",
+          label: "Cadastrar novas atividades neste fornecedor",
+          type: "tags",
+          placeholder: "Ex.: Verificar ruptura, conferir exposicao, validar preco",
+          description: "Digite a atividade e clique em Adicionar. O sistema cadastra a atividade e ja vincula ao fornecedor.",
           fullWidth: true
         },
         { name: "notes", label: "Observacoes", fullWidth: true },
@@ -168,40 +200,65 @@ export function SuppliersPage() {
           )
         },
         {
-          label: "Categorias",
-          headerClassName: "w-[22%]",
-          className: "min-w-[210px]",
+          label: "Escopo operacional",
+          headerClassName: "w-[26%]",
+          className: "min-w-[250px]",
           value: (item) => {
             const categories = Array.isArray(item.categories) ? item.categories as Array<Record<string, unknown>> : [];
-
-            if (categories.length === 0) {
-              return <span className="text-sm font-semibold text-stone-500">Nao vinculadas</span>;
-            }
+            const activities = Array.isArray(item.activities) ? item.activities as Array<Record<string, unknown>> : [];
 
             return (
-              <div className="flex flex-wrap gap-1.5">
-                {categories.slice(0, 3).map((category) => (
-                  <span key={String(category.id)} className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-brand">
-                    {textValue(category.name)}
-                  </span>
-                ))}
-                {categories.length > 3 ? (
-                  <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-black text-slateText">+{categories.length - 3}</span>
-                ) : null}
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-1 text-[11px] font-black uppercase tracking-[0.1em] text-slateText">Categorias</div>
+                  {categories.length === 0 ? (
+                    <span className="text-sm font-semibold text-stone-500">Nao vinculadas</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {categories.slice(0, 2).map((category) => (
+                        <span key={String(category.id)} className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-brand">
+                          {textValue(category.name)}
+                        </span>
+                      ))}
+                      {categories.length > 2 ? (
+                        <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-black text-slateText">+{categories.length - 2}</span>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] font-black uppercase tracking-[0.1em] text-slateText">Atividades</div>
+                  {activities.length === 0 ? (
+                    <span className="text-sm font-semibold text-stone-500">Nao vinculadas</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {activities.slice(0, 2).map((activity) => (
+                        <span key={String(activity.id)} className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-forest">
+                          {textValue(activity.name)}
+                        </span>
+                      ))}
+                      {activities.length > 2 ? (
+                        <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-black text-slateText">+{activities.length - 2}</span>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           }
         },
         {
           label: "Cobertura",
-          headerClassName: "w-[18%]",
+          headerClassName: "w-[14%]",
           className: "min-w-[180px]",
           value: (item) => {
             const count = (item._count as { clients?: number } | undefined)?.clients ?? 0;
+            const activitiesCount = (item._count as { activities?: number } | undefined)?.activities ?? 0;
 
             return (
               <div className="space-y-2">
                 <strong className="block text-base leading-tight text-ink">{count} cliente(s)</strong>
+                <span className="block text-xs font-semibold text-stone-500">{activitiesCount} atividade(s)</span>
                 <StatusPill value={String(item.status ?? "")} />
               </div>
             );
