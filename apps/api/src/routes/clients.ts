@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { Router } from "express";
 import { parse } from "csv-parse/sync";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
@@ -24,9 +25,7 @@ const clientSchema = z.object({
   state: z.string().optional(),
   latitude: z.coerce.number().optional(),
   longitude: z.coerce.number().optional(),
-  defaultPromoterId: z.string().uuid().optional(),
-  supplierIds: z.array(z.string().uuid()).optional(),
-  activityIds: z.array(z.string().uuid()).optional()
+  defaultPromoterId: z.string().uuid().optional()
 });
 
 async function generateNextClientCode(companyId: string) {
@@ -46,97 +45,44 @@ async function generateNextClientCode(companyId: string) {
   return String(lastCode + 1).padStart(4, "0");
 }
 
-const clientInclude = {
-  company: true,
-  defaultPromoter: { include: { user: true } },
-  suppliers: {
-    include: {
-      supplier: true
-    }
-  },
-  activities: {
-    include: {
-      activity: true
-    }
-  }
-} as const;
+async function syncClientSuppliers(
+  tx: Prisma.TransactionClient,
+  clientId: string,
+  companyId?: string | null
+) {
+  await tx.clientSupplier.deleteMany({
+    where: { clientId }
+  });
 
-function normalizeClient(client: Record<string, unknown>) {
-  const supplierLinks = Array.isArray(client.suppliers) ? client.suppliers : [];
-  const activityLinks = Array.isArray(client.activities) ? client.activities : [];
-
-  return {
-    ...client,
-    suppliers: supplierLinks
-      .map((link) => (link as { supplier?: unknown }).supplier)
-      .filter(Boolean),
-    activities: activityLinks
-      .map((link) => (link as { activity?: unknown }).activity)
-      .filter(Boolean)
-  };
-}
-
-async function validateActivityIds(companyId: string, activityIds?: string[]) {
-  const uniqueActivityIds = Array.from(new Set(activityIds ?? []));
-
-  if (uniqueActivityIds.length === 0) {
-    return [];
+  if (!companyId) {
+    return;
   }
 
-  const activities = await prisma.clientActivityType.findMany({
+  const activeSuppliers = await tx.supplier.findMany({
     where: {
-      id: { in: uniqueActivityIds },
-      companyId
+      companyId,
+      status: "ACTIVE"
     },
     select: { id: true }
   });
 
-  if (activities.length !== uniqueActivityIds.length) {
-    throw new AppError(400, "ACTIVITY_NOT_FOUND", "Uma ou mais atividades nao existem nesta empresa/filial.");
+  if (activeSuppliers.length === 0) {
+    return;
   }
 
-  return uniqueActivityIds;
-}
-
-async function resolveActivityIdsFromCsv(companyId: string, rawActivities?: string) {
-  const tokens = (rawActivities ?? "")
-    .split(";")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const activityIds: string[] = [];
-  const warnings: string[] = [];
-
-  for (const token of tokens) {
-    const numericCode = /^\d+$/.test(token) ? Number(token) : undefined;
-    const activity = await prisma.clientActivityType.findFirst({
-      where: {
-        companyId,
-        OR: [
-          { id: token },
-          { name: { equals: token, mode: "insensitive" } },
-          ...(numericCode ? [{ code: numericCode }] : [])
-        ]
-      },
-      select: { id: true }
-    });
-
-    if (activity) {
-      activityIds.push(activity.id);
-    } else {
-      warnings.push(`Atividade nao encontrada: ${token}`);
-    }
-  }
-
-  return {
-    activityIds: Array.from(new Set(activityIds)),
-    warnings
-  };
+  await tx.clientSupplier.createMany({
+    data: activeSuppliers.map((supplier) => ({
+      clientId,
+      supplierId: supplier.id
+    })),
+    skipDuplicates: true
+  });
 }
 
 clientsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const q = typeof req.query.q === "string" ? req.query.q.trim() : undefined;
+    const q = typeof req.query.q === "string" ? req.query.q : undefined;
     const clients = await prisma.client.findMany({
       where: {
         ...scopedCompanyWhere(req),
@@ -152,18 +98,20 @@ clientsRouter.get(
                 { city: { contains: q, mode: "insensitive" } },
                 { state: { contains: q, mode: "insensitive" } },
                 { company: { name: { contains: q, mode: "insensitive" } } },
-                { defaultPromoter: { user: { name: { contains: q, mode: "insensitive" } } } },
-                { activities: { some: { activity: { name: { contains: q, mode: "insensitive" } } } } }
+                { defaultPromoter: { user: { name: { contains: q, mode: "insensitive" } } } }
               ]
             }
           : {})
       },
       orderBy: { createdAt: "desc" },
-      take: 80,
-      include: clientInclude
+      take: 200,
+      include: {
+        company: true,
+        defaultPromoter: { include: { user: true } }
+      }
     });
 
-    res.json({ data: clients.map((client) => normalizeClient(client as unknown as Record<string, unknown>)) });
+    res.json({ data: clients });
   })
 );
 
@@ -172,12 +120,10 @@ clientsRouter.post(
   asyncHandler(async (req, res) => {
     const input = clientSchema.parse(req.body);
     const companyId = requireCompanyId(req, input.companyId);
-    const { supplierIds, activityIds, ...clientInput } = input;
-    void supplierIds;
 
-    if (clientInput.defaultPromoterId) {
+    if (input.defaultPromoterId) {
       const promoter = await prisma.promoter.findUnique({
-        where: { id: clientInput.defaultPromoterId },
+        where: { id: input.defaultPromoterId },
         select: { companyId: true }
       });
       assertSameCompany(req, promoter?.companyId);
@@ -187,58 +133,30 @@ clientsRouter.post(
       }
     }
 
-    const validActivityIds = await validateActivityIds(companyId, activityIds);
-
     const client = await prisma.$transaction(async (tx) => {
       const createdClient = await tx.client.create({
         data: {
-          ...clientInput,
+          ...input,
           companyId,
-          code: clientInput.code?.trim() || await generateNextClientCode(companyId),
-          status: clientInput.status ?? "ACTIVE",
-          latitude: clientInput.latitude,
-          longitude: clientInput.longitude
-        },
-        include: clientInclude
+          code: input.code?.trim() || await generateNextClientCode(companyId),
+          status: input.status ?? "ACTIVE",
+          latitude: input.latitude,
+          longitude: input.longitude
+        }
       });
 
-      const activeSupplierIds = (
-        await tx.supplier.findMany({
-          where: {
-            companyId,
-            status: "ACTIVE"
-          },
-          select: { id: true }
-        })
-      ).map((supplier) => supplier.id);
-
-      if (activeSupplierIds.length > 0) {
-        await tx.clientSupplier.createMany({
-          data: activeSupplierIds.map((supplierId) => ({
-            clientId: createdClient.id,
-            supplierId
-          })),
-          skipDuplicates: true
-        });
-      }
-
-      if (validActivityIds.length > 0) {
-        await tx.clientActivityAssignment.createMany({
-          data: validActivityIds.map((activityId) => ({
-            clientId: createdClient.id,
-            activityId
-          })),
-          skipDuplicates: true
-        });
-      }
+      await syncClientSuppliers(tx, createdClient.id, companyId);
 
       return tx.client.findUniqueOrThrow({
         where: { id: createdClient.id },
-        include: clientInclude
+        include: {
+          company: true,
+          defaultPromoter: { include: { user: true } }
+        }
       });
     });
 
-    res.status(201).json({ data: normalizeClient(client as unknown as Record<string, unknown>) });
+    res.status(201).json({ data: client });
   })
 );
 
@@ -246,8 +164,6 @@ clientsRouter.put(
   "/:id",
   asyncHandler(async (req, res) => {
     const input = clientSchema.partial().parse(req.body);
-    const { supplierIds, activityIds, ...clientInput } = input;
-    void supplierIds;
     const existing = await prisma.client.findUnique({
       where: { id: req.params.id },
       select: { companyId: true }
@@ -258,11 +174,11 @@ clientsRouter.put(
     }
 
     assertSameCompany(req, existing.companyId);
-    const companyId = clientInput.companyId ? requireCompanyId(req, clientInput.companyId) : existing.companyId;
+    const companyId = input.companyId ? requireCompanyId(req, input.companyId) : existing.companyId;
 
-    if (clientInput.defaultPromoterId) {
+    if (input.defaultPromoterId) {
       const promoter = await prisma.promoter.findUnique({
-        where: { id: clientInput.defaultPromoterId },
+        where: { id: input.defaultPromoterId },
         select: { companyId: true }
       });
 
@@ -271,64 +187,27 @@ clientsRouter.put(
       }
     }
 
-    if (!companyId) {
-      throw new AppError(400, "COMPANY_REQUIRED", "Cliente precisa estar vinculado a uma empresa/filial.");
-    }
-
-    const validActivityIds = await validateActivityIds(companyId, activityIds);
-
     const client = await prisma.$transaction(async (tx) => {
       await tx.client.update({
         where: { id: req.params.id },
         data: {
-          ...clientInput,
+          ...input,
           companyId
         }
       });
 
-      await tx.clientSupplier.deleteMany({ where: { clientId: req.params.id } });
-
-      const activeSupplierIds = (
-        await tx.supplier.findMany({
-          where: {
-            companyId,
-            status: "ACTIVE"
-          },
-          select: { id: true }
-        })
-      ).map((supplier) => supplier.id);
-
-      if (activeSupplierIds.length > 0) {
-        await tx.clientSupplier.createMany({
-          data: activeSupplierIds.map((supplierId) => ({
-            clientId: req.params.id,
-            supplierId
-          })),
-          skipDuplicates: true
-        });
-      }
-
-      if (activityIds !== undefined) {
-        await tx.clientActivityAssignment.deleteMany({ where: { clientId: req.params.id } });
-
-        if (validActivityIds.length > 0) {
-          await tx.clientActivityAssignment.createMany({
-            data: validActivityIds.map((activityId) => ({
-              clientId: req.params.id,
-              activityId
-            })),
-            skipDuplicates: true
-          });
-        }
-      }
+      await syncClientSuppliers(tx, req.params.id, companyId);
 
       return tx.client.findUniqueOrThrow({
         where: { id: req.params.id },
-        include: clientInclude
+        include: {
+          company: true,
+          defaultPromoter: { include: { user: true } }
+        }
       });
     });
 
-    res.json({ data: normalizeClient(client as unknown as Record<string, unknown>) });
+    res.json({ data: client });
   })
 );
 
@@ -376,16 +255,6 @@ clientsRouter.post(
 
     let importedRows = 0;
     const errors: Array<{ row: number; message: string }> = [];
-    const warnings: Array<{ row: number; message: string }> = [];
-    const activeSupplierIds = (
-      await prisma.supplier.findMany({
-        where: {
-          companyId,
-          status: "ACTIVE"
-        },
-        select: { id: true }
-      })
-    ).map((supplier) => supplier.id);
 
     for (const [index, row] of records.entries()) {
       try {
@@ -396,64 +265,40 @@ clientsRouter.post(
         }
 
         const code = row.code || row.codigo || `CSV-${Date.now()}-${index}`;
-        const activityResolution = await resolveActivityIdsFromCsv(companyId, row.activities || row.atividades);
 
-        const client = await prisma.client.upsert({
-          where: { companyId_code: { companyId, code } },
-          create: {
-            companyId,
-            code,
-            name,
-            document: row.document || row.documento || undefined,
-            representative: row.representative || row.representante || row.vendedor || undefined,
-            address: row.address || row.endereco || undefined,
-            addressNumber: row.addressNumber || row.numero || undefined,
-            district: row.district || row.bairro || undefined,
-            city: row.city || row.cidade || undefined,
-            state: row.state || row.uf || undefined,
-            status: "ACTIVE"
-          },
-          update: {
-            companyId,
-            name,
-            document: row.document || row.documento || undefined,
-            representative: row.representative || row.representante || row.vendedor || undefined,
-            address: row.address || row.endereco || undefined,
-            addressNumber: row.addressNumber || row.numero || undefined,
-            district: row.district || row.bairro || undefined,
-            city: row.city || row.cidade || undefined,
-            state: row.state || row.uf || undefined,
-            status: "ACTIVE"
-          }
-        });
-
-        await prisma.clientSupplier.deleteMany({
-          where: { clientId: client.id }
-        });
-
-        if (activeSupplierIds.length > 0) {
-          await prisma.clientSupplier.createMany({
-            data: activeSupplierIds.map((supplierId) => ({
-              clientId: client.id,
-              supplierId
-            })),
-            skipDuplicates: true
+        await prisma.$transaction(async (tx) => {
+          const client = await tx.client.upsert({
+            where: { companyId_code: { companyId, code } },
+            create: {
+              companyId,
+              code,
+              name,
+              document: row.document || row.documento || undefined,
+              representative: row.representative || row.representante || undefined,
+              address: row.address || row.endereco || undefined,
+              addressNumber: row.addressNumber || row.numero || undefined,
+              district: row.district || row.bairro || undefined,
+              city: row.city || row.cidade || undefined,
+              state: row.state || row.uf || undefined,
+              status: "ACTIVE"
+            },
+            update: {
+              companyId,
+              name,
+              document: row.document || row.documento || undefined,
+              representative: row.representative || row.representante || undefined,
+              address: row.address || row.endereco || undefined,
+              addressNumber: row.addressNumber || row.numero || undefined,
+              district: row.district || row.bairro || undefined,
+              city: row.city || row.cidade || undefined,
+              state: row.state || row.uf || undefined,
+              status: "ACTIVE"
+            },
+            select: { id: true }
           });
-        }
 
-        if (activityResolution.activityIds.length > 0) {
-          await prisma.clientActivityAssignment.createMany({
-            data: activityResolution.activityIds.map((activityId) => ({
-              clientId: client.id,
-              activityId
-            })),
-            skipDuplicates: true
-          });
-        }
-
-        for (const warning of activityResolution.warnings) {
-          warnings.push({ row: index + 2, message: warning });
-        }
+          await syncClientSuppliers(tx, client.id, companyId);
+        });
 
         importedRows += 1;
       } catch (error) {
@@ -471,13 +316,13 @@ clientsRouter.post(
         totalRows: records.length,
         importedRows,
         failedRows: errors.length,
-        errors: [...errors, ...warnings.map((warning) => ({ ...warning, message: `Aviso: ${warning.message}` }))],
+        errors,
         preview: records.slice(0, 5),
         createdById: req.user?.id,
         companyId
       }
     });
 
-    res.status(201).json({ data: { ...log, warnings } });
+    res.status(201).json({ data: log });
   })
 );

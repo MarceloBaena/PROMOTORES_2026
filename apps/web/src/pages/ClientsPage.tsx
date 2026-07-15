@@ -63,6 +63,7 @@ export function ClientsPage() {
         companyId: user?.companyId ?? "",
         name: "",
         document: "",
+        representative: "",
         defaultPromoterId: "",
         address: "",
         addressNumber: "",
@@ -96,6 +97,12 @@ export function ClientsPage() {
           : []),
         { name: "name", label: "Nome", fullWidth: true },
         { name: "document", label: "Documento" },
+        {
+          name: "representative",
+          label: "Representante",
+          description: "Nome do vendedor ou representante comercial que atende este cliente.",
+          fullWidth: true
+        },
         {
           name: "defaultPromoterId",
           label: "Promotor responsavel",
@@ -133,6 +140,7 @@ export function ClientsPage() {
             const code = textValue(item.code, "Sem codigo");
             const document = textValue(item.document, "Sem documento");
             const company = companyLabel(item.company as CompanyOption | null | undefined);
+            const representative = textValue(item.representative, "Sem representante");
             const promoter = promoterLabel(item.defaultPromoter);
 
             return (
@@ -145,6 +153,7 @@ export function ClientsPage() {
                 </div>
                 <div className="text-xs font-semibold text-stone-500">Documento: {document}</div>
                 <div className="text-xs font-semibold text-stone-500">Empresa: {company}</div>
+                <div className="text-xs font-semibold text-stone-500">Representante: {representative}</div>
                 <div className="text-xs font-semibold text-stone-500">Promotor: {promoter}</div>
               </div>
             );
