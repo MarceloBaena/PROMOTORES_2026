@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { PageErrorBoundary } from "./components/PageErrorBoundary";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
@@ -43,7 +44,7 @@ function ProtectedApp() {
         <Route path="/visitas" element={<VisitsPage />} />
         <Route path="/mapa" element={<LiveMapPage />} />
         <Route path="/auditoria" element={<AuditPage />} />
-        <Route path="/relatorios" element={<ReportsPage />} />
+        <Route path="/relatorios" element={<PageErrorBoundary title="Relatorios indisponiveis"><ReportsPage /></PageErrorBoundary>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

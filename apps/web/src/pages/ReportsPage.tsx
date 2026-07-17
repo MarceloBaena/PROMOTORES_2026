@@ -132,7 +132,7 @@ function formatTime(value?: string | null) {
 }
 
 function formatMinutes(value?: number | null) {
-  if (value === null || value === undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return "-";
   }
 
@@ -154,7 +154,11 @@ function promoterKey(value: { promoterId?: string | null; promoterCode?: number 
 }
 
 function percent(value: number, total: number) {
-  return total > 0 ? Math.round((value / total) * 100) : 0;
+  return Number.isFinite(value) && Number.isFinite(total) && total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
+function safeNumber(value?: number | null) {
+  return Number.isFinite(value) ? Number(value) : 0;
 }
 
 export function ReportsPage() {
@@ -231,11 +235,13 @@ export function ReportsPage() {
   }, [report?.visits, selectedPromoterKey]);
 
   const selectedPromoter = rankedPromoters.find((promoter) => promoterKey(promoter) === selectedPromoterKey) ?? null;
-  const completionRate = report?.totals.visits ? percent(report.totals.completedVisits, report.totals.visits) : 0;
-  const evidenceRate = report?.totals.visits ? percent(report.totals.visitsWithEvidence, report.totals.visits) : 0;
+  const completionRate = report?.totals.visits ? percent(safeNumber(report.totals.completedVisits), safeNumber(report.totals.visits)) : 0;
+  const evidenceRate = report?.totals.visits ? percent(safeNumber(report.totals.visitsWithEvidence), safeNumber(report.totals.visits)) : 0;
   const bestPromoter = rankedPromoters[0];
   const selectedCompletedVisits = filteredVisits.filter((visit) => visit.status === "completed").length;
-  const attentionVisits = filteredVisits.filter((visit) => visit.noDeliveryCount > 0 || visit.stockoutCount > 0 || visit.auditFlags > 0);
+  const attentionVisits = filteredVisits.filter((visit) => safeNumber(visit.noDeliveryCount) > 0 || safeNumber(visit.stockoutCount) > 0 || safeNumber(visit.auditFlags) > 0);
+  const timelineVisits = filteredVisits.slice(0, 80);
+  const tableVisits = filteredVisits.slice(0, 250);
 
   async function download(path: string, fileName: string) {
     const blob = await apiDownload(path);
@@ -414,13 +420,19 @@ export function ReportsPage() {
           </div>
 
           <div className="grid gap-3 2xl:grid-cols-2">
-            {filteredVisits.map((visit, index) => (
+            {timelineVisits.map((visit, index) => (
               <VisitTimelineCard key={visit.visitId} visit={visit} index={index + 1} />
             ))}
 
             {!loading && filteredVisits.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-line bg-field p-8 text-center text-sm font-bold text-slateText 2xl:col-span-2">
                 Nenhum atendimento encontrado para o filtro selecionado.
+              </div>
+            ) : null}
+
+            {filteredVisits.length > timelineVisits.length ? (
+              <div className="rounded-3xl border border-line bg-field p-5 text-center text-sm font-bold text-slateText 2xl:col-span-2">
+                Mostrando os primeiros {timelineVisits.length} atendimento(s) em tela. Use a exportacao para baixar todos os {filteredVisits.length} registro(s).
               </div>
             ) : null}
           </div>
@@ -502,7 +514,7 @@ export function ReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredVisits.map((visit) => (
+              {tableVisits.map((visit) => (
                 <tr key={visit.visitId}>
                   <td>
                     <div className="font-black">{visit.promoterName}</div>
@@ -525,6 +537,11 @@ export function ReportsPage() {
             </tbody>
           </table>
         </div>
+        {filteredVisits.length > tableVisits.length ? (
+          <div className="border-t border-line bg-field px-5 py-3 text-xs font-bold text-slateText">
+            Grade limitada aos primeiros {tableVisits.length} registro(s) para manter a tela rapida. A exportacao CSV contem todos os {filteredVisits.length} registro(s).
+          </div>
+        ) : null}
       </div>
 
       <div className="table-wrap mt-5">
@@ -647,7 +664,7 @@ function PromoterScoreCard({
   active: boolean;
   onClick: () => void;
 }) {
-  const executionRate = percent(promoter.completedVisits, promoter.visits);
+  const executionRate = percent(safeNumber(promoter.completedVisits), safeNumber(promoter.visits));
 
   return (
     <button
@@ -673,9 +690,9 @@ function PromoterScoreCard({
             <div className="h-2 rounded-full bg-gradient-to-r from-brand to-execution" style={{ width: `${executionRate}%` }} />
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <PromoterMiniStat label="Visitas" value={promoter.visits} />
-            <PromoterMiniStat label="Cliente" value={formatMinutes(promoter.averageServiceMinutes)} />
-            <PromoterMiniStat label="Rota" value={formatMinutes(promoter.averageTravelMinutes)} />
+            <PromoterMiniStat label="Visitas" value={safeNumber(promoter.visits)} />
+            <PromoterMiniStat label="Cliente" value={formatMinutes(safeNumber(promoter.averageServiceMinutes))} />
+            <PromoterMiniStat label="Rota" value={formatMinutes(safeNumber(promoter.averageTravelMinutes))} />
           </div>
         </div>
       </div>
@@ -734,12 +751,12 @@ function AttentionVisitCard({ visit }: { visit: ProductivityReport["visits"][num
         <StatusPill value={visit.status} />
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-        <PromoterMiniStat label="Sem entrega" value={visit.noDeliveryCount} />
-        <PromoterMiniStat label="Ruptura" value={visit.stockoutCount} />
-        <PromoterMiniStat label="Auditoria" value={visit.auditFlags} />
+        <PromoterMiniStat label="Sem entrega" value={safeNumber(visit.noDeliveryCount)} />
+        <PromoterMiniStat label="Ruptura" value={safeNumber(visit.stockoutCount)} />
+        <PromoterMiniStat label="Auditoria" value={safeNumber(visit.auditFlags)} />
       </div>
       <div className="mt-3 rounded-2xl bg-white/70 px-3 py-2 text-xs font-bold text-amber-900">
-        {formatDateTime(visit.startedAt)} | {visit.photoCount} foto(s) sincronizada(s)
+        {formatDateTime(visit.startedAt)} | {safeNumber(visit.photoCount)} foto(s) sincronizada(s)
       </div>
     </article>
   );
@@ -772,11 +789,11 @@ function SupplierSummaryCard({
             </span>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <PromoterMiniStat label="Execucoes" value={supplier.executions} />
-            <PromoterMiniStat label="Sem entrega" value={supplier.noDeliveryCount} />
-            <PromoterMiniStat label="Ruptura" value={supplier.stockoutCount} />
+            <PromoterMiniStat label="Execucoes" value={safeNumber(supplier.executions)} />
+            <PromoterMiniStat label="Sem entrega" value={safeNumber(supplier.noDeliveryCount)} />
+            <PromoterMiniStat label="Ruptura" value={safeNumber(supplier.stockoutCount)} />
           </div>
-          <div className="mt-3 text-xs font-bold text-slateText">{supplier.notesCount} justificativa(s) registrada(s)</div>
+          <div className="mt-3 text-xs font-bold text-slateText">{safeNumber(supplier.notesCount)} justificativa(s) registrada(s)</div>
         </div>
       </div>
     </div>
