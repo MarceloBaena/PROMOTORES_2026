@@ -79,8 +79,10 @@ Deploy da API:
 
 ```bash
 vercel link --yes --project promotores-2026-api --scope marcelobaenas-projects
-vercel --prod --yes --local-config vercel.api.json
+npm run api:deploy:prod
 ```
+
+O script `api:deploy:prod` limpa `.vercel/output`, gera o prebuilt da API com `vercel.api.json`, remove a pasta estatica antiga e publica somente o bundle correto da API. Isso evita o erro `API failed to load its serverless bundle` e impede que o dominio da API sirva HTML antigo do painel web.
 
 Deploy do painel web:
 

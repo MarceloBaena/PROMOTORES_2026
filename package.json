@@ -16,6 +16,7 @@
     "api:migrate": "npm run prisma:migrate -w @sales-promoters/api",
     "api:seed:access": "npm run seed:access -w @sales-promoters/api",
     "api:check:tenant": "npm run check:tenant -w @sales-promoters/api",
+    "api:deploy:prod": "node scripts/deploy-vercel-api.cjs",
     "supabase:check": "npm run supabase:check -w @sales-promoters/api",
     "supabase:setup": "npm run supabase:setup -w @sales-promoters/api",
     "build:web": "npm run build -w @sales-promoters/web",
