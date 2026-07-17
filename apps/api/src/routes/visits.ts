@@ -37,6 +37,11 @@ const optionalCoordinate = (min: number, max: number) =>
     z.coerce.number().min(min).max(max).optional()
   );
 
+const optionalDateTime = z.preprocess(
+  (value) => (value === null || value === "" ? undefined : value),
+  z.string().datetime().optional()
+);
+
 const visitSchema = z.object({
   clientGeneratedId: z.string().min(8).max(120).optional(),
   companyId: z.string().uuid().optional(),
@@ -45,8 +50,8 @@ const visitSchema = z.object({
   clientId: z.string().uuid(),
   promoterId: z.string().uuid().optional(),
   status: z.enum(["pending", "in_progress", "completed", "not_completed", "canceled"]).optional(),
-  startedAt: z.string().datetime().optional(),
-  finishedAt: z.string().datetime().optional(),
+  startedAt: optionalDateTime,
+  finishedAt: optionalDateTime,
   gpsLatitude: optionalCoordinate(-90, 90),
   gpsLongitude: optionalCoordinate(-180, 180),
   notes: z.string().optional()
@@ -57,7 +62,7 @@ const photoSchema = z.object({
   clientGeneratedId: z.string().min(8).max(120).optional(),
   supplierExecutionId: z.string().uuid().optional(),
   supplierId: z.string().uuid().optional(),
-  capturedAt: z.string().datetime().optional(),
+  capturedAt: optionalDateTime,
   gpsLatitude: optionalCoordinate(-90, 90),
   gpsLongitude: optionalCoordinate(-180, 180)
 });
@@ -85,8 +90,8 @@ const supplierExecutionSchema = z.object({
   productsReplenished: z.boolean().nullable().optional(),
   stockoutFound: z.boolean().nullable().optional(),
   notes: z.string().optional(),
-  startedAtDevice: z.string().datetime().optional(),
-  finishedAtDevice: z.string().datetime().optional()
+  startedAtDevice: optionalDateTime,
+  finishedAtDevice: optionalDateTime
 });
 
 const visitInclude = {
