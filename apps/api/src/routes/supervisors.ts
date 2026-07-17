@@ -23,17 +23,6 @@ const updateSchema = createSchema.partial().extend({
 supervisorsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    if (req.user?.role === "SUPERVISOR") {
-      const supervisor = await prisma.supervisor.findFirst({
-        where: { ...scopedCompanyWhere(req), userId: req.user.id },
-        orderBy: { code: "asc" },
-        include: { user: { include: { role: true } }, company: true }
-      });
-
-      res.json({ data: supervisor ? [supervisor] : [] });
-      return;
-    }
-
     const promoterId = req.query.promoterId ? String(req.query.promoterId) : undefined;
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
     const numericCode = /^\d+$/.test(q) ? Number(q) : undefined;
@@ -68,10 +57,6 @@ supervisorsRouter.get(
 supervisorsRouter.post(
   "/",
   asyncHandler(async (req, res) => {
-    if (req.user?.role !== "ADMIN") {
-      throw new AppError(403, "FORBIDDEN", "Somente administradores podem cadastrar supervisores.");
-    }
-
     const input = createSchema.parse(req.body);
     const companyId = requireCompanyId(req, input.companyId);
     const role = await prisma.role.findUnique({ where: { code: "SUPERVISOR" } });
@@ -110,10 +95,6 @@ supervisorsRouter.post(
 supervisorsRouter.put(
   "/:id",
   asyncHandler(async (req, res) => {
-    if (req.user?.role !== "ADMIN") {
-      throw new AppError(403, "FORBIDDEN", "Somente administradores podem alterar supervisores.");
-    }
-
     const input = updateSchema.parse(req.body);
     const supervisor = await prisma.supervisor.findUnique({ where: { id: req.params.id } });
 
@@ -153,10 +134,6 @@ supervisorsRouter.put(
 supervisorsRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    if (req.user?.role !== "ADMIN") {
-      throw new AppError(403, "FORBIDDEN", "Somente administradores podem excluir supervisores.");
-    }
-
     const supervisor = await prisma.supervisor.findUnique({ where: { id: req.params.id } });
 
     if (!supervisor) {

@@ -33,6 +33,10 @@ const companyStatusSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE"])
 });
 
+function canMaintainCompany(req: Parameters<typeof isPlatformAdmin>[0], companyId: string) {
+  return isPlatformAdmin(req) || req.user?.companyId === companyId;
+}
+
 companiesRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -85,7 +89,7 @@ companiesRouter.post(
   "/",
   asyncHandler(async (req, res) => {
     if (!isPlatformAdmin(req)) {
-      throw new AppError(403, "PLATFORM_ADMIN_REQUIRED", "Apenas o administrador geral pode cadastrar empresas/filiais.");
+      throw new AppError(403, "PLATFORM_ADMIN_REQUIRED", "Apenas o administrador geral pode cadastrar novas empresas/filiais.");
     }
 
     const input = companySchema.parse(req.body);
@@ -103,14 +107,14 @@ companiesRouter.post(
 companiesRouter.put(
   "/:id",
   asyncHandler(async (req, res) => {
-    if (!isPlatformAdmin(req)) {
-      throw new AppError(403, "PLATFORM_ADMIN_REQUIRED", "Apenas o administrador geral pode editar empresas/filiais.");
-    }
-
     const existing = await prisma.company.findUnique({ where: { id: req.params.id } });
 
     if (!existing) {
       throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa/filial nao encontrada.");
+    }
+
+    if (!canMaintainCompany(req, existing.id)) {
+      throw new AppError(403, "COMPANY_FORBIDDEN", "Usuario pode editar apenas a propria empresa/filial.");
     }
 
     const input = companySchema.partial().parse(req.body);
@@ -126,10 +130,6 @@ companiesRouter.put(
 companiesRouter.patch(
   "/:id/status",
   asyncHandler(async (req, res) => {
-    if (!isPlatformAdmin(req)) {
-      throw new AppError(403, "PLATFORM_ADMIN_REQUIRED", "Apenas o administrador geral pode alterar situacao de empresas/filiais.");
-    }
-
     const existing = await prisma.company.findUnique({
       where: { id: req.params.id },
       select: { id: true }
@@ -137,6 +137,10 @@ companiesRouter.patch(
 
     if (!existing) {
       throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa/filial nao encontrada.");
+    }
+
+    if (!canMaintainCompany(req, existing.id)) {
+      throw new AppError(403, "COMPANY_FORBIDDEN", "Usuario pode alterar apenas a propria empresa/filial.");
     }
 
     const input = companyStatusSchema.parse(req.body);
@@ -152,10 +156,6 @@ companiesRouter.patch(
 companiesRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    if (!isPlatformAdmin(req)) {
-      throw new AppError(403, "PLATFORM_ADMIN_REQUIRED", "Apenas o administrador geral pode inativar empresas/filiais.");
-    }
-
     const existing = await prisma.company.findUnique({
       where: { id: req.params.id },
       select: { id: true }
@@ -163,6 +163,10 @@ companiesRouter.delete(
 
     if (!existing) {
       throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa/filial nao encontrada.");
+    }
+
+    if (!canMaintainCompany(req, existing.id)) {
+      throw new AppError(403, "COMPANY_FORBIDDEN", "Usuario pode inativar apenas a propria empresa/filial.");
     }
 
     const company = await prisma.company.update({

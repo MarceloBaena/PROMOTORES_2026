@@ -41,33 +41,11 @@ const updateSchema = createSchema.partial().extend({
   status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]).optional()
 });
 
-async function getSupervisorScope(req: Parameters<typeof scopedCompanyWhere>[0]) {
-  if (req.user?.role !== "SUPERVISOR") {
-    return null;
-  }
-
-  const supervisor = await prisma.supervisor.findFirst({
-    where: { ...scopedCompanyWhere(req), userId: req.user.id },
-    select: { id: true, companyId: true }
-  });
-
-  if (!supervisor) {
-    throw new AppError(403, "SUPERVISOR_PROFILE_NOT_FOUND", "Supervisor autenticado nao possui cadastro operacional.");
-  }
-
-  return supervisor;
-}
-
 promotersRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const supervisorScope = await getSupervisorScope(req);
-
     const promoters = await prisma.promoter.findMany({
-      where: {
-        ...scopedCompanyWhere(req),
-        ...(supervisorScope ? { supervisorId: supervisorScope.id } : {})
-      },
+      where: scopedCompanyWhere(req),
       orderBy: { code: "asc" },
       include: {
         user: { include: { role: true } },
@@ -85,8 +63,7 @@ promotersRouter.post(
   asyncHandler(async (req, res) => {
     const input = createSchema.parse(req.body);
     const companyId = requireCompanyId(req, input.companyId);
-    const supervisorScope = await getSupervisorScope(req);
-    const supervisorId = supervisorScope?.id ?? input.supervisorId;
+    const supervisorId = input.supervisorId;
     const role = await prisma.role.findUnique({ where: { code: "PROMOTOR" } });
 
     if (!role) {
@@ -98,10 +75,6 @@ promotersRouter.post(
 
     if (existingUser) {
       throw new AppError(409, "EMAIL_ALREADY_EXISTS", "Ja existe usuario cadastrado com este e-mail.");
-    }
-
-    if (supervisorScope && supervisorScope.companyId !== companyId) {
-      throw new AppError(403, "COMPANY_FORBIDDEN", "Supervisor pertence a outra empresa/filial.");
     }
 
     if (supervisorId) {
@@ -159,12 +132,7 @@ promotersRouter.put(
 
     assertSameCompany(req, promoter.companyId);
     const companyId = input.companyId ? requireCompanyId(req, input.companyId) : promoter.companyId;
-    const supervisorScope = await getSupervisorScope(req);
-    const supervisorId = supervisorScope?.id ?? input.supervisorId;
-
-    if (supervisorScope && promoter.supervisorId !== supervisorScope.id) {
-      throw new AppError(403, "PROMOTER_FORBIDDEN", "Promotor pertence a outro supervisor.");
-    }
+    const supervisorId = input.supervisorId;
 
     if (supervisorId) {
       const supervisor = await prisma.supervisor.findUnique({
@@ -218,11 +186,6 @@ promotersRouter.delete(
     }
 
     assertSameCompany(req, promoter.companyId);
-    const supervisorScope = await getSupervisorScope(req);
-
-    if (supervisorScope && promoter.supervisorId !== supervisorScope.id) {
-      throw new AppError(403, "PROMOTER_FORBIDDEN", "Promotor pertence a outro supervisor.");
-    }
 
     await prisma.$transaction([
       prisma.promoter.update({ where: { id: promoter.id }, data: { status: "INACTIVE" } }),

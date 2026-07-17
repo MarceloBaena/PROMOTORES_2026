@@ -128,7 +128,7 @@ export function createApp() {
   });
 
   app.use("/auth", authLimiter, authRouter);
-  app.use("/companies", authenticate, authorizeRoles("ADMIN"), companiesRouter);
+  app.use("/companies", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), companiesRouter);
   app.use("/supervisors", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), supervisorsRouter);
   app.use("/promoters", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), promotersRouter);
   app.use("/product-categories", authenticate, authorizeRoles("ADMIN", "SUPERVISOR"), productCategoriesRouter);

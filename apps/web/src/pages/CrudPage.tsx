@@ -51,6 +51,7 @@ interface CrudPageProps {
   createTitle?: string;
   editTitle?: string;
   createButtonLabel?: string;
+  canCreate?: boolean;
 }
 
 export function CrudPage({
@@ -67,7 +68,8 @@ export function CrudPage({
   fieldSections,
   createTitle,
   editTitle,
-  createButtonLabel
+  createButtonLabel,
+  canCreate = true
 }: CrudPageProps) {
   const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
   const [form, setForm] = useState<Record<string, FieldValue>>(initialValues);
@@ -517,7 +519,7 @@ export function CrudPage({
 
       {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className={`grid gap-4 ${formMode === "drawer" ? "2xl:grid-cols-[minmax(0,1fr)_400px]" : "2xl:grid-cols-[minmax(0,1fr)_340px]"}`}>
+      <div className={`grid gap-4 ${canCreate || editingId ? (formMode === "drawer" ? "2xl:grid-cols-[minmax(0,1fr)_400px]" : "2xl:grid-cols-[minmax(0,1fr)_340px]") : ""}`}>
         <div className="table-wrap">
           <div className="border-b border-line/80 bg-white/90 p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -617,6 +619,7 @@ export function CrudPage({
           </div>
         </div>
 
+        {canCreate || editingId ? (
         <form onSubmit={onSubmit} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
           <div className="panel-header">
             <div>
@@ -670,6 +673,7 @@ export function CrudPage({
             </button>
           </div>
         </form>
+        ) : null}
       </div>
     </section>
   );

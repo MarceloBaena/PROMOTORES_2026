@@ -1,5 +1,6 @@
 import { StatusPill } from "../components/StatusPill";
 import { CrudPage } from "./CrudPage";
+import { useAuth } from "../context/AuthContext";
 
 function companyCode(item: Record<string, unknown>) {
   const code = Number(item.code);
@@ -17,6 +18,9 @@ function textValue(value: unknown, fallback = "-") {
 }
 
 export function CompaniesPage() {
+  const { user } = useAuth();
+  const isPlatformAdmin = user?.role === "ADMIN" && !user.companyId;
+
   return (
     <CrudPage
       title="Empresas/Filiais"
@@ -28,6 +32,7 @@ export function CompaniesPage() {
       editTitle="Alterar empresa/filial"
       formSubtitle="Base comercial da operacao. Cada empresa organiza clientes, fornecedores, categorias e equipe."
       createButtonLabel="Nova empresa"
+      canCreate={isPlatformAdmin}
       searchPlaceholder="Buscar por codigo, nome, CNPJ, contato, cidade, bairro ou situacao"
       initialValues={{
         code: "",
