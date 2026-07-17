@@ -80,7 +80,20 @@ async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere
     include: {
       client: true,
       promoter: { include: { user: true } },
-      route: true
+      route: true,
+      photos: true,
+      auditFlags: true,
+      supplierExecutions: {
+        include: {
+          supplier: {
+            select: {
+              id: true,
+              name: true,
+              tradeName: true
+            }
+          }
+        }
+      }
     },
     orderBy: [
       { promoterId: "asc" },
@@ -102,8 +115,24 @@ async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere
       serviceCount: number;
       travelMinutesTotal: number;
       travelCount: number;
+      photoCount: number;
+      auditFlags: number;
+      supplierExecutions: number;
+      noDeliveryCount: number;
+      stockoutCount: number;
       firstStartAt: string | null;
       lastFinishAt: string | null;
+    }
+  >();
+  const summaryBySupplier = new Map<
+    string,
+    {
+      supplierId: string;
+      supplierName: string;
+      executions: number;
+      noDeliveryCount: number;
+      stockoutCount: number;
+      notesCount: number;
     }
   >();
 
@@ -124,6 +153,11 @@ async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere
       serviceCount: 0,
       travelMinutesTotal: 0,
       travelCount: 0,
+      photoCount: 0,
+      auditFlags: 0,
+      supplierExecutions: 0,
+      noDeliveryCount: 0,
+      stockoutCount: 0,
       firstStartAt: null,
       lastFinishAt: null
     };
@@ -147,8 +181,34 @@ async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere
       summary.lastFinishAt = visit.finishedAt.toISOString();
     }
 
+    summary.photoCount += visit.photos.length;
+    summary.auditFlags += visit.auditFlags.length;
+    summary.supplierExecutions += visit.supplierExecutions.length;
+    summary.noDeliveryCount += visit.supplierExecutions.filter((execution) => execution.deliveryReceived === false).length;
+    summary.stockoutCount += visit.supplierExecutions.filter((execution) => execution.stockoutFound === true).length;
+
+    for (const execution of visit.supplierExecutions) {
+      const supplierName = execution.supplier.tradeName ?? execution.supplier.name;
+      const supplierSummary = summaryBySupplier.get(execution.supplierId) ?? {
+        supplierId: execution.supplierId,
+        supplierName,
+        executions: 0,
+        noDeliveryCount: 0,
+        stockoutCount: 0,
+        notesCount: 0
+      };
+
+      supplierSummary.executions += 1;
+      supplierSummary.noDeliveryCount += execution.deliveryReceived === false ? 1 : 0;
+      supplierSummary.stockoutCount += execution.stockoutFound === true ? 1 : 0;
+      supplierSummary.notesCount += execution.notes?.trim() ? 1 : 0;
+      summaryBySupplier.set(execution.supplierId, supplierSummary);
+    }
+
     summaryByPromoter.set(promoterKey, summary);
     previousByPromoter.set(promoterKey, visit);
+    const visitNoDeliveryCount = visit.supplierExecutions.filter((execution) => execution.deliveryReceived === false).length;
+    const visitStockoutCount = visit.supplierExecutions.filter((execution) => execution.stockoutFound === true).length;
 
     return {
       visitId: visit.id,
@@ -164,15 +224,30 @@ async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere
       finishedAt: visit.finishedAt?.toISOString() ?? null,
       serviceMinutes,
       previousClientName: previousVisit?.client.name ?? null,
-      travelFromPreviousMinutes: previousVisit?.finishedAt ? travelMinutes : null
+      travelFromPreviousMinutes: previousVisit?.finishedAt ? travelMinutes : null,
+      photoCount: visit.photos.length,
+      supplierExecutions: visit.supplierExecutions.length,
+      noDeliveryCount: visitNoDeliveryCount,
+      stockoutCount: visitStockoutCount,
+      auditFlags: visit.auditFlags.length
     };
   });
 
   const promoters = Array.from(summaryByPromoter.values()).map((item) => ({
     ...item,
-    averageServiceMinutes: average(item.serviceMinutesTotal, item.serviceCount),
-    averageTravelMinutes: average(item.travelMinutesTotal, item.travelCount)
+      averageServiceMinutes: average(item.serviceMinutesTotal, item.serviceCount),
+      averageTravelMinutes: average(item.travelMinutesTotal, item.travelCount)
   }));
+  const suppliers = Array.from(summaryBySupplier.values()).sort((first, second) => {
+    const secondAttention = second.noDeliveryCount + second.stockoutCount;
+    const firstAttention = first.noDeliveryCount + first.stockoutCount;
+
+    if (secondAttention !== firstAttention) {
+      return secondAttention - firstAttention;
+    }
+
+    return second.executions - first.executions;
+  });
 
   return {
     period: {
@@ -183,6 +258,12 @@ async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere
       promoters: promoters.length,
       visits: rows.length,
       completedVisits: rows.filter((row) => row.status === "completed").length,
+      photoCount: rows.reduce((total, row) => total + row.photoCount, 0),
+      visitsWithEvidence: rows.filter((row) => row.photoCount > 0).length,
+      supplierExecutions: rows.reduce((total, row) => total + row.supplierExecutions, 0),
+      noDeliveryCount: rows.reduce((total, row) => total + row.noDeliveryCount, 0),
+      stockoutCount: rows.reduce((total, row) => total + row.stockoutCount, 0),
+      auditFlags: rows.reduce((total, row) => total + row.auditFlags, 0),
       serviceMinutesTotal: promoters.reduce((total, item) => total + item.serviceMinutesTotal, 0),
       travelMinutesTotal: promoters.reduce((total, item) => total + item.travelMinutesTotal, 0),
       averageServiceMinutes: average(
@@ -195,6 +276,7 @@ async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere
       )
     },
     promoters,
+    suppliers,
     visits: rows
   };
 }
@@ -348,7 +430,12 @@ reportsRouter.get(
         "fim",
         "minutos_no_cliente",
         "cliente_anterior",
-        "minutos_deslocamento"
+        "minutos_deslocamento",
+        "fotos",
+        "fornecedores_executados",
+        "sem_entrega",
+        "ruptura",
+        "auditorias"
       ],
       ...report.visits.map((visit) => [
         visit.promoterCode ? `PRO-${String(visit.promoterCode).padStart(4, "0")}` : "",
@@ -361,7 +448,12 @@ reportsRouter.get(
         visit.finishedAt ?? "",
         visit.serviceMinutes ?? "",
         visit.previousClientName ?? "",
-        visit.travelFromPreviousMinutes ?? ""
+        visit.travelFromPreviousMinutes ?? "",
+        visit.photoCount,
+        visit.supplierExecutions,
+        visit.noDeliveryCount,
+        visit.stockoutCount,
+        visit.auditFlags
       ])
     ];
 

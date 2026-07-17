@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Award,
+  AlertTriangle,
   Clock3,
+  FileWarning,
   Download,
   Gauge,
   ListChecks,
@@ -28,6 +30,12 @@ interface ProductivityReport {
     promoters: number;
     visits: number;
     completedVisits: number;
+    photoCount: number;
+    visitsWithEvidence: number;
+    supplierExecutions: number;
+    noDeliveryCount: number;
+    stockoutCount: number;
+    auditFlags: number;
     serviceMinutesTotal: number;
     travelMinutesTotal: number;
     averageServiceMinutes: number;
@@ -41,10 +49,23 @@ interface ProductivityReport {
     completedVisits: number;
     serviceMinutesTotal: number;
     travelMinutesTotal: number;
+    photoCount: number;
+    auditFlags: number;
+    supplierExecutions: number;
+    noDeliveryCount: number;
+    stockoutCount: number;
     averageServiceMinutes: number;
     averageTravelMinutes: number;
     firstStartAt: string | null;
     lastFinishAt: string | null;
+  }>;
+  suppliers: Array<{
+    supplierId: string;
+    supplierName: string;
+    executions: number;
+    noDeliveryCount: number;
+    stockoutCount: number;
+    notesCount: number;
   }>;
   visits: Array<{
     visitId: string;
@@ -59,6 +80,11 @@ interface ProductivityReport {
     serviceMinutes: number | null;
     previousClientName: string | null;
     travelFromPreviousMinutes: number | null;
+    photoCount: number;
+    supplierExecutions: number;
+    noDeliveryCount: number;
+    stockoutCount: number;
+    auditFlags: number;
   }>;
 }
 
@@ -206,8 +232,10 @@ export function ReportsPage() {
 
   const selectedPromoter = rankedPromoters.find((promoter) => promoterKey(promoter) === selectedPromoterKey) ?? null;
   const completionRate = report?.totals.visits ? percent(report.totals.completedVisits, report.totals.visits) : 0;
+  const evidenceRate = report?.totals.visits ? percent(report.totals.visitsWithEvidence, report.totals.visits) : 0;
   const bestPromoter = rankedPromoters[0];
   const selectedCompletedVisits = filteredVisits.filter((visit) => visit.status === "completed").length;
+  const attentionVisits = filteredVisits.filter((visit) => visit.noDeliveryCount > 0 || visit.stockoutCount > 0 || visit.auditFlags > 0);
 
   async function download(path: string, fileName: string) {
     const blob = await apiDownload(path);
@@ -286,7 +314,7 @@ export function ReportsPage() {
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <HeroStat label="Visitas" value={report?.totals.visits ?? 0} />
                 <HeroStat label="Concluidas" value={report?.totals.completedVisits ?? 0} />
-                <HeroStat label="Conclusao" value={`${completionRate}%`} />
+                <HeroStat label="Evidencias" value={`${evidenceRate}%`} />
               </div>
             </div>
 
@@ -300,6 +328,7 @@ export function ReportsPage() {
               </div>
               <div className="mt-5 space-y-4">
                 <HeroProgress label="Execucao" value={completionRate} />
+                <HeroProgress label="Evidencias" value={evidenceRate} />
                 <div className="grid grid-cols-2 gap-3">
                   <SmallDarkStat label="No cliente" value={formatMinutes(report?.totals.averageServiceMinutes ?? 0)} />
                   <SmallDarkStat label="Deslocamento" value={formatMinutes(report?.totals.averageTravelMinutes ?? 0)} />
@@ -315,6 +344,10 @@ export function ReportsPage() {
         <ProductivityMetric icon={TrendingUp} label="Taxa de conclusao" value={`${completionRate}%`} helper={`${report?.totals.completedVisits ?? 0} de ${report?.totals.visits ?? 0} visitas`} />
         <ProductivityMetric icon={Timer} label="Media no cliente" value={formatMinutes(report?.totals.averageServiceMinutes ?? 0)} helper="Tempo medio de atendimento" />
         <ProductivityMetric icon={Route} label="Media deslocamento" value={formatMinutes(report?.totals.averageTravelMinutes ?? 0)} helper="Entre fim e inicio de visitas" />
+        <ProductivityMetric icon={ListChecks} label="Fornecedores executados" value={report?.totals.supplierExecutions ?? 0} helper="Industrias avaliadas nos clientes" />
+        <ProductivityMetric icon={MapPinned} label="Fotos recebidas" value={report?.totals.photoCount ?? 0} helper={`${report?.totals.visitsWithEvidence ?? 0} visita(s) com evidencia`} />
+        <ProductivityMetric icon={FileWarning} label="Sem entrega" value={report?.totals.noDeliveryCount ?? 0} helper="Fornecedores sem mercadoria no cliente" />
+        <ProductivityMetric icon={AlertTriangle} label="Rupturas" value={report?.totals.stockoutCount ?? 0} helper={`${report?.totals.auditFlags ?? 0} alerta(s) de auditoria`} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[430px_minmax(0,1fr)]">
@@ -394,6 +427,53 @@ export function ReportsPage() {
         </div>
       </div>
 
+      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
+        <div className="surface-card">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="execution-chip">Pontos de atencao</p>
+              <h2 className="mt-3 font-display text-2xl font-black tracking-tight text-ink">Visitas com ruptura, sem entrega ou auditoria</h2>
+              <p className="mt-1 text-sm font-semibold text-slateText">Lista curta para o supervisor agir sem procurar linha por linha.</p>
+            </div>
+            <span className="rounded-full bg-amber-50 px-4 py-2 text-xs font-black text-amber-800 ring-1 ring-amber-200">
+              {attentionVisits.length} ocorrencia(s)
+            </span>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            {attentionVisits.slice(0, 8).map((visit) => (
+              <AttentionVisitCard key={`attention-${visit.visitId}`} visit={visit} />
+            ))}
+
+            {!loading && attentionVisits.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-line bg-field p-8 text-center text-sm font-bold text-slateText lg:col-span-2">
+                Nenhuma visita com ruptura, sem entrega ou auditoria no filtro atual.
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="surface-card">
+          <div className="mb-5">
+            <p className="brand-chip">Fornecedores</p>
+            <h2 className="mt-3 font-display text-2xl font-black tracking-tight text-ink">Resumo por industria</h2>
+            <p className="mt-1 text-sm font-semibold text-slateText">Quem mais apareceu com ruptura ou sem entrega.</p>
+          </div>
+
+          <div className="space-y-3">
+            {(report?.suppliers ?? []).slice(0, 8).map((supplier, index) => (
+              <SupplierSummaryCard key={supplier.supplierId} supplier={supplier} rank={index + 1} />
+            ))}
+
+            {!loading && (report?.suppliers ?? []).length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-line bg-field p-6 text-center text-sm font-bold text-slateText">
+                Nenhum fornecedor executado no periodo.
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
       <div className="table-wrap mt-5">
         <div className="panel-header">
           <div>
@@ -416,6 +496,9 @@ export function ReportsPage() {
                 <th>Fim</th>
                 <th>No cliente</th>
                 <th>Deslocamento</th>
+                <th>Fotos</th>
+                <th>Sem entrega</th>
+                <th>Ruptura</th>
               </tr>
             </thead>
             <tbody>
@@ -434,6 +517,9 @@ export function ReportsPage() {
                   <td>{formatDateTime(visit.finishedAt)}</td>
                   <td>{formatMinutes(visit.serviceMinutes)}</td>
                   <td>{formatMinutes(visit.travelFromPreviousMinutes)}</td>
+                  <td>{visit.photoCount}</td>
+                  <td>{visit.noDeliveryCount}</td>
+                  <td>{visit.stockoutCount}</td>
                 </tr>
               ))}
             </tbody>
@@ -634,6 +720,66 @@ function VisitTimelineCard({ visit, index }: { visit: ProductivityReport["visits
         </div>
       </div>
     </article>
+  );
+}
+
+function AttentionVisitCard({ visit }: { visit: ProductivityReport["visits"][number] }) {
+  return (
+    <article className="rounded-3xl border border-amber-200 bg-amber-50/70 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-base font-black leading-tight text-ink">{visit.clientName}</h3>
+          <p className="mt-1 text-xs font-bold text-slateText">{visit.promoterName} - {visit.routeName ?? "Sem rota"}</p>
+        </div>
+        <StatusPill value={visit.status} />
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+        <PromoterMiniStat label="Sem entrega" value={visit.noDeliveryCount} />
+        <PromoterMiniStat label="Ruptura" value={visit.stockoutCount} />
+        <PromoterMiniStat label="Auditoria" value={visit.auditFlags} />
+      </div>
+      <div className="mt-3 rounded-2xl bg-white/70 px-3 py-2 text-xs font-bold text-amber-900">
+        {formatDateTime(visit.startedAt)} | {visit.photoCount} foto(s) sincronizada(s)
+      </div>
+    </article>
+  );
+}
+
+function SupplierSummaryCard({
+  supplier,
+  rank
+}: {
+  supplier: ProductivityReport["suppliers"][number];
+  rank: number;
+}) {
+  const attentionTotal = supplier.noDeliveryCount + supplier.stockoutCount;
+
+  return (
+    <div className="rounded-3xl border border-line bg-white p-4">
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-navy font-display text-base font-black text-white">
+          {rank}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="font-black leading-tight text-ink">{supplier.supplierName}</div>
+            <span className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${
+              attentionTotal > 0
+                ? "bg-amber-50 text-amber-800 ring-amber-200"
+                : "bg-emerald-50 text-emerald-800 ring-emerald-200"
+            }`}>
+              {attentionTotal} alerta(s)
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <PromoterMiniStat label="Execucoes" value={supplier.executions} />
+            <PromoterMiniStat label="Sem entrega" value={supplier.noDeliveryCount} />
+            <PromoterMiniStat label="Ruptura" value={supplier.stockoutCount} />
+          </div>
+          <div className="mt-3 text-xs font-bold text-slateText">{supplier.notesCount} justificativa(s) registrada(s)</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
