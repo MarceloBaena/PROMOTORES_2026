@@ -18,7 +18,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.2 (build 5)';
+const appVersionLabel = 'APK Flutter v1.1.3 (build 6)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -268,14 +268,14 @@ class _PromotorProAppState extends State<PromotorProApp> {
                   message = 'Abrindo atendimento de ${item.clientName}...';
                 });
                 try {
-                  await _pushPage(
+                  final resultMessage = await _pushPage<String>(
                     VisitPage(
                       repository: widget.repository,
                       item: item,
                       promoterName: session!.user.name,
                     ),
                   );
-                  await _reload();
+                  await _reload(nextMessage: resultMessage);
                 } catch (error, stackTrace) {
                   debugPrint(
                     'Falha ao abrir atendimento ${item.id}: $error\n$stackTrace',
@@ -965,8 +965,24 @@ class _VisitPageState extends State<VisitPage> {
     setState(() => busy = true);
     try {
       await widget.repository.finishVisit(currentVisit, notesController.text);
+      var resultMessage =
+          'Atendimento encerrado e salvo no aparelho. Sincronize quando tiver internet.';
+
+      final session = await widget.repository.getSession();
+      if (session != null) {
+        try {
+          final result = await widget.repository.syncPending(session.accessToken);
+          resultMessage = result.failed == 0
+              ? 'Atendimento encerrado e sincronizado com a retaguarda. Enviados: ${result.synced}.'
+              : 'Atendimento encerrado, mas ${result.failed} item(ns) ficaram pendentes. Abra a fila de sincronizacao para ver o erro.';
+        } catch (syncError) {
+          resultMessage =
+              'Atendimento encerrado e salvo localmente. Sync nao concluiu: ${normalizedError(syncError)}';
+        }
+      }
+
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.pop(context, resultMessage);
     } catch (error) {
       setState(() => message = normalizedError(error));
     } finally {
