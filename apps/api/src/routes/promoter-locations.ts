@@ -140,11 +140,22 @@ function buildTimeline(input: {
     client: { name: string };
     route: { name: string } | null;
     photos: Array<{ id: string; type: string; url: string; createdAt: Date }>;
+    supplierExecutions: Array<{
+      id: string;
+      status: string;
+      deliveryReceived: boolean | null;
+      stockoutFound: boolean | null;
+      notes: string | null;
+      startedAtDevice: Date | null;
+      finishedAtDevice: Date | null;
+      updatedAt: Date;
+      supplier: { name: string; tradeName: string | null };
+    }>;
   }>;
 }) {
   const timeline: Array<{
     id: string;
-    kind: "route" | "visit_started" | "visit_completed" | "photo" | "signal";
+    kind: "route" | "visit_started" | "visit_completed" | "photo" | "signal" | "supplier_note";
     occurredAt: Date;
     tone: "brand" | "success" | "warning" | "neutral";
     title: string;
@@ -212,6 +223,32 @@ function buildTimeline(input: {
         title: `${visit.photos.length} evidencia(s) registradas em ${visit.client.name}`,
         description: photoKinds ? `Tipos enviados: ${photoKinds}.` : "Evidencias visuais do atendimento.",
         photoUrls: visit.photos.slice(0, 5).map((photo) => photo.url)
+      });
+    }
+
+    for (const execution of visit.supplierExecutions) {
+      const supplierName = execution.supplier.tradeName ?? execution.supplier.name;
+      const notes = execution.notes?.trim();
+      const needsAttention = execution.deliveryReceived === false || execution.stockoutFound === true || Boolean(notes);
+
+      if (!needsAttention) {
+        continue;
+      }
+
+      const statusLabel =
+        execution.deliveryReceived === false
+          ? "Sem entrega registrada"
+          : execution.stockoutFound === true
+            ? "Ruptura informada"
+            : "Observacao registrada";
+
+      timeline.push({
+        id: `supplier-note-${execution.id}`,
+        kind: "supplier_note",
+        occurredAt: execution.finishedAtDevice ?? execution.updatedAt,
+        tone: execution.deliveryReceived === false || execution.stockoutFound === true ? "warning" : "neutral",
+        title: `${statusLabel} - ${supplierName}`,
+        description: notes ? `Cliente ${visit.client.name}: ${notes}` : `Cliente ${visit.client.name} sem justificativa detalhada.`
       });
     }
 
@@ -313,6 +350,17 @@ promoterLocationsRouter.get(
             photos: {
               orderBy: { createdAt: "desc" },
               take: 6
+            },
+            supplierExecutions: {
+              orderBy: { updatedAt: "desc" },
+              include: {
+                supplier: {
+                  select: {
+                    name: true,
+                    tradeName: true
+                  }
+                }
+              }
             }
           }
         },
@@ -403,6 +451,20 @@ promoterLocationsRouter.get(
               type: photo.type,
               url: photo.url,
               createdAt: photo.createdAt
+            })),
+            supplierExecutions: visit.supplierExecutions.map((execution) => ({
+              id: execution.id,
+              status: execution.status,
+              deliveryReceived: execution.deliveryReceived,
+              stockoutFound: execution.stockoutFound,
+              notes: execution.notes,
+              startedAtDevice: execution.startedAtDevice,
+              finishedAtDevice: execution.finishedAtDevice,
+              updatedAt: execution.updatedAt,
+              supplier: {
+                name: execution.supplier.name,
+                tradeName: execution.supplier.tradeName
+              }
             }))
           }))
         });

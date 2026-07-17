@@ -7,7 +7,20 @@ import { auditTypeLabel } from "../lib/labels";
 
 interface VisitPhoto {
   id: string;
-  type: "checkin" | "before" | "after" | "occurrence_extra";
+  type:
+    | "checkin"
+    | "before"
+    | "after"
+    | "checkout"
+    | "supplier_before"
+    | "supplier_after"
+    | "leaflet"
+    | "gondola"
+    | "display"
+    | "island"
+    | "promotional_material"
+    | "store_extra"
+    | "occurrence_extra";
   url: string;
   metadata?: {
     capturedAt?: string;
@@ -17,6 +30,17 @@ interface VisitPhoto {
     source?: string;
   } | null;
   createdAt: string;
+}
+
+interface SupplierExecution {
+  id: string;
+  status: string;
+  deliveryReceived?: boolean | null;
+  productsReplenished?: boolean | null;
+  stockoutFound?: boolean | null;
+  notes?: string | null;
+  supplier?: { name?: string | null; tradeName?: string | null } | null;
+  photos?: VisitPhoto[];
 }
 
 interface Visit {
@@ -31,6 +55,7 @@ interface Visit {
   promoter?: { code?: number; user?: { name?: string; email?: string } };
   route?: { name?: string | null; scheduledDate?: string | null } | null;
   photos: VisitPhoto[];
+  supplierExecutions?: SupplierExecution[];
   auditFlags?: Array<{ id: string; type: string; severity: string; resolved: boolean }>;
   createdAt: string;
 }
@@ -39,6 +64,15 @@ const photoLabels: Record<VisitPhoto["type"], string> = {
   checkin: "Check-in",
   before: "Foto antes",
   after: "Foto depois",
+  checkout: "Check-out",
+  supplier_before: "Fornecedor - foto antes",
+  supplier_after: "Fornecedor - foto depois",
+  leaflet: "Panfleto",
+  gondola: "Gondola",
+  display: "Display",
+  island: "Ilha",
+  promotional_material: "Material promocional",
+  store_extra: "Foto extra da loja",
   occurrence_extra: "Ocorrencia extra"
 };
 
@@ -128,6 +162,22 @@ function photoUrl(url: string) {
   }
 
   return `${API_BASE_URL}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+function booleanLabel(value?: boolean | null) {
+  if (value === true) {
+    return "Sim";
+  }
+
+  if (value === false) {
+    return "Nao";
+  }
+
+  return "Nao informado";
+}
+
+function supplierExecutionLabel(execution: SupplierExecution) {
+  return execution.supplier?.tradeName || execution.supplier?.name || "Fornecedor";
 }
 
 function hasRequiredPhotos(visit: Visit) {
@@ -351,6 +401,53 @@ export function VisitsPage() {
                   {selectedVisit.photos.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-line bg-muted/40 p-4 text-sm font-semibold text-stone-500">
                       Nenhuma foto chegou para esta visita ainda.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="surface-card">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 font-display text-lg font-black text-ink">
+                    <FileText className="h-4 w-4" />
+                    Fornecedores atendidos
+                  </div>
+                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-black text-graphite">
+                    {selectedVisit.supplierExecutions?.length ?? 0} registro(s)
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-3">
+                  {(selectedVisit.supplierExecutions ?? []).map((execution) => (
+                    <div key={execution.id} className="rounded-2xl border border-line bg-white p-3 text-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="font-black text-ink">{supplierExecutionLabel(execution)}</div>
+                        <StatusPill value={execution.status} />
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs font-bold text-slateText sm:grid-cols-3">
+                        <div className="rounded-xl bg-muted/60 p-2">
+                          <span className="block text-[10px] uppercase tracking-[0.12em] text-stone-500">Entrega</span>
+                          {booleanLabel(execution.deliveryReceived)}
+                        </div>
+                        <div className="rounded-xl bg-muted/60 p-2">
+                          <span className="block text-[10px] uppercase tracking-[0.12em] text-stone-500">Abasteceu</span>
+                          {booleanLabel(execution.productsReplenished)}
+                        </div>
+                        <div className="rounded-xl bg-muted/60 p-2">
+                          <span className="block text-[10px] uppercase tracking-[0.12em] text-stone-500">Ruptura</span>
+                          {booleanLabel(execution.stockoutFound)}
+                        </div>
+                      </div>
+                      <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900 ring-1 ring-amber-200">
+                        <span className="font-black">Observacao do promotor:</span>{" "}
+                        {execution.notes?.trim() || "Sem observacao registrada para este fornecedor."}
+                      </div>
+                    </div>
+                  ))}
+
+                  {(selectedVisit.supplierExecutions ?? []).length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-line bg-muted/40 p-4 text-sm font-semibold text-stone-500">
+                      Nenhuma execucao de fornecedor chegou para esta visita.
                     </div>
                   ) : null}
                 </div>

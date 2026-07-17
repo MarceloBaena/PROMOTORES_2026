@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Camera,
   CheckCircle2,
+  ClipboardList,
   Clock3,
   ExternalLink,
   LocateFixed,
@@ -17,7 +18,7 @@ import { PageHeader } from "../components/PageHeader";
 import { apiJson } from "../lib/api";
 
 type LiveStatus = "online" | "stale" | "offline";
-type TimelineKind = "route" | "visit_started" | "visit_completed" | "photo" | "signal";
+type TimelineKind = "route" | "visit_started" | "visit_completed" | "photo" | "signal" | "supplier_note";
 type TimelineTone = "brand" | "success" | "warning" | "neutral";
 
 interface LivePromoter {
@@ -226,6 +227,8 @@ function timelineIcon(kind: TimelineKind) {
       return Camera;
     case "signal":
       return RadioTower;
+    case "supplier_note":
+      return ClipboardList;
     default:
       return Clock3;
   }
@@ -760,11 +763,13 @@ function TimelineEntry({
               ? "Evidencia"
               : event.kind === "signal"
                 ? "Sinal"
-                : event.kind === "visit_completed"
-                  ? "Concluido"
-                  : event.kind === "visit_started"
-                    ? "Atendimento"
-                    : "Roteiro"}
+                : event.kind === "supplier_note"
+                  ? "Ocorrencia"
+                  : event.kind === "visit_completed"
+                    ? "Concluido"
+                    : event.kind === "visit_started"
+                      ? "Atendimento"
+                      : "Roteiro"}
           </span>
         </div>
 

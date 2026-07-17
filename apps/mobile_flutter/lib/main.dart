@@ -18,7 +18,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.3 (build 6)';
+const appVersionLabel = 'APK Flutter v1.1.4 (build 7)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -802,6 +802,19 @@ class _VisitPageState extends State<VisitPage> {
         .toList();
     final executionTypes = executionPhotos.map((photo) => photo.type).toSet();
     final requiresDeliveryFlow = supplierRequiresDeliveryFlow(deliveryReceived);
+    final notes = supplierNotesController.text.trim();
+
+    if (supplierExecutionRequiresJustification(
+          deliveryReceived: deliveryReceived,
+          stockoutFound: stockoutFound,
+        ) &&
+        notes.length < 5) {
+      setState(
+        () => message =
+            'Explique na observacao o motivo da falta de entrega ou ruptura do fornecedor ${supplierLabel(supplier)}.',
+      );
+      return;
+    }
 
     if (requiresDeliveryFlow &&
         (!executionTypes.contains('supplier_before') ||
@@ -832,7 +845,7 @@ class _VisitPageState extends State<VisitPage> {
               ? productsReplenished
               : false,
           stockoutFound: requiresDeliveryFlow ? stockoutFound : false,
-          notes: supplierNotesController.text.trim(),
+          notes: notes,
           finishedAtDevice: DateTime.now().toUtc().toIso8601String(),
           syncStatus: 'pending',
           updatedAt: DateTime.now().toUtc().toIso8601String(),
@@ -1625,6 +1638,11 @@ class AppRepository {
     }
 
     if (!supplierRequiresDeliveryFlow(execution.deliveryReceived)) {
+      if ((execution.notes ?? '').trim().length < 5) {
+        throw Exception(
+          'Fornecedor ${supplierLabel(supplier)} sem entrega precisa de observacao explicando o motivo.',
+        );
+      }
       return;
     }
 
@@ -1640,6 +1658,13 @@ class AppRepository {
         execution.stockoutFound == null) {
       throw Exception(
         'Responda abastecimento e ruptura do fornecedor ${supplierLabel(supplier)}.',
+      );
+    }
+
+    if (execution.stockoutFound == true &&
+        (execution.notes ?? '').trim().length < 5) {
+      throw Exception(
+        'Fornecedor ${supplierLabel(supplier)} com ruptura precisa de observacao explicando o motivo.',
       );
     }
   }
@@ -3367,6 +3392,12 @@ List<ActivitySnapshot> activitiesForSupplier(
 bool supplierRequiresDeliveryFlow(bool? deliveryReceived) =>
     deliveryReceived != false;
 
+bool supplierExecutionRequiresJustification({
+  required bool? deliveryReceived,
+  required bool? stockoutFound,
+}) =>
+    deliveryReceived == false || stockoutFound == true;
+
 String answerLabel(bool? value) {
   if (value == null) return 'Nao informado';
   return value ? 'Sim' : 'Nao';
@@ -4177,6 +4208,10 @@ class SupplierExecutionEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final requiresDeliveryFlow = supplierRequiresDeliveryFlow(deliveryReceived);
+    final requiresJustification = supplierExecutionRequiresJustification(
+      deliveryReceived: deliveryReceived,
+      stockoutFound: stockoutFound,
+    );
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -4273,7 +4308,7 @@ class SupplierExecutionEditor extends StatelessWidget {
             const InfoCard(
               title: 'Sem entrega no fornecedor',
               body:
-                  'Quando nao houve mercadoria, nao exigimos foto antes/depois. Basta registrar a situacao e concluir este fornecedor.',
+                  'Quando nao houve mercadoria, nao exigimos foto antes/depois. Informe o motivo na observacao para auditoria da retaguarda.',
             ),
           ],
           const SizedBox(height: 12),
@@ -4290,6 +4325,16 @@ class SupplierExecutionEditor extends StatelessWidget {
             decoration: const InputDecoration(
               labelText: 'Observacoes do fornecedor',
               border: OutlineInputBorder(),
+            ).copyWith(
+              labelText: requiresJustification
+                  ? 'Observacoes do fornecedor (obrigatorio)'
+                  : 'Observacoes do fornecedor',
+              hintText: requiresJustification
+                  ? 'Explique por que nao teve entrega ou qual foi a ruptura encontrada.'
+                  : 'Informe algo relevante sobre este fornecedor, se necessario.',
+              helperText: requiresJustification
+                  ? 'Obrigatorio para sem entrega ou ruptura.'
+                  : null,
             ),
           ),
           const SizedBox(height: 14),
