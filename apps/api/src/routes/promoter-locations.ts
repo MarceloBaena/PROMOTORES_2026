@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/async-handler";
 import { AppError } from "../lib/errors";
 import { scopedCompanyWhere, assertSameCompany } from "../lib/tenant";
+import { buildRouteWindowWhere } from "../lib/route-window";
 
 export const promoterLocationsRouter = Router();
 
@@ -317,10 +318,7 @@ promoterLocationsRouter.get(
         },
         routes: {
           where: {
-            scheduledDate: {
-              gte: today.start,
-              lte: today.end
-            },
+            ...buildRouteWindowWhere(today.start, today.end),
             status: {
               in: ["PUBLISHED", "COMPLETED"]
             }
@@ -501,10 +499,7 @@ promoterLocationsRouter.post(
         routes: {
           where: {
             status: "PUBLISHED",
-            scheduledDate: {
-              gte: start,
-              lte: end
-            }
+            ...buildRouteWindowWhere(start, end)
           },
           orderBy: { scheduledDate: "asc" },
           take: 1

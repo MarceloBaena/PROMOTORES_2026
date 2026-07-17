@@ -155,8 +155,10 @@ export function VisitsPage() {
   const inProgressCount = visits.filter((visit) => visit.status === "in_progress").length;
   const evidencesReadyCount = visits.filter((visit) => hasRequiredPhotos(visit)).length;
 
-  async function load() {
-    setLoading(true);
+  async function load(options?: { silent?: boolean }) {
+    if (!options?.silent) {
+      setLoading(true);
+    }
     setMessage(null);
 
     try {
@@ -172,12 +174,19 @@ export function VisitsPage() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Nao foi possivel carregar visitas.");
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
     void load();
+    const intervalId = window.setInterval(() => {
+      void load({ silent: true });
+    }, 30000);
+
+    return () => window.clearInterval(intervalId);
   }, []);
 
   async function completeVisit(visit: Visit) {
