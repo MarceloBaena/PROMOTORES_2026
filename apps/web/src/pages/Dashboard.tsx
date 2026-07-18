@@ -190,14 +190,14 @@ export function Dashboard() {
                   <CommandStat label="Atendidos" value={fieldWork.attendedClientsToday} />
                 </div>
 
-                <div className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-4">
+                <div className="mt-4 rounded-lg border border-white/10 bg-white/10 p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <span className="text-xs font-black uppercase tracking-[0.14em] text-white/55">Execucao do dia</span>
                     <span className="font-display text-xl font-black text-white">{fieldWork.executionRate}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-white/10">
+                  <div className="h-2 rounded-sm bg-white/10">
                     <div
-                      className="h-2 rounded-full bg-gradient-to-r from-brand to-execution"
+                      className="h-2 rounded-sm bg-gradient-to-r from-brand to-execution"
                       style={{ width: `${Math.min(100, Math.max(0, fieldWork.executionRate))}%` }}
                     />
                   </div>
@@ -207,7 +207,7 @@ export function Dashboard() {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
+              <div className="rounded-lg border border-white/10 bg-white/10 p-4">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/44">Roteiro</p>
@@ -275,7 +275,7 @@ export function Dashboard() {
             <div className="absolute left-[18%] top-[26%] h-3 w-3 rounded-full bg-execution shadow-[0_0_0_10px_rgba(16,185,129,0.18)]" />
             <div className="absolute left-[58%] top-[36%] h-3 w-3 rounded-full bg-brand shadow-[0_0_0_10px_rgba(37,99,235,0.16)]" />
             <div className="absolute left-[72%] top-[68%] h-3 w-3 rounded-full bg-warning shadow-[0_0_0_10px_rgba(245,158,11,0.18)]" />
-            <div className="absolute bottom-5 left-5 right-5 rounded-3xl border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-900/10 backdrop-blur">
+            <div className="absolute bottom-5 left-5 right-5 rounded-lg border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-900/10 backdrop-blur">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">Equipe em campo</p>
@@ -293,7 +293,7 @@ export function Dashboard() {
 
 function CommandStat({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-3">
+    <div className="min-w-0 rounded-lg border border-white/10 bg-white/10 p-3">
       <div className="break-words text-[10px] font-black uppercase leading-4 tracking-[0.1em] text-white/48">{label}</div>
       <div className={`mt-1 font-display text-xl font-black leading-none sm:text-2xl ${danger ? "text-warning" : "text-white"}`}>{value}</div>
     </div>
@@ -302,7 +302,7 @@ function CommandStat({ label, value, danger = false }: { label: string; value: n
 
 function RouteStep({ label, value, active }: { label: string; value: number; active: boolean }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white/5 p-3">
+    <div className="flex min-w-0 items-center gap-3 rounded-lg bg-white/5 p-3">
       <span className={`grid h-8 w-8 place-items-center rounded-full ${active ? "bg-execution text-white" : "bg-white/10 text-white/40"}`}>
         <Route className="h-4 w-4" />
       </span>
@@ -323,7 +323,7 @@ function PriorityRow({ label, value, tone }: { label: string; value: number; ton
   }[tone];
 
   return (
-    <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3">
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-line bg-white px-4 py-3">
       <span className="min-w-0 break-words text-sm font-black text-graphite">{label}</span>
       <span className={`rounded-full px-3 py-1 font-display text-lg font-black ${toneClass}`}>{value}</span>
     </div>
@@ -344,7 +344,7 @@ function OperationalTile({
   danger?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-3xl border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
+    <div className="min-w-0 rounded-lg border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-words text-[10px] font-black uppercase leading-4 tracking-[0.1em] text-slateText sm:text-[11px]">{label}</p>

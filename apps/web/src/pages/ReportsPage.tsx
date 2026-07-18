@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
-import { useCompanyScope } from "../context/CompanyScopeContext";
+import { useOptionalCompanyScope } from "../context/CompanyScopeContext";
 import { apiDownload, apiJson, triggerDownload } from "../lib/api";
+import { getStoredCompanyScopeId } from "../lib/company-scope";
 import { statusLabel } from "../lib/labels";
 
 interface ProductivityReport {
@@ -162,7 +163,8 @@ function safeNumber(value?: number | null) {
 }
 
 export function ReportsPage() {
-  const { scopeKey } = useCompanyScope();
+  const companyScope = useOptionalCompanyScope();
+  const scopeKey = companyScope?.scopeKey ?? (getStoredCompanyScopeId() || "__all__");
   const [startDate, setStartDate] = useState(defaultStartDate);
   const [endDate, setEndDate] = useState(dateInputValue(new Date()));
   const [selectedPromoterKey, setSelectedPromoterKey] = useState(allPromotersKey);

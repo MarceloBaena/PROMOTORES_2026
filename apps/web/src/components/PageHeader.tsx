@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
-    <div className="relative mb-6 overflow-hidden rounded-[1.8rem] border border-white/80 bg-white/92 px-5 py-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)] ring-1 ring-line/60 backdrop-blur-xl sm:px-6 sm:py-6">
+    <div className="relative mb-6 overflow-hidden rounded-lg border border-white/80 bg-white/92 px-5 py-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)] ring-1 ring-line/60 backdrop-blur-xl sm:px-6 sm:py-6">
       <div className="pointer-events-none absolute right-[-5rem] top-[-5rem] h-52 w-52 rounded-full bg-brand/12 blur-3xl" />
       <div className="pointer-events-none absolute bottom-[-8rem] left-[18%] h-56 w-56 rounded-full bg-execution/10 blur-3xl" />
       <div className="pointer-events-none absolute inset-y-0 right-[22%] w-px bg-gradient-to-b from-transparent via-brand/10 to-transparent" />

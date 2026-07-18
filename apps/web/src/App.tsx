@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { CompanyScopeProvider } from "./context/CompanyScopeContext";
 import { PageErrorBoundary } from "./components/PageErrorBoundary";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
@@ -54,9 +55,11 @@ function ProtectedApp() {
 export function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <ProtectedApp />
-      </BrowserRouter>
+      <CompanyScopeProvider>
+        <BrowserRouter>
+          <ProtectedApp />
+        </BrowserRouter>
+      </CompanyScopeProvider>
     </AuthProvider>
   );
 }

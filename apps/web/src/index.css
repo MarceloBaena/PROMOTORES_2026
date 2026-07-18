@@ -46,7 +46,7 @@ textarea {
   }
 
   .panel {
-    @apply rounded-[1.35rem] border border-white/80 bg-panel/95 shadow-[0_20px_60px_rgba(15,23,42,0.08)] ring-1 ring-line/70 backdrop-blur-xl;
+    @apply rounded-lg border border-white/80 bg-panel/95 shadow-[0_20px_60px_rgba(15,23,42,0.08)] ring-1 ring-line/70 backdrop-blur-xl;
   }
 
   .panel-header {
@@ -62,7 +62,7 @@ textarea {
   }
 
   .table-wrap {
-    @apply overflow-hidden rounded-[1.35rem] border border-white/80 bg-panel/95 shadow-[0_20px_60px_rgba(15,23,42,0.08)] ring-1 ring-line/70;
+    @apply overflow-hidden rounded-lg border border-white/80 bg-panel/95 shadow-[0_20px_60px_rgba(15,23,42,0.08)] ring-1 ring-line/70;
   }
 
   .data-table {
@@ -114,7 +114,7 @@ textarea {
   }
 
   .notice {
-    @apply mb-4 rounded-xl border px-4 py-3 text-sm font-semibold shadow-sm;
+    @apply mb-4 rounded-md border px-4 py-3 text-sm font-semibold shadow-sm;
   }
 
   .notice-warning {
@@ -126,7 +126,7 @@ textarea {
   }
 
   .metric-card {
-    @apply relative min-w-0 overflow-hidden rounded-[1.35rem] border border-white/80 bg-panel/95 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-line/70 transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(15,23,42,0.12)] sm:p-5;
+    @apply relative min-w-0 overflow-hidden rounded-lg border border-white/80 bg-panel/95 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-line/70 transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(15,23,42,0.12)] sm:p-5;
   }
 
   .metric-card::after {
@@ -134,7 +134,7 @@ textarea {
   }
 
   .surface-card {
-    @apply rounded-[1.35rem] border border-white/80 bg-white/90 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] ring-1 ring-line/70 backdrop-blur-xl;
+    @apply rounded-lg border border-white/80 bg-white/90 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] ring-1 ring-line/70 backdrop-blur-xl;
   }
 
   .brand-chip {

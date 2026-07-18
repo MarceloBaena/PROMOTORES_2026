@@ -104,9 +104,26 @@ export function CompanyScopeProvider({ children }: { children: ReactNode }) {
 export function useCompanyScope() {
   const context = useContext(CompanyScopeContext);
 
-  if (!context) {
-    throw new Error("useCompanyScope must be used inside CompanyScopeProvider.");
+  if (context) {
+    return context;
   }
 
-  return context;
+  const selectedCompanyId = getStoredCompanyScopeId();
+
+  return {
+    initialized: true,
+    isGlobalAdmin: !selectedCompanyId,
+    companies: [],
+    selectedCompanyId,
+    selectedCompany: null,
+    companyScopeLabel: selectedCompanyId ? "Empresa selecionada" : "Todas as empresas",
+    scopeKey: selectedCompanyId || "__all__",
+    setSelectedCompanyId: (companyId: string) => {
+      saveStoredCompanyScopeId(companyId);
+    }
+  };
+}
+
+export function useOptionalCompanyScope() {
+  return useContext(CompanyScopeContext);
 }
