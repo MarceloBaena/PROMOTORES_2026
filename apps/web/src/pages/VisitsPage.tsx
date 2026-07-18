@@ -51,7 +51,7 @@ interface Visit {
   finishedAt?: string | null;
   gpsLatitude?: number | string | null;
   gpsLongitude?: number | string | null;
-  client: { name: string; code?: string | null; address?: string | null; city?: string | null; state?: string | null };
+  client: { name: string; tradeName?: string | null; code?: string | null; address?: string | null; city?: string | null; state?: string | null };
   promoter?: { code?: number; user?: { name?: string; email?: string } };
   route?: { name?: string | null; scheduledDate?: string | null } | null;
   photos: VisitPhoto[];
@@ -178,6 +178,18 @@ function booleanLabel(value?: boolean | null) {
 
 function supplierExecutionLabel(execution: SupplierExecution) {
   return execution.supplier?.tradeName || execution.supplier?.name || "Fornecedor";
+}
+
+function clientNameBlock(client: Visit["client"]) {
+  const tradeName = client.tradeName?.trim();
+  return (
+    <>
+      <div className="text-sm font-black text-ink">{client.name}</div>
+      {tradeName && tradeName !== client.name ? (
+        <div className="mt-1 text-xs font-semibold text-slateText">Fantasia: {tradeName}</div>
+      ) : null}
+    </>
+  );
 }
 
 function hasRequiredPhotos(visit: Visit) {
@@ -316,7 +328,7 @@ export function VisitsPage() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-black text-ink">{visit.client.name}</div>
+                      {clientNameBlock(visit.client)}
                       <div className="mt-1 text-xs font-semibold text-slateText">{visit.route?.name ?? "Sem rota vinculada"}</div>
                       <div className="mt-2 text-xs font-semibold text-slateText">{visitAddress(visit)}</div>
                     </div>
@@ -360,6 +372,9 @@ export function VisitsPage() {
               <div className="rounded-[1.35rem] bg-navy p-4 text-white">
                 <div className="text-[11px] font-black uppercase tracking-[0.14em] text-white/55">Cliente</div>
                 <div className="mt-2 font-display text-2xl font-black">{selectedVisit.client.name}</div>
+                {selectedVisit.client.tradeName && selectedVisit.client.tradeName !== selectedVisit.client.name ? (
+                  <div className="mt-1 text-sm font-black text-blue-100">Fantasia: {selectedVisit.client.tradeName}</div>
+                ) : null}
                 <div className="mt-2 text-sm font-semibold text-white/75">{visitAddress(selectedVisit)}</div>
                 <div className="mt-3"><StatusPill value={selectedVisit.status} /></div>
               </div>

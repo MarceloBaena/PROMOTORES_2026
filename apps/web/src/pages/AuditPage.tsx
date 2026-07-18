@@ -12,7 +12,7 @@ interface AuditFlag {
   resolved: boolean;
   createdAt: string;
   visit: {
-    client: { name: string };
+    client: { name: string; tradeName?: string | null };
     promoter?: { code?: number; user?: { name?: string } };
   };
 }
@@ -32,6 +32,20 @@ function promoterLabel(promoter?: AuditFlag["visit"]["promoter"]) {
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("pt-BR");
+}
+
+function ClientName({ client, inverse = false }: { client: AuditFlag["visit"]["client"]; inverse?: boolean }) {
+  const tradeName = client.tradeName?.trim();
+  return (
+    <>
+      <div className={inverse ? "mt-2 font-display text-2xl font-black" : "text-sm font-black text-ink"}>{client.name}</div>
+      {tradeName && tradeName !== client.name ? (
+        <div className={inverse ? "mt-1 text-sm font-black text-blue-100" : "mt-1 text-xs font-semibold text-slateText"}>
+          Fantasia: {tradeName}
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 export function AuditPage() {
@@ -154,7 +168,7 @@ export function AuditPage() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-black text-ink">{flag.visit.client.name}</div>
+                      <ClientName client={flag.visit.client} />
                       <div className="mt-1 text-xs font-semibold text-slateText">{promoterLabel(flag.visit.promoter)}</div>
                       <div className="mt-2 text-xs font-semibold text-slateText">{auditTypeLabel(flag.type)}</div>
                     </div>
@@ -189,7 +203,7 @@ export function AuditPage() {
             <div className="space-y-4 p-5">
               <div className="rounded-[1.35rem] bg-navy p-4 text-white">
                 <div className="text-[11px] font-black uppercase tracking-[0.14em] text-white/55">Cliente</div>
-                <div className="mt-2 font-display text-2xl font-black">{selectedFlag.visit.client.name}</div>
+                <ClientName client={selectedFlag.visit.client} inverse />
                 <div className="mt-2 text-sm font-semibold text-white/75">{promoterLabel(selectedFlag.visit.promoter)}</div>
                 <div className="mt-3"><StatusPill value={selectedFlag.severity} /></div>
               </div>

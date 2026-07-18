@@ -2613,10 +2613,14 @@ class ClientSnapshot {
   final Map<String, dynamic> payload;
 
   String get displayName {
-    final preferred = (tradeName?.trim().isNotEmpty ?? false)
-        ? tradeName!.trim()
-        : name.trim();
-    return preferred.isEmpty ? 'Cliente' : preferred;
+    final legalName = name.trim();
+    final fantasyName = tradeName?.trim();
+    if (fantasyName != null &&
+        fantasyName.isNotEmpty &&
+        fantasyName != legalName) {
+      return '$legalName | Fantasia: $fantasyName';
+    }
+    return legalName.isEmpty ? 'Cliente' : legalName;
   }
 
   factory ClientSnapshot.fromJson(Map<String, dynamic> json) => ClientSnapshot(

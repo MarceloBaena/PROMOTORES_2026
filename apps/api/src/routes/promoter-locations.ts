@@ -116,6 +116,11 @@ function photoTypeLabel(type: string) {
   }
 }
 
+function clientDisplayName(client: { name: string; tradeName?: string | null }) {
+  const tradeName = client.tradeName?.trim();
+  return tradeName && tradeName !== client.name ? `${client.name} | Fantasia: ${tradeName}` : client.name;
+}
+
 function buildTimeline(input: {
   latestLocation?: {
     latitude: number | null;
@@ -153,11 +158,6 @@ function buildTimeline(input: {
     }>;
   }>;
 }) {
-  const clientDisplayName = (client: { name: string; tradeName: string | null }) => {
-    const tradeName = client.tradeName?.trim();
-    return tradeName || client.name;
-  };
-
   const timeline: Array<{
     id: string;
     kind: "route" | "visit_started" | "visit_completed" | "photo" | "signal" | "supplier_note";
@@ -486,7 +486,7 @@ promoterLocationsRouter.get(
           activeVisit: activeVisit
             ? {
                 id: activeVisit.id,
-                clientName: activeVisit.client.name,
+                clientName: clientDisplayName(activeVisit.client),
                 routeName: activeVisit.route?.name ?? null,
                 startedAt: activeVisit.startedAt
               }
@@ -497,7 +497,7 @@ promoterLocationsRouter.get(
                   id: routeOfDay.id,
                   name: routeOfDay.name,
                   scheduledDate: routeOfDay.scheduledDate,
-                  nextClientName: nextRouteItem?.client.name ?? null
+                  nextClientName: nextRouteItem ? clientDisplayName(nextRouteItem.client) : null
                 }
               : null,
           routeOfDay: routeOfDay
@@ -509,7 +509,7 @@ promoterLocationsRouter.get(
                 totalClients: routeOfDay.items.length,
                 completedClients: completedRouteClients,
                 pendingClients: Math.max(routeOfDay.items.length - completedRouteClients, 0),
-                nextClientName: nextRouteItem?.client.name ?? null
+                nextClientName: nextRouteItem ? clientDisplayName(nextRouteItem.client) : null
               }
             : null,
           location: latestLocation

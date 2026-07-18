@@ -59,6 +59,11 @@ function average(total: number, count: number) {
   return count > 0 ? Math.round(total / count) : 0;
 }
 
+function clientDisplayName(client: { name: string; tradeName?: string | null }) {
+  const tradeName = client.tradeName?.trim();
+  return tradeName && tradeName !== client.name ? `${client.name} | Fantasia: ${tradeName}` : client.name;
+}
+
 async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere>[0]) {
   const input = productivityQuerySchema.parse(req.query);
   const now = new Date();
@@ -217,13 +222,13 @@ async function buildProductivityReport(req: Parameters<typeof scopedCompanyWhere
       promoterName,
       clientId: visit.clientId,
       clientCode: visit.client.code,
-      clientName: visit.client.name,
+      clientName: clientDisplayName(visit.client),
       routeName: visit.route?.name ?? null,
       status: visit.status,
       startedAt: visit.startedAt?.toISOString() ?? null,
       finishedAt: visit.finishedAt?.toISOString() ?? null,
       serviceMinutes,
-      previousClientName: previousVisit?.client.name ?? null,
+      previousClientName: previousVisit ? clientDisplayName(previousVisit.client) : null,
       travelFromPreviousMinutes: previousVisit?.finishedAt ? travelMinutes : null,
       photoCount: visit.photos.length,
       supplierExecutions: visit.supplierExecutions.length,

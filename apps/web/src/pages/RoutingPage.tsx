@@ -57,9 +57,10 @@ function optionLabel(option: PersonOption, prefix: "PRO" | "SUP") {
 function clientLabel(client: ClientOption) {
   const code = client.code ? `${client.code} - ` : "";
   const city = client.city ? ` (${client.city}${client.state ? `/${client.state}` : ""})` : "";
-  const displayName = client.tradeName?.trim() || client.name || "Cliente sem nome";
-  const legalName = client.tradeName?.trim() && client.name ? ` | ${client.name}` : "";
-  return `${code}${displayName}${legalName}${city}`;
+  const name = client.name || "Cliente sem nome";
+  const tradeName = client.tradeName?.trim();
+  const fantasy = tradeName && tradeName !== client.name ? ` | Fantasia: ${tradeName}` : "";
+  return `${code}${name}${fantasy}${city}`;
 }
 
 export function RoutingPage() {
@@ -341,7 +342,7 @@ export function RoutingPage() {
                     onClick={() => toggleClient(client.id)}
                     title="Remover cliente"
                   >
-                    {index + 1}. {client.tradeName?.trim() || client.name}
+                    {index + 1}. {clientLabel(client)}
                     <X className="h-3 w-3" />
                   </button>
                 ))}
@@ -409,7 +410,18 @@ export function RoutingPage() {
                   <RouteInfo label="Supervisor" value={personLabel(route.supervisor, "SUP")} />
                   <RouteInfo
                     label="Clientes"
-                    value={route.items.length > 0 ? route.items.map((item) => item.client.tradeName?.trim() || item.client.name).slice(0, 2).join(" | ") : "Sem clientes"}
+                    value={
+                      route.items.length > 0
+                        ? route.items
+                            .map((item) =>
+                              item.client.tradeName?.trim() && item.client.tradeName !== item.client.name
+                                ? `${item.client.name} / ${item.client.tradeName}`
+                                : item.client.name
+                            )
+                            .slice(0, 2)
+                            .join(" | ")
+                        : "Sem clientes"
+                    }
                   />
                 </div>
               </div>
