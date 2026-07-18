@@ -129,7 +129,7 @@ function buildTimeline(input: {
     status: string;
     scheduledDate: Date | null;
     createdAt: Date;
-    items: Array<{ id: string; status: string; client: { name: string } }>;
+    items: Array<{ id: string; status: string; client: { name: string; tradeName: string | null } }>;
   } | null;
   visits: Array<{
     id: string;
@@ -137,7 +137,7 @@ function buildTimeline(input: {
     startedAt: Date | null;
     finishedAt: Date | null;
     updatedAt: Date;
-    client: { name: string };
+    client: { name: string; tradeName: string | null };
     route: { name: string } | null;
     photos: Array<{ id: string; type: string; url: string; createdAt: Date }>;
     supplierExecutions: Array<{
@@ -153,6 +153,11 @@ function buildTimeline(input: {
     }>;
   }>;
 }) {
+  const clientDisplayName = (client: { name: string; tradeName: string | null }) => {
+    const tradeName = client.tradeName?.trim();
+    return tradeName || client.name;
+  };
+
   const timeline: Array<{
     id: string;
     kind: "route" | "visit_started" | "visit_completed" | "photo" | "signal" | "supplier_note";
@@ -199,6 +204,7 @@ function buildTimeline(input: {
 
   for (const visit of input.visits) {
     const routeName = visit.route?.name ?? "rota sem nome";
+    const clientName = clientDisplayName(visit.client);
 
     if (visit.startedAt) {
       timeline.push({
@@ -206,7 +212,7 @@ function buildTimeline(input: {
         kind: "visit_started",
         occurredAt: visit.startedAt,
         tone: "brand",
-        title: `Inicio de atendimento em ${visit.client.name}`,
+        title: `Inicio de atendimento em ${clientName}`,
         description: `Roteiro ${routeName}.`
       });
     }
@@ -220,7 +226,7 @@ function buildTimeline(input: {
         kind: "photo",
         occurredAt: latestPhoto.createdAt,
         tone: "success",
-        title: `${visit.photos.length} evidencia(s) registradas em ${visit.client.name}`,
+        title: `${visit.photos.length} evidencia(s) registradas em ${clientName}`,
         description: photoKinds ? `Tipos enviados: ${photoKinds}.` : "Evidencias visuais do atendimento.",
         photoUrls: visit.photos.slice(0, 5).map((photo) => photo.url)
       });
@@ -248,7 +254,7 @@ function buildTimeline(input: {
         occurredAt: execution.finishedAtDevice ?? execution.updatedAt,
         tone: execution.deliveryReceived === false || execution.stockoutFound === true ? "warning" : "neutral",
         title: `${statusLabel} - ${supplierName}`,
-        description: notes ? `Cliente ${visit.client.name}: ${notes}` : `Cliente ${visit.client.name} sem justificativa detalhada.`
+        description: notes ? `Cliente ${clientName}: ${notes}` : `Cliente ${clientName} sem justificativa detalhada.`
       });
     }
 
@@ -258,7 +264,7 @@ function buildTimeline(input: {
         kind: "visit_completed",
         occurredAt: visit.finishedAt,
         tone: "success",
-        title: `Atendimento concluido em ${visit.client.name}`,
+        title: `Atendimento concluido em ${clientName}`,
         description: `Roteiro ${routeName} finalizado pelo promotor.`
       });
     } else if (visit.status === "in_progress") {
@@ -267,7 +273,7 @@ function buildTimeline(input: {
         kind: "visit_started",
         occurredAt: visit.updatedAt,
         tone: "warning",
-        title: `Atendimento em andamento em ${visit.client.name}`,
+        title: `Atendimento em andamento em ${clientName}`,
         description: `Promotor ainda em campo neste cliente do roteiro ${routeName}.`
       });
     }
@@ -434,7 +440,7 @@ promoterLocationsRouter.get(
                 items: routeOfDay.items.map((item) => ({
                   id: item.id,
                   status: item.status,
-                  client: { name: item.client.name }
+                  client: { name: item.client.name, tradeName: item.client.tradeName }
                 }))
               }
             : null,
@@ -444,7 +450,7 @@ promoterLocationsRouter.get(
             startedAt: visit.startedAt,
             finishedAt: visit.finishedAt,
             updatedAt: visit.updatedAt,
-            client: { name: visit.client.name },
+            client: { name: visit.client.name, tradeName: visit.client.tradeName },
             route: visit.route ? { name: visit.route.name } : null,
             photos: visit.photos.map((photo) => ({
               id: photo.id,
