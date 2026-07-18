@@ -67,7 +67,8 @@ export function SuppliersPage() {
       subtitle="Cadastro das industrias e marcas atendidas pela operacao, concentrando categorias, contato comercial e atividades executadas em campo."
       endpoint="/suppliers"
       searchHint="Busque por fornecedor, fantasia, documento, telefone, empresa, categoria, atividade ou situacao."
-      formMode="drawer"
+      formPlacement="top"
+      startFormCollapsed
       createTitle="Incluir fornecedor"
       editTitle="Alterar fornecedor"
       formSubtitle="Fornecedor ativo fica disponivel automaticamente para todos os clientes da empresa/filial, com atividades que orientam o trabalho do promotor no cliente."

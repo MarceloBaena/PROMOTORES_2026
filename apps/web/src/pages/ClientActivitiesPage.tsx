@@ -52,7 +52,8 @@ export function ClientActivitiesPage() {
       subtitle="Atividades padrao executadas pela equipe em campo e vinculadas aos fornecedores da operacao."
       endpoint="/client-activities"
       searchHint="Busque por codigo, atividade, descricao, empresa ou situacao."
-      formMode="drawer"
+      formPlacement="top"
+      startFormCollapsed
       createTitle="Incluir atividade"
       editTitle="Alterar atividade"
       formSubtitle="Atividades padrao que podem ser vinculadas aos fornecedores e reaproveitadas no atendimento de cada cliente."

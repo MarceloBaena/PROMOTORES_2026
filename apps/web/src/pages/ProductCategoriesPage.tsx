@@ -52,7 +52,8 @@ export function ProductCategoriesPage() {
       subtitle="Classificacao comercial usada para organizar fornecedores, sortimento e leitura operacional da base."
       endpoint="/product-categories"
       searchHint="Busque por codigo, categoria, descricao, empresa ou situacao."
-      formMode="drawer"
+      formPlacement="top"
+      startFormCollapsed
       createTitle="Incluir categoria"
       editTitle="Alterar categoria"
       formSubtitle="Categorias usadas para organizar fornecedores e padronizar a leitura comercial."

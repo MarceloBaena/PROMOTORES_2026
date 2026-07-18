@@ -73,6 +73,8 @@ export function PromotersPage() {
       subtitle="Cadastro da equipe de campo com supervisor vinculado, telefone do aparelho e credenciais do aplicativo."
       endpoint="/promoters"
       searchHint="Busque por codigo, nome, e-mail, telefone, empresa ou supervisor responsavel."
+      formPlacement="top"
+      startFormCollapsed
       formSubtitle="Use este cadastro para liberar o promotor no aplicativo, registrar o telefone e definir quem acompanha a operacao."
       initialValues={{ name: "", email: "", password: "", phone: "", companyId: user?.companyId ?? "", supervisorId: "" }}
       fields={[
@@ -157,6 +159,8 @@ export function SupervisorsPage() {
       subtitle="Cadastro da lideranca de campo responsavel por acompanhar promotores, rotas, auditorias e produtividade."
       endpoint="/supervisors"
       searchHint="Busque por codigo, nome, e-mail, empresa ou regiao."
+      formPlacement="top"
+      startFormCollapsed
       formSubtitle="Cadastre os supervisores que vao acompanhar a operacao e responder pela equipe em campo."
       initialValues={{ name: "", email: "", password: "", companyId: user?.companyId ?? "", region: "" }}
       fields={[
