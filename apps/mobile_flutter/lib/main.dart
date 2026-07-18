@@ -2592,6 +2592,7 @@ class ClientSnapshot {
     required this.id,
     this.code,
     required this.name,
+    this.tradeName,
     this.address,
     this.city,
     this.state,
@@ -2603,6 +2604,7 @@ class ClientSnapshot {
   final String id;
   final String? code;
   final String name;
+  final String? tradeName;
   final String? address;
   final String? city;
   final String? state;
@@ -2610,10 +2612,18 @@ class ClientSnapshot {
   final double? longitude;
   final Map<String, dynamic> payload;
 
+  String get displayName {
+    final preferred = (tradeName?.trim().isNotEmpty ?? false)
+        ? tradeName!.trim()
+        : name.trim();
+    return preferred.isEmpty ? 'Cliente' : preferred;
+  }
+
   factory ClientSnapshot.fromJson(Map<String, dynamic> json) => ClientSnapshot(
     id: json['id'] as String,
     code: json['code']?.toString(),
     name: json['name'] as String,
+    tradeName: json['tradeName'] as String?,
     address: json['address'] as String?,
     city: json['city'] as String?,
     state: json['state'] as String?,
@@ -2629,6 +2639,7 @@ class ClientSnapshot {
       id: row['id'] as String,
       code: row['code']?.toString(),
       name: row['name'] as String,
+      tradeName: payload['tradeName'] as String?,
       address: row['address'] as String?,
       city: row['city'] as String?,
       state: row['state'] as String?,
@@ -2641,7 +2652,7 @@ class ClientSnapshot {
   Map<String, Object?> toDb() => {
     'id': id,
     'code': code,
-    'name': name,
+    'name': displayName,
     'address': address,
     'city': city,
     'state': state,

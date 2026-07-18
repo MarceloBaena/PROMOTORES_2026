@@ -56,7 +56,7 @@ export function ClientsPage() {
       title="Clientes"
       subtitle="Cadastro comercial e operacional dos pontos de atendimento usados na roteirizacao e nas visitas de campo."
       endpoint="/clients"
-      searchHint="Busque por codigo, cliente, documento, endereco, bairro, cidade, empresa ou promotor responsavel."
+      searchHint="Busque por codigo, cliente, nome fantasia, documento, endereco, bairro, cidade, empresa ou promotor responsavel."
       formSubtitle="Preencha a ficha do cliente com os dados usados no painel e no aplicativo do promotor."
       formPlacement="top"
       startFormCollapsed
@@ -65,6 +65,7 @@ export function ClientsPage() {
         code: "",
         companyId: user?.companyId ?? "",
         name: "",
+        tradeName: "",
         document: "",
         representative: "",
         defaultPromoterId: "",
@@ -98,7 +99,13 @@ export function ClientsPage() {
               fullWidth: true
             }]
           : []),
-        { name: "name", label: "Nome", fullWidth: true },
+        { name: "name", label: "Nome/Razao social", fullWidth: true },
+        {
+          name: "tradeName",
+          label: "Nome fantasia",
+          description: "Nome comercial conhecido pela equipe de vendas e promotores.",
+          fullWidth: true
+        },
         { name: "document", label: "Documento" },
         {
           name: "representative",
@@ -139,7 +146,7 @@ export function ClientsPage() {
           title: "Identificacao",
           description: "Dados principais do cliente para localizar e controlar o cadastro.",
           columns: 2,
-          fields: ["code", "name", "document", "status"]
+          fields: ["code", "name", "tradeName", "document", "status"]
         },
         {
           title: "Vinculos operacionais",
@@ -166,6 +173,7 @@ export function ClientsPage() {
           value: (item) => {
             const code = textValue(item.code, "Sem codigo");
             const document = textValue(item.document, "Sem documento");
+            const tradeName = textValue(item.tradeName, "Sem nome fantasia");
             const company = companyLabel(item.company as CompanyOption | null | undefined);
             const representative = textValue(item.representative, "Sem representante");
             const promoter = promoterLabel(item.defaultPromoter);
@@ -178,6 +186,7 @@ export function ClientsPage() {
                   </span>
                   <strong className="text-base leading-tight text-ink">{textValue(item.name)}</strong>
                 </div>
+                <div className="text-xs font-semibold text-stone-500">Fantasia: {tradeName}</div>
                 <div className="text-xs font-semibold text-stone-500">Documento: {document}</div>
                 <div className="text-xs font-semibold text-stone-500">Empresa: {company}</div>
                 <div className="text-xs font-semibold text-stone-500">Representante: {representative}</div>

@@ -15,6 +15,7 @@ const clientSchema = z.object({
   code: z.string().optional(),
   companyId: z.string().uuid().optional(),
   name: z.string().min(2),
+  tradeName: z.string().optional(),
   document: z.string().optional(),
   representative: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).optional(),
@@ -90,6 +91,7 @@ clientsRouter.get(
           ? {
               OR: [
                 { name: { contains: q, mode: "insensitive" } },
+                { tradeName: { contains: q, mode: "insensitive" } },
                 { code: { contains: q, mode: "insensitive" } },
                 { document: { contains: q, mode: "insensitive" } },
                 { representative: { contains: q, mode: "insensitive" } },
@@ -273,6 +275,7 @@ clientsRouter.post(
               companyId,
               code,
               name,
+              tradeName: row.tradeName || row.nomeFantasia || row.fantasia || undefined,
               document: row.document || row.documento || undefined,
               representative: row.representative || row.representante || undefined,
               address: row.address || row.endereco || undefined,
@@ -285,6 +288,7 @@ clientsRouter.post(
             update: {
               companyId,
               name,
+              tradeName: row.tradeName || row.nomeFantasia || row.fantasia || undefined,
               document: row.document || row.documento || undefined,
               representative: row.representative || row.representante || undefined,
               address: row.address || row.endereco || undefined,

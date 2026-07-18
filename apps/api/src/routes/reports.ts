@@ -496,10 +496,11 @@ reportsRouter.get(
   asyncHandler(async (req, res) => {
     const clients = await prisma.client.findMany({ where: scopedCompanyWhere(req), orderBy: { createdAt: "desc" }, take: 1000 });
     const workbook = excelXml([
-      ["code", "name", "document", "status", "city", "state"],
+      ["code", "name", "tradeName", "document", "status", "city", "state"],
       ...clients.map((client) => [
         client.code ?? "",
         client.name,
+        client.tradeName ?? "",
         client.document ?? "",
         client.status,
         client.city ?? "",
@@ -521,6 +522,7 @@ reportsRouter.get(
       [
         "code",
         "name",
+        "tradeName",
         "document",
         "status",
         "city",
@@ -529,6 +531,7 @@ reportsRouter.get(
       ...clients.map((client) => [
         client.code ?? "",
         client.name,
+        client.tradeName ?? "",
         client.document ?? "",
         client.status,
         client.city ?? "",

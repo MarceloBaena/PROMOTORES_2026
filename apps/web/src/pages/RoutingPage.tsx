@@ -12,7 +12,7 @@ interface RoutePlan {
   status: string;
   promoter?: { code?: number; user?: { name?: string } };
   supervisor?: { code?: number; user?: { name?: string } };
-  items: Array<{ id: string; sequence: number; client: { name: string } }>;
+  items: Array<{ id: string; sequence: number; client: { name: string; tradeName?: string | null } }>;
 }
 
 interface PersonOption {
@@ -30,6 +30,7 @@ interface ClientOption {
   companyId?: string | null;
   code?: string | null;
   name?: string;
+  tradeName?: string | null;
   city?: string | null;
   state?: string | null;
   defaultPromoter?: {
@@ -56,7 +57,9 @@ function optionLabel(option: PersonOption, prefix: "PRO" | "SUP") {
 function clientLabel(client: ClientOption) {
   const code = client.code ? `${client.code} - ` : "";
   const city = client.city ? ` (${client.city}${client.state ? `/${client.state}` : ""})` : "";
-  return `${code}${client.name ?? "Cliente sem nome"}${city}`;
+  const displayName = client.tradeName?.trim() || client.name || "Cliente sem nome";
+  const legalName = client.tradeName?.trim() && client.name ? ` | ${client.name}` : "";
+  return `${code}${displayName}${legalName}${city}`;
 }
 
 export function RoutingPage() {
@@ -338,7 +341,7 @@ export function RoutingPage() {
                     onClick={() => toggleClient(client.id)}
                     title="Remover cliente"
                   >
-                    {index + 1}. {client.name}
+                    {index + 1}. {client.tradeName?.trim() || client.name}
                     <X className="h-3 w-3" />
                   </button>
                 ))}
@@ -406,7 +409,7 @@ export function RoutingPage() {
                   <RouteInfo label="Supervisor" value={personLabel(route.supervisor, "SUP")} />
                   <RouteInfo
                     label="Clientes"
-                    value={route.items.length > 0 ? route.items.map((item) => item.client.name).slice(0, 2).join(" | ") : "Sem clientes"}
+                    value={route.items.length > 0 ? route.items.map((item) => item.client.tradeName?.trim() || item.client.name).slice(0, 2).join(" | ") : "Sem clientes"}
                   />
                 </div>
               </div>
