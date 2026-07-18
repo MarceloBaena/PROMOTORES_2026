@@ -58,6 +58,9 @@ export function ClientsPage() {
       endpoint="/clients"
       searchHint="Busque por codigo, cliente, documento, endereco, bairro, cidade, empresa ou promotor responsavel."
       formSubtitle="Preencha a ficha do cliente com os dados usados no painel e no aplicativo do promotor."
+      formPlacement="top"
+      startFormCollapsed
+      createButtonLabel="Incluir cliente"
       initialValues={{
         code: "",
         companyId: user?.companyId ?? "",
@@ -129,6 +132,30 @@ export function ClientsPage() {
             { value: "INACTIVE", label: "Inativo" },
             { value: "ARCHIVED", label: "Arquivado" }
           ]
+        }
+      ]}
+      fieldSections={[
+        {
+          title: "Identificacao",
+          description: "Dados principais do cliente para localizar e controlar o cadastro.",
+          columns: 2,
+          fields: ["code", "name", "document", "status"]
+        },
+        {
+          title: "Vinculos operacionais",
+          description: "Defina a empresa, o representante comercial e o promotor responsavel.",
+          columns: 2,
+          fields: [
+            ...(isPlatformAdmin ? ["companyId"] : []),
+            "representative",
+            "defaultPromoterId"
+          ]
+        },
+        {
+          title: "Endereco",
+          description: "Informacoes usadas no roteiro e no app de campo.",
+          columns: 2,
+          fields: ["address", "addressNumber", "district", "city", "state", "latitude", "longitude"]
         }
       ]}
       columns={[

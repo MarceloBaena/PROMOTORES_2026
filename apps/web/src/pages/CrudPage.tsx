@@ -47,6 +47,8 @@ interface CrudPageProps {
   searchPlaceholder?: string;
   formSubtitle?: string;
   formMode?: "panel" | "drawer";
+  formPlacement?: "side" | "top";
+  startFormCollapsed?: boolean;
   fieldSections?: FieldSection[];
   createTitle?: string;
   editTitle?: string;
@@ -65,6 +67,8 @@ export function CrudPage({
   searchPlaceholder,
   formSubtitle,
   formMode = "panel",
+  formPlacement = "side",
+  startFormCollapsed = false,
   fieldSections,
   createTitle,
   editTitle,
@@ -79,6 +83,8 @@ export function CrudPage({
   const [tableSearch, setTableSearch] = useState("");
   const [searchFilters, setSearchFilters] = useState<Record<string, string>>({});
   const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
+  const [formOpen, setFormOpen] = useState(!startFormCollapsed || formPlacement !== "top");
+  const isTopForm = formPlacement === "top";
 
   const filteredItems = useMemo(() => {
     const search = tableSearch.trim().toLowerCase();
@@ -274,10 +280,15 @@ export function CrudPage({
         method: editingId ? "PUT" : "POST",
         body: JSON.stringify(payload)
       });
+      const successMessage = editingId ? "Registro alterado com sucesso." : "Registro incluido com sucesso.";
       setForm(initialValues);
       setTagDrafts({});
       setEditingId(null);
       await load();
+      setMessage(successMessage);
+      if (isTopForm) {
+        setFormOpen(false);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Operacao nao concluida.");
     } finally {
@@ -340,8 +351,41 @@ export function CrudPage({
     );
   }
 
+  function resetForm(collapse = false) {
+    setEditingId(null);
+    setForm(initialValues);
+    setTagDrafts({});
+    setSearchFilters({});
+
+    if (collapse && isTopForm) {
+      setFormOpen(false);
+    }
+  }
+
+  function openCreateForm() {
+    setMessage(null);
+    resetForm(false);
+    setFormOpen(true);
+  }
+
+  function fieldWrapperClass(field: Field) {
+    if (!field.fullWidth) {
+      return "";
+    }
+
+    return isTopForm ? "md:col-span-2 xl:col-span-4" : "sm:col-span-2";
+  }
+
+  function sectionGridClass(section: FieldSection) {
+    if (isTopForm) {
+      return section.columns === 1 ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-4";
+    }
+
+    return section.columns === 1 ? "grid-cols-1" : "sm:grid-cols-2";
+  }
+
   function renderField(field: Field) {
-    const wrapperClass = field.fullWidth ? "sm:col-span-2" : "";
+    const wrapperClass = fieldWrapperClass(field);
     const labelClass = `block ${wrapperClass}`.trim();
     const selectOptions = (field.options ?? []).map(normalizeOption);
     const filterValue = searchFilters[field.name] ?? "";
@@ -499,6 +543,206 @@ export function CrudPage({
     );
   }
 
+  function renderForm() {
+    const formClass = isTopForm ? "panel overflow-hidden" : "panel overflow-hidden 2xl:sticky 2xl:top-20 2xl:self-start";
+    const bodyClass = isTopForm ? "space-y-5 p-4 sm:p-6" : "space-y-5 p-4 sm:p-6";
+
+    return (
+      <form onSubmit={onSubmit} className={formClass}>
+        <div className="panel-header">
+          <div>
+            <div className="mb-2">
+              <span className={`${editingId ? "execution-chip" : "brand-chip"}`}>
+                {editingId ? "Alteracao em andamento" : "Novo cadastro"}
+              </span>
+            </div>
+            <h2 className="panel-title">{resolvedFormTitle}</h2>
+            <p className="panel-subtitle">
+              {formSubtitle ?? (title === "Clientes" ? "Cadastro completo para roteiro e atendimento em campo." : "Preencha os dados e confirme a gravacao do registro.")}
+            </p>
+          </div>
+          {editingId || isTopForm ? (
+            <button
+              type="button"
+              title={editingId ? "Cancelar alteracao" : "Recolher formulario"}
+              className="icon-button"
+              onClick={() => resetForm(isTopForm)}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+
+        <div className={bodyClass}>
+          {sections.map((section) => (
+            <div key={section.title} className="rounded-lg border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
+              <div className="mb-4">
+                <h3 className="text-sm font-black uppercase tracking-[0.12em] text-ink">{section.title}</h3>
+                {section.description ? (
+                  <p className="mt-1 text-sm font-semibold leading-6 text-slateText">{section.description}</p>
+                ) : null}
+              </div>
+              <div className={`grid gap-5 ${sectionGridClass(section)}`}>
+                {section.fields.map((fieldName) => {
+                  const field = fieldMap.get(fieldName);
+                  return field ? renderField(field) : null;
+                })}
+              </div>
+            </div>
+          ))}
+
+          <div className="flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              title={editingId ? "Cancelar" : "Limpar"}
+              className="secondary-button justify-center"
+              onClick={() => resetForm(isTopForm)}
+              disabled={loading}
+            >
+              <X className="h-4 w-4" />
+              {editingId ? "Cancelar" : "Limpar"}
+            </button>
+            <button type="submit" title={actionLabel} disabled={loading} className="primary-button justify-center sm:min-w-56">
+              {editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {loading ? "Salvando..." : actionLabel}
+            </button>
+          </div>
+        </div>
+      </form>
+    );
+  }
+
+  function renderCollapsedFormButton() {
+    if (!canCreate || !isTopForm || formOpen || editingId) {
+      return null;
+    }
+
+    return (
+      <button
+        type="button"
+        className="panel mb-4 flex w-full flex-col gap-3 p-4 text-left transition hover:-translate-y-0.5 hover:shadow-soft sm:flex-row sm:items-center sm:justify-between sm:p-5"
+        onClick={openCreateForm}
+      >
+        <div>
+          <span className="brand-chip">Novo cadastro</span>
+          <h2 className="mt-3 text-xl font-black text-ink">{title === "Clientes" ? "Novo cliente" : resolvedFormTitle}</h2>
+          <p className="mt-1 text-sm font-semibold text-slateText">
+            Abra o formulario horizontal para incluir um registro sem tirar a listagem da tela.
+          </p>
+        </div>
+        <span className="primary-button pointer-events-none justify-center sm:w-auto">
+          <Plus className="h-4 w-4" />
+          {title === "Clientes" ? "Novo cliente" : "Incluir"}
+        </span>
+      </button>
+    );
+  }
+
+  function renderTable() {
+    return (
+      <div className="table-wrap">
+        <div className="border-b border-line/80 bg-white/90 p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <h2 className="text-sm font-black uppercase tracking-[0.12em] text-slateText">Busca guiada</h2>
+              <p className="text-sm font-semibold text-slateText">
+                {searchHint ?? "Use a busca para localizar rapidamente o registro antes de alterar ou excluir."}
+              </p>
+            </div>
+            <span className="rounded-full border border-line bg-field px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-graphite">
+              {filteredItems.length} registro(s)
+            </span>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+              <input
+                className="input-control h-12 pl-11 pr-24"
+                type="search"
+                placeholder={resolvedSearchPlaceholder}
+                value={tableSearch}
+                onChange={(event) => setTableSearch(event.target.value)}
+              />
+              {tableSearch ? (
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-[0.12em] text-forest"
+                  onClick={() => setTableSearch("")}
+                >
+                  Limpar
+                </button>
+              ) : null}
+            </label>
+            <div className="flex items-center justify-center rounded-2xl border border-line bg-field px-4 py-3 text-sm font-semibold text-slateText">
+              Exibindo <span className="ml-1 font-black text-ink">{filteredItems.length}</span>
+            </div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                {columns.map((column) => (
+                  <th key={column.label} className={column.headerClassName ?? ""}>{column.label}</th>
+                ))}
+                <th className="w-56 px-4 py-3">Acoes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.map((item) => (
+                <tr key={String(item.id)} className="align-top">
+                  {columns.map((column) => (
+                    <td key={column.label} className={column.className ?? ""}>{column.value(item)}</td>
+                  ))}
+                  <td>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        title="Alterar"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-graphite shadow-sm transition hover:-translate-y-0.5 hover:bg-muted"
+                        onClick={() => {
+                          setEditingId(String(item.id));
+                          setForm(formFromItem(item));
+                          setTagDrafts({});
+                          setFormOpen(true);
+                          setMessage(null);
+                        }}
+                      >
+                        <Edit3 className="h-4 w-4" />
+                        <span className="hidden sm:inline">Alterar</span>
+                      </button>
+                      <button
+                        type="button"
+                        title="Excluir"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-berry shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-50"
+                        onClick={() => {
+                          if (window.confirm("Deseja excluir/inativar este registro?")) {
+                            void remove(String(item.id));
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="hidden sm:inline">Excluir</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredItems.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-8 text-center text-stone-500" colSpan={columns.length + 1}>
+                    {loading ? "Carregando..." : tableSearch ? "Nenhum registro encontrado para a busca." : "Nenhum registro encontrado."}
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section>
       <PageHeader
@@ -519,162 +763,17 @@ export function CrudPage({
 
       {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className={`grid gap-4 ${canCreate || editingId ? (formMode === "drawer" ? "2xl:grid-cols-[minmax(0,1fr)_400px]" : "2xl:grid-cols-[minmax(0,1fr)_340px]") : ""}`}>
-        <div className="table-wrap">
-          <div className="border-b border-line/80 bg-white/90 p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div className="space-y-1">
-                <h2 className="text-sm font-black uppercase tracking-[0.12em] text-slateText">Busca guiada</h2>
-                <p className="text-sm font-semibold text-slateText">
-                  {searchHint ?? "Use a busca para localizar rapidamente o registro antes de alterar ou excluir."}
-                </p>
-              </div>
-              <span className="rounded-full border border-line bg-field px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-graphite">
-                {filteredItems.length} registro(s)
-              </span>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
-              <label className="relative block">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                <input
-                  className="input-control h-12 pl-11 pr-24"
-                  type="search"
-                  placeholder={resolvedSearchPlaceholder}
-                  value={tableSearch}
-                  onChange={(event) => setTableSearch(event.target.value)}
-                />
-                {tableSearch ? (
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-[0.12em] text-forest"
-                    onClick={() => setTableSearch("")}
-                  >
-                    Limpar
-                  </button>
-                ) : null}
-              </label>
-              <div className="flex items-center justify-center rounded-2xl border border-line bg-field px-4 py-3 text-sm font-semibold text-slateText">
-                Exibindo <span className="ml-1 font-black text-ink">{filteredItems.length}</span>
-              </div>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {columns.map((column) => (
-                    <th key={column.label} className={column.headerClassName ?? ""}>{column.label}</th>
-                  ))}
-                  <th className="w-56 px-4 py-3">Acoes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredItems.map((item) => (
-                  <tr key={String(item.id)} className="align-top">
-                    {columns.map((column) => (
-                      <td key={column.label} className={column.className ?? ""}>{column.value(item)}</td>
-                    ))}
-                    <td>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          title="Alterar"
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-graphite shadow-sm transition hover:-translate-y-0.5 hover:bg-muted"
-                          onClick={() => {
-                            setEditingId(String(item.id));
-                            setForm(formFromItem(item));
-                            setTagDrafts({});
-                          }}
-                        >
-                          <Edit3 className="h-4 w-4" />
-                          <span className="hidden sm:inline">Alterar</span>
-                        </button>
-                        <button
-                          type="button"
-                          title="Excluir"
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-berry shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-50"
-                          onClick={() => {
-                            if (window.confirm("Deseja excluir/inativar este registro?")) {
-                              void remove(String(item.id));
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span className="hidden sm:inline">Excluir</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filteredItems.length === 0 ? (
-                  <tr>
-                    <td className="px-4 py-8 text-center text-stone-500" colSpan={columns.length + 1}>
-                      {loading ? "Carregando..." : tableSearch ? "Nenhum registro encontrado para a busca." : "Nenhum registro encontrado."}
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+      {isTopForm ? (
+        <div className="space-y-4">
+          {formOpen || editingId ? renderForm() : renderCollapsedFormButton()}
+          {renderTable()}
         </div>
-
-        {canCreate || editingId ? (
-        <form onSubmit={onSubmit} className="panel overflow-hidden 2xl:sticky 2xl:top-20 2xl:self-start">
-          <div className="panel-header">
-            <div>
-              <div className="mb-2">
-                <span className={`${editingId ? "execution-chip" : "brand-chip"}`}>
-                  {editingId ? "Alteracao em andamento" : "Novo cadastro"}
-                </span>
-              </div>
-              <h2 className="panel-title">{resolvedFormTitle}</h2>
-              <p className="panel-subtitle">
-                {formSubtitle ?? (title === "Clientes" ? "Cadastro completo para roteiro e atendimento em campo." : "Preencha os dados e confirme a gravacao do registro.")}
-              </p>
-            </div>
-            {editingId ? (
-              <button
-                type="button"
-                title="Cancelar"
-                className="icon-button"
-                onClick={() => {
-                  setEditingId(null);
-                  setForm(initialValues);
-                  setTagDrafts({});
-                }}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-
-          <div className="space-y-5 p-4 sm:p-6">
-            {sections.map((section) => (
-              <div key={section.title} className="rounded-lg border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
-                <div className="mb-4">
-                  <h3 className="text-sm font-black uppercase tracking-[0.12em] text-ink">{section.title}</h3>
-                  {section.description ? (
-                    <p className="mt-1 text-sm font-semibold leading-6 text-slateText">{section.description}</p>
-                  ) : null}
-                </div>
-                <div className={`grid gap-5 ${section.columns === 1 ? "grid-cols-1" : "sm:grid-cols-2"}`}>
-                  {section.fields.map((fieldName) => {
-                    const field = fieldMap.get(fieldName);
-                    return field ? renderField(field) : null;
-                  })}
-                </div>
-              </div>
-            ))}
-
-            <button type="submit" title={actionLabel} disabled={loading} className="primary-button w-full">
-              {editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {actionLabel}
-            </button>
-          </div>
-        </form>
-        ) : null}
-      </div>
+      ) : (
+        <div className={`grid gap-4 ${canCreate || editingId ? (formMode === "drawer" ? "2xl:grid-cols-[minmax(0,1fr)_400px]" : "2xl:grid-cols-[minmax(0,1fr)_340px]") : ""}`}>
+          {renderTable()}
+          {canCreate || editingId ? renderForm() : null}
+        </div>
+      )}
     </section>
   );
 }

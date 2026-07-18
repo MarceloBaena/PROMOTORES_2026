@@ -7,7 +7,8 @@
     "build:shared": "cd ../../packages/shared && npm run build",
     "dev": "npm run build:shared && vite --host 0.0.0.0",
     "build": "npm run build:shared && tsc -b && vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run --environment jsdom"
   },
   "dependencies": {
     "@sales-promoters/shared": "file:../../packages/shared",
@@ -21,14 +22,19 @@
   },
   "devDependencies": {
     "@rolldown/plugin-babel": "^0.2.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/leaflet": "^1.9.21",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
     "babel-plugin-react-compiler": "^1.0.0",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.6.3",
-    "vite": "^8.0.16"
+    "vite": "^8.0.16",
+    "vitest": "^4.1.10"
   }
 }
