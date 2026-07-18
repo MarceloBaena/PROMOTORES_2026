@@ -159,11 +159,11 @@ export function PromotersLiveMap({
 
   if (locatedItems.length === 0) {
     return (
-      <div className={`relative overflow-hidden rounded-[1.35rem] bg-[#dfe8df] ${mapHeight}`}>
+      <div className={`relative overflow-hidden rounded-lg bg-[#dfe8df] ${mapHeight}`}>
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,25,23,0.06)_1px,transparent_1px),linear-gradient(rgba(17,25,23,0.06)_1px,transparent_1px)] bg-[size:54px_54px]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_28%,rgba(37,111,75,0.18),transparent_22rem),radial-gradient(circle_at_74%_70%,rgba(54,95,120,0.18),transparent_20rem)]" />
         <div className="absolute inset-0 grid place-items-center px-6 text-center">
-          <div className="max-w-md rounded-3xl border border-white/80 bg-white/92 p-7 shadow-xl backdrop-blur">
+          <div className="max-w-md rounded-lg border border-white/80 bg-white/92 p-5 shadow-xl backdrop-blur sm:p-7">
             <LocateFixed className="mx-auto h-10 w-10 text-stone-400" />
             <h3 className="mt-4 font-display text-2xl font-bold text-ink">Nenhuma posicao recebida</h3>
             <p className="mt-2 text-sm font-semibold leading-6 text-stone-500">
@@ -176,7 +176,7 @@ export function PromotersLiveMap({
   }
 
   return (
-    <div className={`live-map-shell relative overflow-hidden rounded-[1.35rem] ${mapHeight}`}>
+    <div className={`live-map-shell relative overflow-hidden rounded-lg ${mapHeight}`}>
       <MapContainer center={DEFAULT_CENTER} zoom={12} scrollWheelZoom className="live-leaflet-map h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
@@ -286,8 +286,8 @@ export function PromotersLiveMap({
         })}
       </MapContainer>
 
-      <div className="pointer-events-none absolute left-4 top-4 z-[500] max-w-[min(100%-2rem,30rem)]">
-        <div className="rounded-[1.1rem] border border-white/80 bg-white/92 px-3 py-3 shadow-xl backdrop-blur">
+      <div className="pointer-events-none absolute left-2 top-2 z-[500] max-w-[calc(100%-1rem)] sm:left-4 sm:top-4 sm:max-w-[min(100%-2rem,30rem)]">
+        <div className="rounded-lg border border-white/80 bg-white/92 px-3 py-3 shadow-xl backdrop-blur">
           <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-500">Controle ao vivo</div>
           <div className="mt-2 flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-2 rounded-full bg-brandSoft px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-brand">
@@ -306,7 +306,7 @@ export function PromotersLiveMap({
         </div>
       </div>
 
-      <div className="pointer-events-none absolute right-4 top-4 z-[500]">
+      <div className="pointer-events-none absolute right-2 top-2 z-[500] hidden sm:block sm:right-4 sm:top-4">
         <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/95 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-800 shadow-lg backdrop-blur">
           <TimerReset className="h-4 w-4" />
           Atualizacao a cada {LIVE_MAP_REFRESH_INTERVAL_MS / 1000}s
@@ -314,8 +314,8 @@ export function PromotersLiveMap({
       </div>
 
       {focusedPromoter?.location ? (
-        <div className="absolute bottom-4 left-4 right-4 z-[500]">
-          <div className="rounded-[1.6rem] border border-white/80 bg-white/94 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.18)] backdrop-blur">
+        <div className="absolute bottom-2 left-2 right-2 z-[500] sm:bottom-4 sm:left-4 sm:right-4">
+          <div className="rounded-lg border border-white/80 bg-white/94 p-3 shadow-[0_24px_60px_rgba(15,23,42,0.18)] backdrop-blur sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="font-mono text-[11px] font-black tracking-[0.14em] text-brand">
@@ -332,16 +332,16 @@ export function PromotersLiveMap({
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl bg-slate-50 p-3">
+            <div className="mt-4 grid gap-2 sm:grid-cols-3 sm:gap-3">
+              <div className="rounded-lg bg-slate-50 p-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-500">Operacao</div>
                 <div className="mt-1 text-sm font-black text-ink">{operationalLabel(focusedPromoter)}</div>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-3">
+              <div className="rounded-lg bg-slate-50 p-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-500">Rota</div>
                 <div className="mt-1 text-sm font-black text-ink">{routeWindowLabel(focusedPromoter)}</div>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-3">
+              <div className="rounded-lg bg-slate-50 p-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-500">Proximo ponto</div>
                 <div className="mt-1 text-sm font-black text-ink">{nextClientLabel(focusedPromoter)}</div>
               </div>

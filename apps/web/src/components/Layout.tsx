@@ -61,7 +61,7 @@ export function Layout() {
 
   return (
     <div className="app-page">
-      <aside className="fixed inset-y-0 left-0 hidden w-80 border-r border-white/10 bg-navy text-white shadow-[24px_0_70px_rgba(15,23,42,0.22)] lg:flex lg:flex-col">
+      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-white/10 bg-navy text-white shadow-[24px_0_70px_rgba(15,23,42,0.22)] lg:flex lg:flex-col xl:w-80">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_0%,rgba(37,99,235,0.30),transparent_18rem),radial-gradient(circle_at_80%_18%,rgba(16,185,129,0.18),transparent_16rem),linear-gradient(180deg,rgba(255,255,255,0.08),transparent_42%)]" />
         <div className="relative border-b border-white/10 px-5 py-5">
           <BrandMark />
@@ -141,7 +141,7 @@ export function Layout() {
         </div>
       </aside>
 
-      <div className="lg:pl-80">
+      <div className="lg:pl-72 xl:pl-80">
         <header className="sticky top-0 z-10 border-b border-white/70 bg-white/90 shadow-sm shadow-slate-900/5 backdrop-blur-xl">
           <div className="flex min-h-16 items-center justify-between gap-4 px-4 sm:px-5 lg:px-7">
             <div className="hidden min-w-0 sm:block">

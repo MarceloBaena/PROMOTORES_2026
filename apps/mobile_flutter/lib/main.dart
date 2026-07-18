@@ -984,7 +984,9 @@ class _VisitPageState extends State<VisitPage> {
       final session = await widget.repository.getSession();
       if (session != null) {
         try {
-          final result = await widget.repository.syncPending(session.accessToken);
+          final result = await widget.repository.syncPending(
+            session.accessToken,
+          );
           resultMessage = result.failed == 0
               ? 'Atendimento encerrado e sincronizado com a retaguarda. Enviados: ${result.synced}.'
               : 'Atendimento encerrado, mas ${result.failed} item(ns) ficaram pendentes. Abra a fila de sincronizacao para ver o erro.';
@@ -2703,7 +2705,8 @@ class SupplierSnapshot {
   final String? tradeName;
   final String? document;
   final Map<String, dynamic> payload;
-  List<ActivitySnapshot> get activities => activitiesFromRaw(payload['activities']);
+  List<ActivitySnapshot> get activities =>
+      activitiesFromRaw(payload['activities']);
 
   String get displayName {
     final preferred = (tradeName?.trim().isNotEmpty ?? false)
@@ -3332,8 +3335,9 @@ List<ActivitySnapshot> activitiesFromRaw(Object? raw) {
       .toList();
 }
 
-List<ActivitySnapshot> clientActivitiesFromPayload(Map<String, dynamic>? payload) =>
-    activitiesFromRaw(payload?['activities']);
+List<ActivitySnapshot> clientActivitiesFromPayload(
+  Map<String, dynamic>? payload,
+) => activitiesFromRaw(payload?['activities']);
 
 List<SupplierSnapshot> suppliersFromPayload(Map<String, dynamic>? payload) {
   final raw = payload?['suppliers'];
@@ -3395,8 +3399,7 @@ bool supplierRequiresDeliveryFlow(bool? deliveryReceived) =>
 bool supplierExecutionRequiresJustification({
   required bool? deliveryReceived,
   required bool? stockoutFound,
-}) =>
-    deliveryReceived == false || stockoutFound == true;
+}) => deliveryReceived == false || stockoutFound == true;
 
 String answerLabel(bool? value) {
   if (value == null) return 'Nao informado';
@@ -3440,7 +3443,20 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: SafeArea(child: child));
+    final mediaQuery = MediaQuery.of(context);
+    final clampedTextScale = mediaQuery.textScaler.clamp(
+      minScaleFactor: 0.92,
+      maxScaleFactor: 1.18,
+    );
+
+    return Scaffold(
+      body: SafeArea(
+        child: MediaQuery(
+          data: mediaQuery.copyWith(textScaler: clampedTextScale),
+          child: child,
+        ),
+      ),
+    );
   }
 }
 
@@ -3460,56 +3476,86 @@ class AppTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      decoration: const BoxDecoration(color: brandNavy),
-      child: Row(
-        children: [
-          if (showBack)
-            FilledButton.tonalIcon(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('Voltar'),
-            )
-          else
-            Image.asset('assets/promotorpro-icon.png', width: 42, height: 42),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFFD6E2FF),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 390;
+
+        return Container(
+          padding: EdgeInsets.fromLTRB(
+            compact ? 12 : 16,
+            12,
+            compact ? 12 : 16,
+            16,
+          ),
+          decoration: const BoxDecoration(color: brandNavy),
+          child: Row(
+            children: [
+              if (showBack)
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Voltar'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: brandNavy,
+                    backgroundColor: const Color(0xFFEFF6FF),
+                    minimumSize: Size(compact ? 92 : 118, 46),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 10 : 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                ],
-              ],
-            ),
+                )
+              else
+                Image.asset(
+                  'assets/promotorpro-icon.png',
+                  width: compact ? 36 : 42,
+                  height: compact ? 36 : 42,
+                ),
+              SizedBox(width: compact ? 10 : 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: compact ? 20 : 24,
+                        height: 1.08,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle!,
+                        maxLines: compact ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: const Color(0xFFD6E2FF),
+                          fontSize: compact ? 12 : 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (onLogout != null)
+                IconButton(
+                  tooltip: 'Sair',
+                  onPressed: onLogout,
+                  icon: const Icon(Icons.logout, color: Colors.white),
+                ),
+            ],
           ),
-          if (onLogout != null)
-            IconButton(
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout, color: Colors.white),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -3522,11 +3568,17 @@ class BrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.of(context).size.width < 390;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Image.asset('assets/promotorpro-icon.png', width: 78, height: 78),
-        const SizedBox(height: 16),
+        Image.asset(
+          'assets/promotorpro-icon.png',
+          width: compact ? 62 : 78,
+          height: compact ? 62 : 78,
+        ),
+        SizedBox(height: compact ? 12 : 16),
         Text(
           'PROMOTORPRO',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
@@ -3538,10 +3590,11 @@ class BrandHeader extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           title,
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-            fontWeight: FontWeight.w900,
-            color: brandNavy,
-          ),
+          style:
+              (compact
+                      ? Theme.of(context).textTheme.headlineMedium
+                      : Theme.of(context).textTheme.displaySmall)
+                  ?.copyWith(fontWeight: FontWeight.w900, color: brandNavy),
         ),
         Text(
           subtitle,
@@ -3568,6 +3621,7 @@ class PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
+      width: double.infinity,
       height: 56,
       child: FilledButton(
         onPressed: onPressed,
@@ -3596,6 +3650,7 @@ class SecondaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
+      width: double.infinity,
       height: 54,
       child: OutlinedButton(
         onPressed: onPressed,
@@ -3619,6 +3674,7 @@ class DangerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
+      width: double.infinity,
       height: 54,
       child: OutlinedButton(
         onPressed: onPressed,
@@ -3649,56 +3705,73 @@ class OperatorIdentityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: line),
-      ),
-      child: Row(
-        children: [
-          const CircleAvatar(
-            radius: 24,
-            backgroundColor: brandNavy,
-            child: Icon(Icons.person, color: Colors.white),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 360;
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: line),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  promoterName,
-                  style: const TextStyle(
-                    color: brandNavy,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  promoterEmail,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  versionLabel,
-                  style: const TextStyle(
-                    color: brandBlue,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: identityChildren(compact: true),
+                )
+              : Row(children: identityChildren(compact: false)),
+        );
+      },
     );
+  }
+
+  List<Widget> identityChildren({required bool compact}) {
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          promoterName,
+          maxLines: compact ? 3 : 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: brandNavy,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          promoterEmail,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          versionLabel,
+          style: const TextStyle(
+            color: brandBlue,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+
+    return [
+      const CircleAvatar(
+        radius: 24,
+        backgroundColor: brandNavy,
+        child: Icon(Icons.person, color: Colors.white),
+      ),
+      SizedBox(width: compact ? 0 : 14, height: compact ? 12 : 0),
+      compact ? details : Expanded(child: details),
+    ];
   }
 }
 
@@ -3775,14 +3848,30 @@ class DashboardGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: MediaQuery.of(context).size.width > 650 ? 4 : 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: 1.45,
-      children: cards.map((card) => MetricCard(data: card)).toList(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final count = width >= 760
+            ? 4
+            : width >= 430
+            ? 2
+            : 1;
+        final ratio = count == 1
+            ? 3.2
+            : width < 520
+            ? 1.65
+            : 1.45;
+
+        return GridView.count(
+          crossAxisCount: count,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: ratio,
+          children: cards.map((card) => MetricCard(data: card)).toList(),
+        );
+      },
     );
   }
 }
@@ -3880,16 +3969,24 @@ class RouteItemCard extends StatelessWidget {
                       children: [
                         Text(
                           item.clientName,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontWeight: FontWeight.w900,
                             color: brandNavy,
                           ),
                         ),
                         const SizedBox(height: 6),
-                        Text(item.clientAddress ?? 'Endereco nao informado'),
+                        Text(
+                          item.clientAddress ?? 'Endereco nao informado',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           item.routeName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         if (item.hasCoordinates) ...[
@@ -3962,6 +4059,8 @@ class ClientHero extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             item.clientName,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 24,
@@ -3971,6 +4070,8 @@ class ClientHero extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             item.clientAddress ?? 'Endereco nao informado',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Color(0xFFE2E8F0),
               fontWeight: FontWeight.w600,
@@ -4090,10 +4191,13 @@ class SupplierExecutionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Text(
                       supplierLabel(supplier),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         color: brandNavy,
@@ -4102,8 +4206,10 @@ class SupplierExecutionTile extends StatelessWidget {
                     ),
                   ),
                   Chip(
+                    visualDensity: VisualDensity.compact,
                     label: Text(
                       statusLabel,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     backgroundColor: status == 'completed'
@@ -4123,8 +4229,8 @@ class SupplierExecutionTile extends StatelessWidget {
                       color: Color(0xFF64748B),
                       fontWeight: FontWeight.w600,
                     ),
-                    ),
                   ),
+                ),
               if (activityCount > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -4322,20 +4428,21 @@ class SupplierExecutionEditor extends StatelessWidget {
                 unawaited(result);
               }
             },
-            decoration: const InputDecoration(
-              labelText: 'Observacoes do fornecedor',
-              border: OutlineInputBorder(),
-            ).copyWith(
-              labelText: requiresJustification
-                  ? 'Observacoes do fornecedor (obrigatorio)'
-                  : 'Observacoes do fornecedor',
-              hintText: requiresJustification
-                  ? 'Explique por que nao teve entrega ou qual foi a ruptura encontrada.'
-                  : 'Informe algo relevante sobre este fornecedor, se necessario.',
-              helperText: requiresJustification
-                  ? 'Obrigatorio para sem entrega ou ruptura.'
-                  : null,
-            ),
+            decoration:
+                const InputDecoration(
+                  labelText: 'Observacoes do fornecedor',
+                  border: OutlineInputBorder(),
+                ).copyWith(
+                  labelText: requiresJustification
+                      ? 'Observacoes do fornecedor (obrigatorio)'
+                      : 'Observacoes do fornecedor',
+                  hintText: requiresJustification
+                      ? 'Explique por que nao teve entrega ou qual foi a ruptura encontrada.'
+                      : 'Informe algo relevante sobre este fornecedor, se necessario.',
+                  helperText: requiresJustification
+                      ? 'Obrigatorio para sem entrega ou ruptura.'
+                      : null,
+                ),
           ),
           const SizedBox(height: 14),
           PrimaryButton(

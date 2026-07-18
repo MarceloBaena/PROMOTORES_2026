@@ -620,7 +620,7 @@ export function CrudPage({
         </div>
 
         {canCreate || editingId ? (
-        <form onSubmit={onSubmit} className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
+        <form onSubmit={onSubmit} className="panel overflow-hidden 2xl:sticky 2xl:top-20 2xl:self-start">
           <div className="panel-header">
             <div>
               <div className="mb-2">
@@ -649,9 +649,9 @@ export function CrudPage({
             ) : null}
           </div>
 
-          <div className="space-y-5 p-6">
+          <div className="space-y-5 p-4 sm:p-6">
             {sections.map((section) => (
-              <div key={section.title} className="rounded-[1.35rem] border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
+              <div key={section.title} className="rounded-lg border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
                 <div className="mb-4">
                   <h3 className="text-sm font-black uppercase tracking-[0.12em] text-ink">{section.title}</h3>
                   {section.description ? (
