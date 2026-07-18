@@ -42,6 +42,11 @@ const optionalDateTime = z.preprocess(
   z.string().datetime().optional()
 );
 
+const optionalText = z.preprocess(
+  (value) => (value === null || value === "" ? undefined : value),
+  z.string().trim().optional()
+);
+
 const visitSchema = z.object({
   clientGeneratedId: z.string().min(8).max(120).optional(),
   companyId: z.string().uuid().optional(),
@@ -54,7 +59,7 @@ const visitSchema = z.object({
   finishedAt: optionalDateTime,
   gpsLatitude: optionalCoordinate(-90, 90),
   gpsLongitude: optionalCoordinate(-180, 180),
-  notes: z.string().optional()
+  notes: optionalText
 });
 
 const photoSchema = z.object({
@@ -89,7 +94,7 @@ const supplierExecutionSchema = z.object({
   deliveryReceived: z.boolean().nullable().optional(),
   productsReplenished: z.boolean().nullable().optional(),
   stockoutFound: z.boolean().nullable().optional(),
-  notes: z.string().optional(),
+  notes: optionalText,
   startedAtDevice: optionalDateTime,
   finishedAtDevice: optionalDateTime
 });

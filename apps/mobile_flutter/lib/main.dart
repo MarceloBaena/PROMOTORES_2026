@@ -1929,7 +1929,7 @@ class ApiClient {
       'finishedAt': visit.finishedAt,
       'gpsLatitude': visit.gpsLatitude,
       'gpsLongitude': visit.gpsLongitude,
-      'notes': visit.notes,
+      'notes': visit.notes ?? '',
     };
     final response = await _request(
       visit.serverId == null ? '/visits' : '/visits/${visit.serverId}',
@@ -1955,7 +1955,7 @@ class ApiClient {
       'deliveryReceived': execution.deliveryReceived,
       'productsReplenished': execution.productsReplenished,
       'stockoutFound': execution.stockoutFound,
-      'notes': execution.notes,
+      'notes': execution.notes ?? '',
       'startedAtDevice': execution.startedAtDevice,
       'finishedAtDevice': execution.finishedAtDevice,
     };
