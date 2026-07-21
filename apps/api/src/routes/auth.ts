@@ -16,7 +16,8 @@ export const authRouter = Router();
 
 const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1)
+  password: z.string().min(1),
+  client: z.enum(["web", "mobile"]).optional()
 });
 
 const refreshSchema = z.object({
@@ -40,6 +41,10 @@ authRouter.post(
 
     if (!validPassword) {
       throw new AppError(401, "INVALID_CREDENTIALS", "Invalid e-mail or password.");
+    }
+
+    if (credentials.client === "web" && user.role.code === "PROMOTOR") {
+      throw new AppError(403, "WEB_ACCESS_DENIED", "Promotor deve acessar somente o aplicativo de campo.");
     }
 
     const tokens = await issueTokenPair(user);

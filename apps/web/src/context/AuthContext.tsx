@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuthSession, SessionUser } from "@sales-promoters/shared";
-import { apiJson, clearSession, getSession, login as apiLogin, logout as apiLogout } from "../lib/api";
+import { ApiHttpError, apiJson, clearSession, getSession, login as apiLogin, logout as apiLogout } from "../lib/api";
 
 interface AuthContextValue {
   user: SessionUser | null;
@@ -12,6 +12,11 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const WEB_ACCESS_DENIED_MESSAGE = "Promotor nao pode acessar a retaguarda. Use o aplicativo de campo.";
+
+function isPromoterUser(user: SessionUser | null | undefined) {
+  return user?.role === "PROMOTOR";
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -28,6 +33,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     apiJson<{ user: SessionUser }>("/auth/me")
       .then((response) => {
+        if (isPromoterUser(response.user)) {
+          clearSession();
+          setUser(null);
+          setApiMessage(WEB_ACCESS_DENIED_MESSAGE);
+          return;
+        }
+
         setUser(response.user);
         setApiMessage(null);
       })
@@ -45,6 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       apiMessage,
       login: async (email, password) => {
         const session: AuthSession = await apiLogin(email, password);
+        if (isPromoterUser(session.user)) {
+          clearSession();
+          throw new ApiHttpError(403, WEB_ACCESS_DENIED_MESSAGE, "WEB_ACCESS_DENIED");
+        }
         setUser(session.user);
         setApiMessage(null);
       },

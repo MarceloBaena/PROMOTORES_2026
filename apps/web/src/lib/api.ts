@@ -189,7 +189,7 @@ export async function login(email: string, password: string) {
     headers: {
       "content-type": "application/json"
     },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, client: "web" })
   }).catch(() => {
     throw new ApiConnectionError();
   });
