@@ -374,6 +374,13 @@ reportsRouter.get(
       (total, route) => total + (route.isExpired ? route.unresolvedItems : 0),
       0
     );
+    const openUnder48 = routeSummaries.reduce(
+      (total, route) => total + (!route.isExpired ? route.unresolvedItems : 0),
+      0
+    );
+    const executionRate =
+      routeItemsToday > 0 ? Math.round((completedVisitsToday / routeItemsToday) * 100) : 0;
+
     res.json({
       data: {
         clients,
@@ -402,6 +409,16 @@ reportsRouter.get(
           not_completed: notCompletedVisitsToday,
           planned: plannedVisitsToday,
           pending: pendingVisitsToday
+        },
+        fieldWork: {
+          activePromoters: promoters,
+          releasedClientsToday: routeItemsToday,
+          attendedClientsToday: completedVisitsToday,
+          inServiceNow: inProgressVisitsToday,
+          openUnder48,
+          noServiceOver48: pendingVisitsToday,
+          executionRate,
+          staleRuleHours: 48
         },
         checkinsToday,
         routesTotal,
