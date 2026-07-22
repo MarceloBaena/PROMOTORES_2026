@@ -152,7 +152,7 @@ export function SuppliersPage() {
           type: "multiselect",
           searchable: true,
           options: activityOptions,
-          description: "Estas atividades aparecerao para o promotor dentro do atendimento deste fornecedor.",
+          description: "Importe ou selecione todas as atividades cadastradas que o promotor deve executar neste fornecedor.",
           fullWidth: true
         },
         {

@@ -323,6 +323,11 @@ export function CrudPage({
     updateField(fieldName, nextValues);
   }
 
+  function selectMultiselectValues(fieldName: string, optionValues: string[]) {
+    const nextValues = Array.from(new Set(optionValues.filter(Boolean)));
+    updateField(fieldName, nextValues);
+  }
+
   function addTagValue(fieldName: string) {
     const draft = String(tagDrafts[fieldName] ?? "").trim();
 
@@ -427,6 +432,32 @@ export function CrudPage({
 
         {field.type === "multiselect" ? (
           <div className="rounded-2xl border border-line bg-white p-3">
+            {selectOptions.length > 0 ? (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold text-stone-500">
+                  {selectOptions.length} opcao(oes) disponivel(is)
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    aria-label="Selecionar todas"
+                    className="rounded-full border border-line bg-field px-3 py-1.5 text-xs font-black text-graphite transition hover:bg-muted"
+                    onClick={() => selectMultiselectValues(field.name, filteredOptions.map((option) => option.value))}
+                  >
+                    Selecionar todas
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Limpar selecao"
+                    className="rounded-full border border-line bg-white px-3 py-1.5 text-xs font-black text-stone-500 transition hover:bg-muted"
+                    onClick={() => selectMultiselectValues(field.name, [])}
+                  >
+                    Limpar selecao
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mb-3 flex flex-wrap gap-2">
               {Array.isArray(form[field.name]) && form[field.name].length > 0 ? (
                 (form[field.name] as string[]).map((selectedValue: string) => {

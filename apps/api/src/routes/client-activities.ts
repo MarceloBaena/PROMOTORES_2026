@@ -74,7 +74,7 @@ clientActivitiesRouter.get(
           : {})
       },
       orderBy: [{ status: "asc" }, { code: "asc" }],
-      take: 120,
+      take: 1000,
       include: activityInclude()
     });
 

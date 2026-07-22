@@ -121,3 +121,58 @@ describe("CrudPage com formulario superior", () => {
     expect(screen.getByRole("textbox", { name: /documento/i })).toHaveValue("123");
   });
 });
+
+describe("CrudPage com selecao multipla", () => {
+  beforeEach(() => {
+    mockedApiJson.mockReset();
+    mockedApiJson.mockResolvedValue({ data: [] });
+  });
+
+  it("permite selecionar todas as opcoes de uma vez", async () => {
+    const user = userEvent.setup();
+
+    mockedApiJson
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: { id: "supplier-1" } })
+      .mockResolvedValueOnce({ data: [] });
+
+    render(
+      <CrudPage
+        title="Fornecedores"
+        endpoint="/suppliers"
+        fields={[
+          { name: "name", label: "Nome", required: true },
+          {
+            name: "activityIds",
+            label: "Atividades executadas neste fornecedor",
+            type: "multiselect",
+            options: [
+              { value: "activity-1", label: "Verificar ruptura" },
+              { value: "activity-2", label: "Conferir exposicao" }
+            ]
+          }
+        ]}
+        columns={columns}
+        initialValues={{ name: "", activityIds: [] }}
+        formPlacement="top"
+        startFormCollapsed
+        createButtonLabel="Salvar fornecedor"
+      />
+    );
+
+    await user.click(await screen.findByRole("button", { name: /incluir/i }));
+    await user.type(screen.getByRole("textbox", { name: /nome/i }), "Fornecedor Teste");
+    await user.click(screen.getByRole("button", { name: /selecionar todas/i }));
+    await user.click(screen.getByRole("button", { name: /salvar fornecedor/i }));
+
+    await waitFor(() => {
+      expect(mockedApiJson).toHaveBeenCalledWith("/suppliers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Fornecedor Teste",
+          activityIds: ["activity-1", "activity-2"]
+        })
+      });
+    });
+  });
+});
