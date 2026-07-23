@@ -1,8 +1,8 @@
-{
-  "app": "PromotorPro",
-  "platform": "android",
-  "versionName": "1.1.5",
-  "versionCode": 8,
-  "file": "/downloads/PromotorPro-v1.1.5-build8.apk",
-  "generatedAt": "2026-07-23T11:22:52-04:00"
+﻿{
+    "app":  "PromotorPro",
+    "platform":  "android",
+    "versionName":  "1.1.6",
+    "versionCode":  9,
+    "file":  "/downloads/PromotorPro-v1.1.6-build9.apk",
+    "generatedAt":  "2026-07-23T12:14:59-04:00"
 }

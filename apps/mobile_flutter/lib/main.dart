@@ -18,7 +18,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.5 (build 8)';
+const appVersionLabel = 'APK Flutter v1.1.6 (build 9)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -874,7 +874,11 @@ class _VisitPageState extends State<VisitPage> {
     }
   }
 
-  Future<void> _capture(String type, {SupplierSnapshot? supplier}) async {
+  Future<void> _capture(
+    String type, {
+    SupplierSnapshot? supplier,
+    CategorySnapshot? category,
+  }) async {
     final currentVisit = visit;
     if (currentVisit == null) {
       setState(() => message = 'Inicie o atendimento antes de capturar fotos.');
@@ -926,6 +930,14 @@ class _VisitPageState extends State<VisitPage> {
       return;
     }
 
+    if (execution == null && category != null) {
+      setState(
+        () => message =
+            'Selecione um fornecedor antes de registrar evidencia por categoria.',
+      );
+      return;
+    }
+
     if (execution == null && type == 'checkout' && !allSuppliersCompleted) {
       setState(
         () => message =
@@ -941,10 +953,14 @@ class _VisitPageState extends State<VisitPage> {
         type,
         supplierExecutionLocalId: execution?.localId,
         supplierId: supplier?.id,
+        categoryId: category?.id,
+        categoryName: category?.displayName,
       );
       await _load();
       setState(
-        () => message = execution == null
+        () => message = category != null
+            ? 'Foto da categoria ${category.displayName} salva localmente.'
+            : execution == null
             ? '${photoLabel(type)} salva localmente com data, hora e GPS quando disponivel.'
             : '${photoLabel(type)} do fornecedor ${supplierLabel(supplier!)} salva localmente.',
       );
@@ -1085,10 +1101,14 @@ class _VisitPageState extends State<VisitPage> {
                       final executionTypes = executionPhotos
                           .map((photo) => photo.type)
                           .toSet();
+                      final categoryEvidenceCount = executionPhotos
+                          .where((photo) => photo.categoryId != null)
+                          .length;
                       return SupplierExecutionTile(
                         supplier: supplier,
                         activityCount: supplierActivities.length,
                         categoryCount: supplier.categories.length,
+                        categoryEvidenceCount: categoryEvidenceCount,
                         status: execution?.status ?? 'pending',
                         hasBefore: executionTypes.contains('supplier_before'),
                         hasAfter: executionTypes.contains('supplier_after'),
@@ -1113,6 +1133,17 @@ class _VisitPageState extends State<VisitPage> {
                           client,
                         ),
                         categories: activeSupplier!.categories,
+                        categoryEvidenceCounts: {
+                          for (final category in activeSupplier!.categories)
+                            category.id: photos
+                                .where(
+                                  (photo) =>
+                                      photo.supplierExecutionLocalId ==
+                                          activeSupplierExecution!.localId &&
+                                      photo.categoryId == category.id,
+                                )
+                                .length,
+                        },
                         hasBefore: photos.any(
                           (photo) =>
                               photo.supplierExecutionLocalId ==
@@ -1137,6 +1168,11 @@ class _VisitPageState extends State<VisitPage> {
                         onCaptureAfter: () => _capture(
                           'supplier_after',
                           supplier: activeSupplier!,
+                        ),
+                        onCaptureCategory: (category) => _capture(
+                          'store_extra',
+                          supplier: activeSupplier!,
+                          category: category,
                         ),
                         onDeliveryChanged: (value) async {
                           setState(() {
@@ -1493,6 +1529,8 @@ class AppRepository {
     String type, {
     String? supplierExecutionLocalId,
     String? supplierId,
+    String? categoryId,
+    String? categoryName,
   }) async {
     final picker = ImagePicker();
     final result = await picker.pickImage(
@@ -1522,6 +1560,8 @@ class AppRepository {
       capturedAt: DateTime.now().toUtc().toIso8601String(),
       supplierExecutionLocalId: supplierExecutionLocalId,
       supplierId: supplierId,
+      categoryId: categoryId,
+      categoryName: categoryName,
       gpsLatitude: gps?.latitude,
       gpsLongitude: gps?.longitude,
       syncStatus: 'pending',
@@ -1655,6 +1695,24 @@ class AppRepository {
         !photoTypes.contains('supplier_after')) {
       throw Exception(
         'Fornecedor ${supplierLabel(supplier)} precisa de foto antes e foto depois.',
+      );
+    }
+
+    CategorySnapshot? missingCategory;
+    for (final category in supplier.categories) {
+      final hasCategoryEvidence = executionPhotos.any(
+        (photo) =>
+            photo.categoryId == category.id ||
+            photo.categoryName == category.displayName,
+      );
+      if (!hasCategoryEvidence) {
+        missingCategory = category;
+        break;
+      }
+    }
+    if (missingCategory != null) {
+      throw Exception(
+        'Categoria ${missingCategory.displayName} precisa de pelo menos uma foto de evidencia.',
       );
     }
 
@@ -1996,6 +2054,10 @@ class ApiClient {
             ? null
             : {'supplierExecutionId': supplierExecutionId},
         ...?supplierId == null ? null : {'supplierId': supplierId},
+        ...?photo.categoryId == null ? null : {'categoryId': photo.categoryId},
+        ...?photo.categoryName == null
+            ? null
+            : {'categoryName': photo.categoryName},
         'contentType': 'image/jpeg',
         'base64Image': base64Encode(bytes),
       },
@@ -2043,7 +2105,7 @@ class LocalDatabase {
     final path = p.join(directory.path, 'promotorpro_flutter.db');
     _db = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE clients (id TEXT PRIMARY KEY, code TEXT, name TEXT NOT NULL, address TEXT, city TEXT, state TEXT, latitude REAL, longitude REAL, payload_json TEXT NOT NULL)',
@@ -2061,7 +2123,7 @@ class LocalDatabase {
           'CREATE TABLE supplier_executions (local_id TEXT PRIMARY KEY, server_id TEXT, visit_local_id TEXT NOT NULL, client_id TEXT NOT NULL, supplier_id TEXT NOT NULL, status TEXT NOT NULL, delivery_received INTEGER, products_replenished INTEGER, stockout_found INTEGER, notes TEXT, started_at_device TEXT, finished_at_device TEXT, sync_status TEXT NOT NULL, updated_at TEXT NOT NULL)',
         );
         await db.execute(
-          'CREATE TABLE photos (local_id TEXT PRIMARY KEY, visit_local_id TEXT NOT NULL, server_id TEXT, type TEXT NOT NULL, uri TEXT NOT NULL, captured_at TEXT NOT NULL, supplier_execution_local_id TEXT, supplier_id TEXT, gps_latitude REAL, gps_longitude REAL, sync_status TEXT NOT NULL)',
+          'CREATE TABLE photos (local_id TEXT PRIMARY KEY, visit_local_id TEXT NOT NULL, server_id TEXT, type TEXT NOT NULL, uri TEXT NOT NULL, captured_at TEXT NOT NULL, supplier_execution_local_id TEXT, supplier_id TEXT, category_id TEXT, category_name TEXT, gps_latitude REAL, gps_longitude REAL, sync_status TEXT NOT NULL)',
         );
         await db.execute(
           'CREATE TABLE sync_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, entity_local_id TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
@@ -2090,6 +2152,16 @@ class LocalDatabase {
           } catch (_) {}
           try {
             await db.execute('ALTER TABLE photos ADD COLUMN supplier_id TEXT');
+          } catch (_) {}
+        }
+        if (oldVersion < 4) {
+          try {
+            await db.execute('ALTER TABLE photos ADD COLUMN category_id TEXT');
+          } catch (_) {}
+          try {
+            await db.execute(
+              'ALTER TABLE photos ADD COLUMN category_name TEXT',
+            );
           } catch (_) {}
         }
       },
@@ -2456,6 +2528,7 @@ class LocalDatabase {
         clients.payload_json AS clientPayloadJson,
         clients.name AS clientName,
         photos.type AS photoType,
+        photos.category_name AS categoryName,
         COALESCE(
           supplier_executions.supplier_id,
           photo_execution.supplier_id,
@@ -3121,6 +3194,8 @@ class LocalPhoto {
     required this.capturedAt,
     this.supplierExecutionLocalId,
     this.supplierId,
+    this.categoryId,
+    this.categoryName,
     this.gpsLatitude,
     this.gpsLongitude,
     required this.syncStatus,
@@ -3134,6 +3209,8 @@ class LocalPhoto {
   final String capturedAt;
   final String? supplierExecutionLocalId;
   final String? supplierId;
+  final String? categoryId;
+  final String? categoryName;
   final double? gpsLatitude;
   final double? gpsLongitude;
   final String syncStatus;
@@ -3147,6 +3224,8 @@ class LocalPhoto {
     capturedAt: row['captured_at'] as String,
     supplierExecutionLocalId: row['supplier_execution_local_id'] as String?,
     supplierId: row['supplier_id'] as String?,
+    categoryId: row['category_id'] as String?,
+    categoryName: row['category_name'] as String?,
     gpsLatitude: asDouble(row['gps_latitude']),
     gpsLongitude: asDouble(row['gps_longitude']),
     syncStatus: row['sync_status'] as String,
@@ -3161,6 +3240,8 @@ class LocalPhoto {
     'captured_at': capturedAt,
     'supplier_execution_local_id': supplierExecutionLocalId,
     'supplier_id': supplierId,
+    'category_id': categoryId,
+    'category_name': categoryName,
     'gps_latitude': gpsLatitude,
     'gps_longitude': gpsLongitude,
     'sync_status': syncStatus,
@@ -3196,6 +3277,7 @@ class QueueDiagnostic {
     this.lastError,
     this.clientName,
     this.photoType,
+    this.categoryName,
     this.supplierName,
   });
 
@@ -3205,6 +3287,7 @@ class QueueDiagnostic {
   final String? lastError;
   final String? clientName;
   final String? photoType;
+  final String? categoryName;
   final String? supplierName;
 
   factory QueueDiagnostic.fromDb(Map<String, Object?> row) {
@@ -3227,6 +3310,7 @@ class QueueDiagnostic {
       lastError: row['lastError'] as String?,
       clientName: row['clientName'] as String?,
       photoType: row['photoType'] as String?,
+      categoryName: row['categoryName'] as String?,
       supplierName: supplierName,
     );
   }
@@ -3486,6 +3570,7 @@ String photoLabel(String type) {
     'checkout' => 'Check-out',
     'supplier_before' => 'Foto antes',
     'supplier_after' => 'Foto depois',
+    'store_extra' => 'Foto de categoria',
     'occurrence_extra' => 'Foto complementar',
     _ => 'Ocorrencia',
   };
@@ -4219,6 +4304,7 @@ class SupplierExecutionTile extends StatelessWidget {
     required this.supplier,
     required this.activityCount,
     required this.categoryCount,
+    required this.categoryEvidenceCount,
     required this.status,
     required this.hasBefore,
     required this.hasAfter,
@@ -4232,6 +4318,7 @@ class SupplierExecutionTile extends StatelessWidget {
   final SupplierSnapshot supplier;
   final int activityCount;
   final int categoryCount;
+  final int categoryEvidenceCount;
   final String status;
   final bool hasBefore;
   final bool hasAfter;
@@ -4320,7 +4407,7 @@ class SupplierExecutionTile extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    '$categoryCount categoria(s) vinculada(s)',
+                    '$categoryEvidenceCount de $categoryCount categoria(s) com foto',
                     style: const TextStyle(
                       color: Color(0xFF0F766E),
                       fontWeight: FontWeight.w800,
@@ -4346,6 +4433,11 @@ class SupplierExecutionTile extends StatelessWidget {
                     label: 'Ruptura',
                     done: stockoutFoundAnswered,
                   ),
+                  if (categoryCount > 0)
+                    _MiniStatusChip(
+                      label: 'Categorias',
+                      done: categoryEvidenceCount >= categoryCount,
+                    ),
                 ],
               ),
             ],
@@ -4362,6 +4454,7 @@ class SupplierExecutionEditor extends StatelessWidget {
     required this.supplier,
     required this.activities,
     required this.categories,
+    required this.categoryEvidenceCounts,
     required this.hasBefore,
     required this.hasAfter,
     required this.deliveryReceived,
@@ -4371,6 +4464,7 @@ class SupplierExecutionEditor extends StatelessWidget {
     required this.busy,
     required this.onCaptureBefore,
     required this.onCaptureAfter,
+    required this.onCaptureCategory,
     required this.onDeliveryChanged,
     required this.onProductsChanged,
     required this.onStockoutChanged,
@@ -4382,6 +4476,7 @@ class SupplierExecutionEditor extends StatelessWidget {
   final SupplierSnapshot supplier;
   final List<ActivitySnapshot> activities;
   final List<CategorySnapshot> categories;
+  final Map<String, int> categoryEvidenceCounts;
   final bool hasBefore;
   final bool hasAfter;
   final bool? deliveryReceived;
@@ -4391,6 +4486,7 @@ class SupplierExecutionEditor extends StatelessWidget {
   final bool busy;
   final VoidCallback onCaptureBefore;
   final VoidCallback onCaptureAfter;
+  final FutureOr<void> Function(CategorySnapshot category) onCaptureCategory;
   final FutureOr<void> Function(bool? value) onDeliveryChanged;
   final FutureOr<void> Function(bool? value) onProductsChanged;
   final FutureOr<void> Function(bool? value) onStockoutChanged;
@@ -4452,6 +4548,10 @@ class SupplierExecutionEditor extends StatelessWidget {
             SupplierActivitiesPanel(
               activities: activities,
               categories: categories,
+              categoryEvidenceCounts: categoryEvidenceCounts,
+              busy: busy,
+              requireCategoryPhotos: requiresDeliveryFlow,
+              onCaptureCategory: onCaptureCategory,
             ),
           ],
           const SizedBox(height: 14),
@@ -4557,10 +4657,18 @@ class SupplierActivitiesPanel extends StatelessWidget {
     super.key,
     required this.activities,
     required this.categories,
+    required this.categoryEvidenceCounts,
+    required this.busy,
+    required this.requireCategoryPhotos,
+    required this.onCaptureCategory,
   });
 
   final List<ActivitySnapshot> activities;
   final List<CategorySnapshot> categories;
+  final Map<String, int> categoryEvidenceCounts;
+  final bool busy;
+  final bool requireCategoryPhotos;
+  final FutureOr<void> Function(CategorySnapshot category) onCaptureCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -4585,7 +4693,7 @@ class SupplierActivitiesPanel extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Use esta lista como guia da execucao antes das fotos e da conclusao do fornecedor.',
+            'Registre evidencias nas categorias antes da conclusao do fornecedor quando houver entrega.',
             style: TextStyle(
               color: Color(0xFF64748B),
               fontWeight: FontWeight.w600,
@@ -4595,10 +4703,17 @@ class SupplierActivitiesPanel extends StatelessWidget {
           if (categories.isNotEmpty) ...[
             const _ExecutionSectionTitle(label: 'Categorias vinculadas'),
             ...categories.map(
-              (category) => _ExecutionGuideItem(
-                title: category.displayName,
-                description: category.description,
-                color: brandBlue,
+              (category) => CategoryEvidenceItem(
+                category: category,
+                count: categoryEvidenceCounts[category.id] ?? 0,
+                required: requireCategoryPhotos,
+                busy: busy,
+                onCapture: () {
+                  final result = onCaptureCategory(category);
+                  if (result is Future<void>) {
+                    unawaited(result);
+                  }
+                },
               ),
             ),
             if (activities.isNotEmpty) const SizedBox(height: 6),
@@ -4611,6 +4726,112 @@ class SupplierActivitiesPanel extends StatelessWidget {
               description: activity.description,
               color: brandGreen,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class CategoryEvidenceItem extends StatelessWidget {
+  const CategoryEvidenceItem({
+    super.key,
+    required this.category,
+    required this.count,
+    required this.required,
+    required this.busy,
+    required this.onCapture,
+  });
+
+  final CategorySnapshot category;
+  final int count;
+  final bool required;
+  final bool busy;
+  final VoidCallback onCapture;
+
+  @override
+  Widget build(BuildContext context) {
+    final done = count > 0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: done ? const Color(0xFFECFDF5) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: done ? const Color(0xFFA7F3D0) : line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 2),
+                height: 24,
+                width: 24,
+                decoration: BoxDecoration(
+                  color: done ? brandGreen : const Color(0xFFDBEAFE),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  done ? Icons.check : Icons.photo_camera_outlined,
+                  color: done ? Colors.white : brandBlue,
+                  size: 15,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category.displayName,
+                      style: const TextStyle(
+                        color: brandNavy,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if ((category.description?.trim().isNotEmpty ?? false))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          category.description!.trim(),
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  done
+                      ? '$count foto(s) registrada(s)'
+                      : required
+                      ? 'Foto obrigatoria para concluir'
+                      : 'Foto opcional enquanto nao houver entrega',
+                  style: TextStyle(
+                    color: done
+                        ? const Color(0xFF047857)
+                        : const Color(0xFF64748B),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: busy ? null : onCapture,
+                icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                label: const Text('Foto da categoria'),
+              ),
+            ],
           ),
         ],
       ),
@@ -4851,6 +5072,15 @@ class PhotoTile extends StatelessWidget {
     final supplierText = supplier == null
         ? null
         : 'Fornecedor: ${supplierLabel(supplier)}';
+    final categoryText = (photo.categoryName?.trim().isNotEmpty ?? false)
+        ? 'Categoria: ${photo.categoryName!.trim()}'
+        : null;
+    final title = [
+      photo.categoryName?.trim().isNotEmpty ?? false
+          ? 'Foto da categoria ${photo.categoryName!.trim()}'
+          : photoLabel(photo.type),
+      if (supplier != null) supplierLabel(supplier),
+    ].join(' - ');
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -4859,14 +5089,9 @@ class PhotoTile extends StatelessWidget {
       ),
       child: ListTile(
         leading: const Icon(Icons.photo_camera, color: brandBlue),
-        title: Text(
-          supplier == null
-              ? photoLabel(photo.type)
-              : '${photoLabel(photo.type)} - ${supplierLabel(supplier)}',
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
         subtitle: Text(
-          '${supplierText == null ? '' : '$supplierText\n'}Capturada: ${formatDate(photo.capturedAt)}\nGPS: ${photo.gpsLatitude?.toStringAsFixed(6) ?? 'sem gps'}, ${photo.gpsLongitude?.toStringAsFixed(6) ?? 'sem gps'}',
+          '${supplierText == null ? '' : '$supplierText\n'}${categoryText == null ? '' : '$categoryText\n'}Capturada: ${formatDate(photo.capturedAt)}\nGPS: ${photo.gpsLatitude?.toStringAsFixed(6) ?? 'sem gps'}, ${photo.gpsLongitude?.toStringAsFixed(6) ?? 'sem gps'}',
         ),
       ),
     );
@@ -4887,7 +5112,9 @@ class DiagnosticCard extends StatelessWidget {
             ? 'Fornecedor'
             : 'Fornecedor ${item.supplierName}',
       'photo' =>
-        item.supplierName == null
+        item.categoryName?.trim().isNotEmpty ?? false
+            ? 'Foto da categoria ${item.categoryName}'
+            : item.supplierName == null
             ? item.photoType == null
                   ? 'Foto'
                   : 'Foto ${photoLabel(item.photoType!).toLowerCase()}'
