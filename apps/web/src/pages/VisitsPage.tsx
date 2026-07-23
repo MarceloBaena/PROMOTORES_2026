@@ -6,8 +6,10 @@ import {
   Eye,
   FileText,
   MapPin,
+  Maximize2,
   RefreshCw,
   UserRound,
+  X,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
@@ -271,6 +273,7 @@ function visitAddress(visit: Visit) {
 export function VisitsPage() {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -278,6 +281,12 @@ export function VisitsPage() {
     () =>
       visits.find((visit) => visit.id === selectedVisitId) ?? visits[0] ?? null,
     [selectedVisitId, visits],
+  );
+  const selectedPhoto = useMemo(
+    () =>
+      selectedVisit?.photos.find((photo) => photo.id === selectedPhotoId) ??
+      null,
+    [selectedPhotoId, selectedVisit],
   );
 
   const completedCount = visits.filter(
@@ -327,6 +336,21 @@ export function VisitsPage() {
 
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    if (!selectedPhoto) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedPhotoId(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPhoto]);
 
   async function completeVisit(visit: Visit) {
     if (!hasRequiredPhotos(visit)) {
@@ -562,11 +586,22 @@ export function VisitsPage() {
                         key={photo.id}
                         className="overflow-hidden rounded-2xl border border-line bg-white"
                       >
-                        <img
-                          className="h-44 w-full object-cover"
-                          src={photoUrl(photo.url)}
-                          alt={photoTitle(photo)}
-                        />
+                        <button
+                          type="button"
+                          className="group relative block w-full overflow-hidden text-left"
+                          onClick={() => setSelectedPhotoId(photo.id)}
+                          aria-label={`Ampliar evidencia ${photoTitle(photo)}`}
+                        >
+                          <img
+                            className="h-44 w-full object-cover transition duration-200 group-hover:scale-[1.03]"
+                            src={photoUrl(photo.url)}
+                            alt={photoTitle(photo)}
+                          />
+                          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-navy/85 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-white shadow-lg">
+                            <Maximize2 className="h-3.5 w-3.5" />
+                            Ampliar
+                          </span>
+                        </button>
                         <div className="space-y-2 p-3 text-sm">
                           <div className="font-black text-ink">
                             {photoTitle(photo)}
@@ -715,7 +750,121 @@ export function VisitsPage() {
           )}
         </aside>
       </div>
+
+      {selectedVisit && selectedPhoto ? (
+        <PhotoEvidenceDialog
+          photo={selectedPhoto}
+          visit={selectedVisit}
+          onClose={() => setSelectedPhotoId(null)}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function PhotoEvidenceDialog({
+  photo,
+  visit,
+  onClose,
+}: {
+  photo: VisitPhoto;
+  visit: Visit;
+  onClose: () => void;
+}) {
+  const evidence = photoEvidence(photo, visit);
+  const supplier = photoSupplierLabel(photo);
+  const category = photo.metadata?.categoryName?.trim();
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-navy/80 p-3 backdrop-blur-sm sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Evidencia ampliada: ${photoTitle(photo)}`}
+    >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+        aria-label="Fechar evidencia ampliada"
+      />
+
+      <div className="relative grid max-h-[92vh] w-full max-w-6xl overflow-hidden rounded-[1.5rem] border border-white/15 bg-white shadow-2xl lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-h-0 items-center justify-center bg-slate-950 p-3 sm:p-5">
+          <img
+            className="max-h-[62vh] w-full rounded-2xl object-contain lg:max-h-[86vh]"
+            src={photoUrl(photo.url)}
+            alt={photoTitle(photo)}
+          />
+        </div>
+
+        <aside className="max-h-[40vh] overflow-y-auto p-5 lg:max-h-[92vh]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.16em] text-brand">
+                Evidencia ampliada
+              </div>
+              <h3 className="mt-2 font-display text-2xl font-black text-ink">
+                {photoTitle(photo)}
+              </h3>
+            </div>
+            <button
+              type="button"
+              className="icon-button shrink-0"
+              onClick={onClose}
+              aria-label="Fechar evidencia"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            <InfoCard
+              icon={<Camera className="h-4 w-4" />}
+              label="Tipo da foto"
+              value={photoLabels[photo.type]}
+            />
+            {supplier ? (
+              <InfoCard
+                icon={<FileText className="h-4 w-4" />}
+                label="Fornecedor"
+                value={supplier}
+              />
+            ) : null}
+            {category ? (
+              <InfoCard
+                icon={<FileText className="h-4 w-4" />}
+                label="Categoria"
+                value={category}
+              />
+            ) : null}
+            <InfoCard
+              icon={<Clock className="h-4 w-4" />}
+              label="Data"
+              value={formatOnlyDate(evidence.capturedAt)}
+            />
+            <InfoCard
+              icon={<Clock className="h-4 w-4" />}
+              label="Hora"
+              value={formatOnlyTime(evidence.capturedAt)}
+            />
+            <InfoCard
+              icon={<MapPin className="h-4 w-4" />}
+              label={evidence.gpsLabel}
+              value={evidence.gpsValue}
+            />
+          </div>
+
+          <button
+            type="button"
+            className="secondary-button mt-5 w-full justify-center"
+            onClick={onClose}
+          >
+            Fechar visualizacao
+          </button>
+        </aside>
+      </div>
+    </div>
   );
 }
 
