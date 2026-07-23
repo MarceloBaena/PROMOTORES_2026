@@ -99,6 +99,21 @@ mobileRouter.get(
                               name: "asc"
                             }
                           }
+                        },
+                        categories: {
+                          where: {
+                            category: {
+                              status: "ACTIVE"
+                            }
+                          },
+                          include: {
+                            category: true
+                          },
+                          orderBy: {
+                            category: {
+                              name: "asc"
+                            }
+                          }
                         }
                       }
                     }
@@ -125,7 +140,8 @@ mobileRouter.get(
                 ...item.client,
                 suppliers: item.client.suppliers.map((link) => ({
                   ...link.supplier,
-                  activities: link.supplier.activities.map((activityLink) => activityLink.activity)
+                  activities: link.supplier.activities.map((activityLink) => activityLink.activity),
+                  categories: link.supplier.categories.map((categoryLink) => categoryLink.category)
                 })),
                 activities: item.client.activities.map((link) => link.activity)
               }

@@ -1088,6 +1088,7 @@ class _VisitPageState extends State<VisitPage> {
                       return SupplierExecutionTile(
                         supplier: supplier,
                         activityCount: supplierActivities.length,
+                        categoryCount: supplier.categories.length,
                         status: execution?.status ?? 'pending',
                         hasBefore: executionTypes.contains('supplier_before'),
                         hasAfter: executionTypes.contains('supplier_after'),
@@ -1111,6 +1112,7 @@ class _VisitPageState extends State<VisitPage> {
                           activeSupplier!,
                           client,
                         ),
+                        categories: activeSupplier!.categories,
                         hasBefore: photos.any(
                           (photo) =>
                               photo.supplierExecutionLocalId ==
@@ -2704,6 +2706,44 @@ class ActivitySnapshot {
       );
 }
 
+class CategorySnapshot {
+  CategorySnapshot({
+    required this.id,
+    this.code,
+    required this.name,
+    this.description,
+    this.status,
+    required this.payload,
+  });
+
+  final String id;
+  final String? code;
+  final String name;
+  final String? description;
+  final String? status;
+  final Map<String, dynamic> payload;
+
+  String get displayName {
+    final normalizedName = name.trim().isEmpty ? 'Categoria' : name.trim();
+    if ((code?.trim().isNotEmpty ?? false)) {
+      return '${code!.trim()} - $normalizedName';
+    }
+    return normalizedName;
+  }
+
+  factory CategorySnapshot.fromJson(Map<String, dynamic> json) =>
+      CategorySnapshot(
+        id: json['id'] as String,
+        code: json['code']?.toString(),
+        name: (json['name'] as String?)?.trim().isNotEmpty == true
+            ? (json['name'] as String).trim()
+            : 'Categoria',
+        description: json['description'] as String?,
+        status: json['status']?.toString(),
+        payload: json,
+      );
+}
+
 class SupplierSnapshot {
   SupplierSnapshot({
     required this.id,
@@ -2722,6 +2762,8 @@ class SupplierSnapshot {
   final Map<String, dynamic> payload;
   List<ActivitySnapshot> get activities =>
       activitiesFromRaw(payload['activities']);
+  List<CategorySnapshot> get categories =>
+      categoriesFromRaw(payload['categories']);
 
   String get displayName {
     final preferred = (tradeName?.trim().isNotEmpty ?? false)
@@ -3353,6 +3395,21 @@ List<ActivitySnapshot> activitiesFromRaw(Object? raw) {
 List<ActivitySnapshot> clientActivitiesFromPayload(
   Map<String, dynamic>? payload,
 ) => activitiesFromRaw(payload?['activities']);
+
+List<CategorySnapshot> categoriesFromRaw(Object? raw) {
+  if (raw is! List) {
+    return const <CategorySnapshot>[];
+  }
+
+  return raw
+      .whereType<Map>()
+      .map(
+        (item) => CategorySnapshot.fromJson(
+          item.map((key, value) => MapEntry(key.toString(), value)),
+        ),
+      )
+      .toList();
+}
 
 List<SupplierSnapshot> suppliersFromPayload(Map<String, dynamic>? payload) {
   final raw = payload?['suppliers'];
@@ -4161,6 +4218,7 @@ class SupplierExecutionTile extends StatelessWidget {
     super.key,
     required this.supplier,
     required this.activityCount,
+    required this.categoryCount,
     required this.status,
     required this.hasBefore,
     required this.hasAfter,
@@ -4173,6 +4231,7 @@ class SupplierExecutionTile extends StatelessWidget {
 
   final SupplierSnapshot supplier;
   final int activityCount;
+  final int categoryCount;
   final String status;
   final bool hasBefore;
   final bool hasAfter;
@@ -4257,6 +4316,17 @@ class SupplierExecutionTile extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (categoryCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '$categoryCount categoria(s) vinculada(s)',
+                    style: const TextStyle(
+                      color: Color(0xFF0F766E),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -4291,6 +4361,7 @@ class SupplierExecutionEditor extends StatelessWidget {
     super.key,
     required this.supplier,
     required this.activities,
+    required this.categories,
     required this.hasBefore,
     required this.hasAfter,
     required this.deliveryReceived,
@@ -4310,6 +4381,7 @@ class SupplierExecutionEditor extends StatelessWidget {
 
   final SupplierSnapshot supplier;
   final List<ActivitySnapshot> activities;
+  final List<CategorySnapshot> categories;
   final bool hasBefore;
   final bool hasAfter;
   final bool? deliveryReceived;
@@ -4375,9 +4447,12 @@ class SupplierExecutionEditor extends StatelessWidget {
               ),
             ],
           ),
-          if (activities.isNotEmpty) ...[
+          if (activities.isNotEmpty || categories.isNotEmpty) ...[
             const SizedBox(height: 14),
-            SupplierActivitiesPanel(activities: activities),
+            SupplierActivitiesPanel(
+              activities: activities,
+              categories: categories,
+            ),
           ],
           const SizedBox(height: 14),
           BooleanAnswerField(
@@ -4478,9 +4553,14 @@ class SupplierExecutionEditor extends StatelessWidget {
 }
 
 class SupplierActivitiesPanel extends StatelessWidget {
-  const SupplierActivitiesPanel({super.key, required this.activities});
+  const SupplierActivitiesPanel({
+    super.key,
+    required this.activities,
+    required this.categories,
+  });
 
   final List<ActivitySnapshot> activities;
+  final List<CategorySnapshot> categories;
 
   @override
   Widget build(BuildContext context) {
@@ -4496,7 +4576,7 @@ class SupplierActivitiesPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Atividades previstas para este fornecedor',
+            'Categorias e atividades do fornecedor',
             style: TextStyle(
               color: brandNavy,
               fontWeight: FontWeight.w900,
@@ -4505,62 +4585,110 @@ class SupplierActivitiesPanel extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Use esta lista como guia da execucao antes de concluir o fornecedor.',
+            'Use esta lista como guia da execucao antes das fotos e da conclusao do fornecedor.',
             style: TextStyle(
               color: Color(0xFF64748B),
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
-          ...activities.map(
-            (activity) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    height: 9,
-                    width: 9,
-                    decoration: const BoxDecoration(
-                      color: brandGreen,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          activity.displayName,
-                          style: const TextStyle(
-                            color: brandNavy,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        if ((activity.description?.trim().isNotEmpty ?? false))
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              activity.description!.trim(),
-                              style: const TextStyle(
-                                color: Color(0xFF64748B),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+          if (categories.isNotEmpty) ...[
+            const _ExecutionSectionTitle(label: 'Categorias vinculadas'),
+            ...categories.map(
+              (category) => _ExecutionGuideItem(
+                title: category.displayName,
+                description: category.description,
+                color: brandBlue,
               ),
+            ),
+            if (activities.isNotEmpty) const SizedBox(height: 6),
+          ],
+          if (activities.isNotEmpty)
+            const _ExecutionSectionTitle(label: 'Atividades para executar'),
+          ...activities.map(
+            (activity) => _ExecutionGuideItem(
+              title: activity.displayName,
+              description: activity.description,
+              color: brandGreen,
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _ExecutionSectionTitle extends StatelessWidget {
+  const _ExecutionSectionTitle({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      label,
+      style: const TextStyle(
+        color: Color(0xFF64748B),
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
+}
+
+class _ExecutionGuideItem extends StatelessWidget {
+  const _ExecutionGuideItem({
+    required this.title,
+    required this.description,
+    required this.color,
+  });
+
+  final String title;
+  final String? description;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 4),
+          height: 9,
+          width: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: brandNavy,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if ((description?.trim().isNotEmpty ?? false))
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    description!.trim(),
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class BooleanAnswerField extends StatelessWidget {
