@@ -18,7 +18,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.6 (build 9)';
+const appVersionLabel = 'APK Flutter v1.1.7 (build 10)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -695,8 +695,8 @@ class _VisitPageState extends State<VisitPage> {
       await _load();
       setState(
         () => message = legacyFlowEnabled
-            ? 'Atendimento iniciado offline. Agora capture check-in, antes, depois e check-out.'
-            : 'Atendimento iniciado offline. Capture check-in, passe por todos os fornecedores e finalize com o check-out.',
+            ? 'Atendimento iniciado offline. Primeiro capture o check-in para liberar as demais evidencias.'
+            : 'Atendimento iniciado offline. Primeiro capture o check-in para liberar os fornecedores.',
       );
       unawaited(widget.repository.sendHeartbeatFromVisit(created));
     } catch (error) {
@@ -711,6 +711,14 @@ class _VisitPageState extends State<VisitPage> {
     if (currentVisit == null) {
       setState(() {
         message = 'Inicie o atendimento antes de registrar o fornecedor.';
+      });
+      return;
+    }
+
+    if (!hasCheckin) {
+      setState(() {
+        message =
+            'Check-in obrigatorio: registre a chegada no cliente antes de executar o fornecedor.';
       });
       return;
     }
@@ -752,6 +760,14 @@ class _VisitPageState extends State<VisitPage> {
       return;
     }
 
+    if (!hasCheckin) {
+      setState(
+        () => message =
+            'Check-in obrigatorio: registre a chegada no cliente antes de responder o fornecedor.',
+      );
+      return;
+    }
+
     final execution =
         activeSupplierExecution ??
         await widget.repository.ensureSupplierExecution(
@@ -786,6 +802,14 @@ class _VisitPageState extends State<VisitPage> {
     final execution = activeSupplierExecution;
     if (supplier == null || execution == null) {
       setState(() => message = 'Selecione um fornecedor para concluir.');
+      return;
+    }
+
+    if (!hasCheckin) {
+      setState(
+        () => message =
+            'Check-in obrigatorio: registre a chegada no cliente antes de concluir fornecedor.',
+      );
       return;
     }
 
@@ -889,6 +913,14 @@ class _VisitPageState extends State<VisitPage> {
       setState(
         () => message =
             'Esta visita ja foi concluida localmente. Volte ao menu principal para sincronizar.',
+      );
+      return;
+    }
+
+    if (type != 'checkin' && !hasCheckin) {
+      setState(
+        () => message =
+            'Check-in obrigatorio: tire a foto de chegada no cliente antes de iniciar o atendimento.',
       );
       return;
     }
@@ -1051,193 +1083,202 @@ class _VisitPageState extends State<VisitPage> {
                     ok: hasCheckin,
                     onPressed: busy ? null : () => _capture('checkin'),
                   ),
-                  EvidenceButton(
-                    label: 'Check-out com foto',
-                    ok: hasCheckout,
-                    onPressed: busy
-                        ? null
-                        : allSuppliersCompleted
-                        ? () => _capture('checkout')
-                        : null,
-                  ),
-                  if (legacyFlowEnabled) ...[
-                    EvidenceButton(
-                      label: 'Foto antes',
-                      ok: hasBefore,
-                      onPressed: busy ? null : () => _capture('before'),
-                    ),
-                    EvidenceButton(
-                      label: 'Foto depois',
-                      ok: hasAfter,
-                      onPressed: busy ? null : () => _capture('after'),
-                    ),
-                  ],
-                  if (!legacyFlowEnabled) ...[
-                    const SizedBox(height: 8),
-                    InfoCard(
-                      title: 'Execucao por fornecedor',
+                  if (!hasCheckin)
+                    const InfoCard(
+                      title: 'Check-in obrigatorio',
                       body:
-                          'Conclua ${clientSuppliers.length} fornecedor(es) deste cliente. Se nao houve entrega, marque "Nao" em recebeu mercadoria para liberar a conclusao sem fotos do fornecedor.',
+                          'O atendimento so e liberado depois da foto de check-in, que comprova a chegada do promotor no cliente.',
+                    )
+                  else ...[
+                    EvidenceButton(
+                      label: 'Check-out com foto',
+                      ok: hasCheckout,
+                      onPressed: busy
+                          ? null
+                          : allSuppliersCompleted
+                          ? () => _capture('checkout')
+                          : null,
                     ),
-                    const SizedBox(height: 12),
-                    ...clientSuppliers.map((supplier) {
-                      final supplierActivities = activitiesForSupplier(
-                        supplier,
-                        client,
-                      );
-                      final execution = findSupplierExecution(
-                        supplierExecutions,
-                        supplier.id,
-                      );
-                      final executionPhotos = execution == null
-                          ? <LocalPhoto>[]
-                          : photos
-                                .where(
-                                  (photo) =>
-                                      photo.supplierExecutionLocalId ==
-                                      execution.localId,
-                                )
-                                .toList();
-                      final executionTypes = executionPhotos
-                          .map((photo) => photo.type)
-                          .toSet();
-                      final categoryEvidenceCount = executionPhotos
-                          .where((photo) => photo.categoryId != null)
-                          .length;
-                      return SupplierExecutionTile(
-                        supplier: supplier,
-                        activityCount: supplierActivities.length,
-                        categoryCount: supplier.categories.length,
-                        categoryEvidenceCount: categoryEvidenceCount,
-                        status: execution?.status ?? 'pending',
-                        hasBefore: executionTypes.contains('supplier_before'),
-                        hasAfter: executionTypes.contains('supplier_after'),
-                        deliveryReceivedAnswered:
-                            execution?.deliveryReceived != null,
-                        productsReplenishedAnswered:
-                            execution?.productsReplenished != null,
-                        stockoutFoundAnswered: execution?.stockoutFound != null,
-                        active: activeSupplierId == supplier.id,
-                        onTap: busy
-                            ? null
-                            : () => _openSupplierExecution(supplier),
-                      );
-                    }),
-                    const SizedBox(height: 12),
-                    if (activeSupplier != null &&
-                        activeSupplierExecution != null)
-                      SupplierExecutionEditor(
-                        supplier: activeSupplier!,
-                        activities: activitiesForSupplier(
-                          activeSupplier!,
-                          client,
-                        ),
-                        categories: activeSupplier!.categories,
-                        categoryEvidenceCounts: {
-                          for (final category in activeSupplier!.categories)
-                            category.id: photos
-                                .where(
-                                  (photo) =>
-                                      photo.supplierExecutionLocalId ==
-                                          activeSupplierExecution!.localId &&
-                                      photo.categoryId == category.id,
-                                )
-                                .length,
-                        },
-                        hasBefore: photos.any(
-                          (photo) =>
-                              photo.supplierExecutionLocalId ==
-                                  activeSupplierExecution!.localId &&
-                              photo.type == 'supplier_before',
-                        ),
-                        hasAfter: photos.any(
-                          (photo) =>
-                              photo.supplierExecutionLocalId ==
-                                  activeSupplierExecution!.localId &&
-                              photo.type == 'supplier_after',
-                        ),
-                        deliveryReceived: deliveryReceived,
-                        productsReplenished: productsReplenished,
-                        stockoutFound: stockoutFound,
-                        notesController: supplierNotesController,
-                        busy: busy,
-                        onCaptureBefore: () => _capture(
-                          'supplier_before',
-                          supplier: activeSupplier!,
-                        ),
-                        onCaptureAfter: () => _capture(
-                          'supplier_after',
-                          supplier: activeSupplier!,
-                        ),
-                        onCaptureCategory: (category) => _capture(
-                          'store_extra',
-                          supplier: activeSupplier!,
-                          category: category,
-                        ),
-                        onDeliveryChanged: (value) async {
-                          setState(() {
-                            deliveryReceived = value;
-                            if (value == false) {
-                              productsReplenished = false;
-                              stockoutFound = false;
-                            }
-                          });
-                          await _saveSupplierDraft(
-                            nextDeliveryReceived: value,
-                            nextProductsReplenished: value == false
-                                ? false
-                                : productsReplenished,
-                            nextStockoutFound: value == false
-                                ? false
-                                : stockoutFound,
-                          );
-                        },
-                        onProductsChanged: (value) async {
-                          setState(() => productsReplenished = value);
-                          await _saveSupplierDraft(
-                            nextProductsReplenished: value,
-                          );
-                        },
-                        onStockoutChanged: (value) async {
-                          setState(() => stockoutFound = value);
-                          await _saveSupplierDraft(nextStockoutFound: value);
-                        },
-                        onNotesChanged: (value) async {
-                          await _saveSupplierDraft(nextNotes: value);
-                        },
-                        onComplete: _completeSupplierExecution,
-                        onClose: () {
-                          setState(() {
-                            activeSupplierId = null;
-                            supplierNotesController.clear();
-                            deliveryReceived = null;
-                            productsReplenished = null;
-                            stockoutFound = null;
-                          });
-                        },
-                      )
-                    else
-                      const InfoCard(
-                        title: 'Selecione um fornecedor',
-                        body:
-                            'Toque em um fornecedor para responder entrega, registrar foto antes e foto depois quando houver mercadoria, e concluir esse atendimento.',
+                    if (legacyFlowEnabled) ...[
+                      EvidenceButton(
+                        label: 'Foto antes',
+                        ok: hasBefore,
+                        onPressed: busy ? null : () => _capture('before'),
                       ),
-                  ],
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: notesController,
-                    minLines: 3,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      labelText: 'Observacoes da execucao',
-                      border: OutlineInputBorder(),
+                      EvidenceButton(
+                        label: 'Foto depois',
+                        ok: hasAfter,
+                        onPressed: busy ? null : () => _capture('after'),
+                      ),
+                    ],
+                    if (!legacyFlowEnabled) ...[
+                      const SizedBox(height: 8),
+                      InfoCard(
+                        title: 'Execucao por fornecedor',
+                        body:
+                            'Conclua ${clientSuppliers.length} fornecedor(es) deste cliente. Se nao houve entrega, marque "Nao" em recebeu mercadoria para liberar a conclusao sem fotos do fornecedor.',
+                      ),
+                      const SizedBox(height: 12),
+                      ...clientSuppliers.map((supplier) {
+                        final supplierActivities = activitiesForSupplier(
+                          supplier,
+                          client,
+                        );
+                        final execution = findSupplierExecution(
+                          supplierExecutions,
+                          supplier.id,
+                        );
+                        final executionPhotos = execution == null
+                            ? <LocalPhoto>[]
+                            : photos
+                                  .where(
+                                    (photo) =>
+                                        photo.supplierExecutionLocalId ==
+                                        execution.localId,
+                                  )
+                                  .toList();
+                        final executionTypes = executionPhotos
+                            .map((photo) => photo.type)
+                            .toSet();
+                        final categoryEvidenceCount = executionPhotos
+                            .where((photo) => photo.categoryId != null)
+                            .length;
+                        return SupplierExecutionTile(
+                          supplier: supplier,
+                          activityCount: supplierActivities.length,
+                          categoryCount: supplier.categories.length,
+                          categoryEvidenceCount: categoryEvidenceCount,
+                          status: execution?.status ?? 'pending',
+                          hasBefore: executionTypes.contains('supplier_before'),
+                          hasAfter: executionTypes.contains('supplier_after'),
+                          deliveryReceivedAnswered:
+                              execution?.deliveryReceived != null,
+                          productsReplenishedAnswered:
+                              execution?.productsReplenished != null,
+                          stockoutFoundAnswered:
+                              execution?.stockoutFound != null,
+                          active: activeSupplierId == supplier.id,
+                          onTap: busy
+                              ? null
+                              : () => _openSupplierExecution(supplier),
+                        );
+                      }),
+                      const SizedBox(height: 12),
+                      if (activeSupplier != null &&
+                          activeSupplierExecution != null)
+                        SupplierExecutionEditor(
+                          supplier: activeSupplier!,
+                          activities: activitiesForSupplier(
+                            activeSupplier!,
+                            client,
+                          ),
+                          categories: activeSupplier!.categories,
+                          categoryEvidenceCounts: {
+                            for (final category in activeSupplier!.categories)
+                              category.id: photos
+                                  .where(
+                                    (photo) =>
+                                        photo.supplierExecutionLocalId ==
+                                            activeSupplierExecution!.localId &&
+                                        photo.categoryId == category.id,
+                                  )
+                                  .length,
+                          },
+                          hasBefore: photos.any(
+                            (photo) =>
+                                photo.supplierExecutionLocalId ==
+                                    activeSupplierExecution!.localId &&
+                                photo.type == 'supplier_before',
+                          ),
+                          hasAfter: photos.any(
+                            (photo) =>
+                                photo.supplierExecutionLocalId ==
+                                    activeSupplierExecution!.localId &&
+                                photo.type == 'supplier_after',
+                          ),
+                          deliveryReceived: deliveryReceived,
+                          productsReplenished: productsReplenished,
+                          stockoutFound: stockoutFound,
+                          notesController: supplierNotesController,
+                          busy: busy,
+                          onCaptureBefore: () => _capture(
+                            'supplier_before',
+                            supplier: activeSupplier!,
+                          ),
+                          onCaptureAfter: () => _capture(
+                            'supplier_after',
+                            supplier: activeSupplier!,
+                          ),
+                          onCaptureCategory: (category) => _capture(
+                            'store_extra',
+                            supplier: activeSupplier!,
+                            category: category,
+                          ),
+                          onDeliveryChanged: (value) async {
+                            setState(() {
+                              deliveryReceived = value;
+                              if (value == false) {
+                                productsReplenished = false;
+                                stockoutFound = false;
+                              }
+                            });
+                            await _saveSupplierDraft(
+                              nextDeliveryReceived: value,
+                              nextProductsReplenished: value == false
+                                  ? false
+                                  : productsReplenished,
+                              nextStockoutFound: value == false
+                                  ? false
+                                  : stockoutFound,
+                            );
+                          },
+                          onProductsChanged: (value) async {
+                            setState(() => productsReplenished = value);
+                            await _saveSupplierDraft(
+                              nextProductsReplenished: value,
+                            );
+                          },
+                          onStockoutChanged: (value) async {
+                            setState(() => stockoutFound = value);
+                            await _saveSupplierDraft(nextStockoutFound: value);
+                          },
+                          onNotesChanged: (value) async {
+                            await _saveSupplierDraft(nextNotes: value);
+                          },
+                          onComplete: _completeSupplierExecution,
+                          onClose: () {
+                            setState(() {
+                              activeSupplierId = null;
+                              supplierNotesController.clear();
+                              deliveryReceived = null;
+                              productsReplenished = null;
+                              stockoutFound = null;
+                            });
+                          },
+                        )
+                      else
+                        const InfoCard(
+                          title: 'Selecione um fornecedor',
+                          body:
+                              'Toque em um fornecedor para responder entrega, registrar foto antes e foto depois quando houver mercadoria, e concluir esse atendimento.',
+                        ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: notesController,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'Observacoes da execucao',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  PrimaryButton(
-                    label: 'Encerrar visita',
-                    onPressed: busy ? null : _finish,
-                  ),
+                    const SizedBox(height: 12),
+                    PrimaryButton(
+                      label: 'Encerrar visita',
+                      onPressed: busy ? null : _finish,
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 14),
                 MessageBox(message: message),
