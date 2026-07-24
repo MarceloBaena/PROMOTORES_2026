@@ -33,6 +33,19 @@ type TimelineKind =
   | "supplier_note";
 type TimelineTone = "brand" | "success" | "warning" | "neutral";
 
+interface TimelinePhoto {
+  id: string;
+  type?: string;
+  title?: string | null;
+  url: string;
+  createdAt?: string | null;
+  capturedAt?: string | null;
+  gpsLatitude?: number | string | null;
+  gpsLongitude?: number | string | null;
+  supplierName?: string | null;
+  categoryName?: string | null;
+}
+
 interface LivePromoter {
   promoter: {
     id: string;
@@ -98,6 +111,7 @@ interface LivePromoter {
     title: string;
     description: string;
     photoUrls?: string[];
+    photos?: TimelinePhoto[];
     latitude?: number | null;
     longitude?: number | null;
   }>;
@@ -106,7 +120,7 @@ interface LivePromoter {
 
 interface TimelinePhotoSelection {
   event: LivePromoter["timeline"][number];
-  url: string;
+  photo: TimelinePhoto;
   index: number;
 }
 
@@ -259,6 +273,62 @@ function timelinePhotoUrl(url: string) {
   }
 
   return `${API_BASE_URL}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+function coordinateNumber(value?: string | number | null) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function validGpsPair(
+  latitude?: string | number | null,
+  longitude?: string | number | null,
+) {
+  const lat = coordinateNumber(latitude);
+  const lng = coordinateNumber(longitude);
+
+  if (lat === null || lng === null || (lat === 0 && lng === 0)) {
+    return null;
+  }
+
+  return { latitude: lat, longitude: lng };
+}
+
+function timelinePhotoItems(event: LivePromoter["timeline"][number]) {
+  if (event.photos && event.photos.length > 0) {
+    return event.photos;
+  }
+
+  return (event.photoUrls ?? []).map((url, index) => ({
+    id: `${event.id}-${index}`,
+    title: `Evidencia ${index + 1}`,
+    url,
+    createdAt: event.occurredAt,
+    capturedAt: event.occurredAt,
+    gpsLatitude: event.latitude,
+    gpsLongitude: event.longitude,
+  }));
+}
+
+function timelinePhotoGps(
+  photo: TimelinePhoto,
+  event: LivePromoter["timeline"][number],
+) {
+  const photoGps = validGpsPair(photo.gpsLatitude, photo.gpsLongitude);
+  const eventGps = validGpsPair(event.latitude, event.longitude);
+
+  return {
+    label: photoGps ? "GPS da foto" : eventGps ? "GPS do evento" : "GPS",
+    value: photoGps
+      ? `${photoGps.latitude.toFixed(6)}, ${photoGps.longitude.toFixed(6)}`
+      : eventGps
+        ? `${eventGps.latitude.toFixed(6)}, ${eventGps.longitude.toFixed(6)}`
+        : "Sem GPS vinculado a esta evidencia.",
+  };
 }
 
 function timelineIcon(kind: TimelineKind) {
@@ -555,8 +625,8 @@ export function LiveMapPage() {
                         key={event.id}
                         event={event}
                         last={index === selectedPromoter.timeline.length - 1}
-                        onOpenPhoto={(url, photoIndex) =>
-                          setSelectedPhoto({ event, url, index: photoIndex })
+                        onOpenPhoto={(photo, photoIndex) =>
+                          setSelectedPhoto({ event, photo, index: photoIndex })
                         }
                       />
                     ))}
@@ -1016,9 +1086,10 @@ function TimelineEntry({
 }: {
   event: LivePromoter["timeline"][number];
   last: boolean;
-  onOpenPhoto: (url: string, index: number) => void;
+  onOpenPhoto: (photo: TimelinePhoto, index: number) => void;
 }) {
   const Icon = timelineIcon(event.kind);
+  const photos = timelinePhotoItems(event);
 
   return (
     <div className="relative pl-14">
@@ -1062,19 +1133,20 @@ function TimelineEntry({
           {event.description}
         </p>
 
-        {event.photoUrls && event.photoUrls.length > 0 ? (
+        {photos.length > 0 ? (
           <div className="mt-4 flex flex-wrap gap-2">
-            {event.photoUrls.map((url, index) => (
+            {photos.map((photo, index) => (
               <button
-                key={`${event.id}-${index}`}
+                key={photo.id || `${event.id}-${index}`}
                 type="button"
                 className="group relative h-16 w-16 overflow-hidden rounded-2xl border border-line bg-field text-left transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-brand"
-                onClick={() => onOpenPhoto(url, index)}
-                aria-label={`Ampliar evidencia ${index + 1} do acompanhamento`}
+                onClick={() => onOpenPhoto(photo, index)}
+                aria-label={`Ampliar ${photo.title || `evidencia ${index + 1}`} do acompanhamento`}
+                title={photo.title || `Evidencia ${index + 1}`}
               >
                 <img
-                  src={timelinePhotoUrl(url)}
-                  alt={`Evidencia ${index + 1}`}
+                  src={timelinePhotoUrl(photo.url)}
+                  alt={photo.title || `Evidencia ${index + 1}`}
                   className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
                 />
                 <span className="absolute inset-0 grid place-items-center bg-navy/0 text-white opacity-0 transition group-hover:bg-navy/35 group-hover:opacity-100">
@@ -1104,14 +1176,17 @@ function TimelinePhotoDialog({
   selection: TimelinePhotoSelection;
   onClose: () => void;
 }) {
-  const { event, url, index } = selection;
+  const { event, photo, index } = selection;
+  const photoTitle = photo.title || `Evidencia ${index + 1}`;
+  const capturedAt = photo.capturedAt ?? photo.createdAt ?? event.occurredAt;
+  const gps = timelinePhotoGps(photo, event);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-navy/80 p-3 backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-label={`Evidencia ampliada do acompanhamento ${index + 1}`}
+      aria-label={`Evidencia ampliada: ${photoTitle}`}
     >
       <button
         type="button"
@@ -1124,8 +1199,8 @@ function TimelinePhotoDialog({
         <div className="flex min-h-0 items-center justify-center bg-slate-950 p-3 sm:p-5">
           <img
             className="max-h-[62vh] w-full rounded-2xl object-contain lg:max-h-[86vh]"
-            src={timelinePhotoUrl(url)}
-            alt={`Evidencia ${index + 1} do acompanhamento`}
+            src={timelinePhotoUrl(photo.url)}
+            alt={photoTitle}
           />
         </div>
 
@@ -1136,7 +1211,7 @@ function TimelinePhotoDialog({
                 Evidencia do acompanhamento
               </div>
               <h3 className="mt-2 font-display text-2xl font-black text-ink">
-                Foto {index + 1}
+                {photoTitle}
               </h3>
             </div>
             <button
@@ -1150,21 +1225,23 @@ function TimelinePhotoDialog({
           </div>
 
           <div className="mt-5 space-y-3">
+            <InfoRow label="Nome da evidencia" value={photoTitle} />
+            {photo.supplierName ? (
+              <InfoRow label="Fornecedor" value={photo.supplierName} />
+            ) : null}
+            {photo.categoryName ? (
+              <InfoRow label="Categoria" value={photo.categoryName} />
+            ) : null}
             <InfoRow label="Evento" value={event.title} />
-            <InfoRow label="Horario" value={formatDateTime(event.occurredAt)} />
+            <InfoRow
+              label="Data e hora da foto"
+              value={formatDateTime(capturedAt)}
+            />
             <InfoRow
               label="Descricao"
               value={event.description || "Sem descricao registrada."}
             />
-            <InfoRow
-              label="GPS do evento"
-              value={
-                typeof event.latitude === "number" &&
-                typeof event.longitude === "number"
-                  ? `${event.latitude.toFixed(6)}, ${event.longitude.toFixed(6)}`
-                  : "Sem GPS vinculado ao evento."
-              }
-            />
+            <InfoRow label={gps.label} value={gps.value} />
           </div>
 
           <button

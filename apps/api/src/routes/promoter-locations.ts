@@ -13,7 +13,7 @@ const locationSchema = z.object({
   longitude: z.coerce.number().min(-180).max(180),
   accuracyMeters: z.coerce.number().min(0).max(10000).optional(),
   capturedAt: z.string().datetime().optional(),
-  visitId: z.string().uuid().optional()
+  visitId: z.string().uuid().optional(),
 });
 
 function toNumber(value: unknown) {
@@ -73,17 +73,30 @@ function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number) {
 
   const base =
     Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-    Math.cos(originLat) * Math.cos(targetLat) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+    Math.cos(originLat) *
+      Math.cos(targetLat) *
+      Math.sin(deltaLng / 2) *
+      Math.sin(deltaLng / 2);
 
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(base), Math.sqrt(1 - base));
 }
 
 function calculateDistanceKm(
-  locations: Array<{ latitude: number | null; longitude: number | null; capturedAt: Date }>
+  locations: Array<{
+    latitude: number | null;
+    longitude: number | null;
+    capturedAt: Date;
+  }>,
 ) {
   const chronological = [...locations]
-    .filter((location) => typeof location.latitude === "number" && typeof location.longitude === "number")
-    .sort((left, right) => left.capturedAt.getTime() - right.capturedAt.getTime());
+    .filter(
+      (location) =>
+        typeof location.latitude === "number" &&
+        typeof location.longitude === "number",
+    )
+    .sort(
+      (left, right) => left.capturedAt.getTime() - right.capturedAt.getTime(),
+    );
 
   let distanceKm = 0;
   for (let index = 1; index < chronological.length; index += 1) {
@@ -94,7 +107,7 @@ function calculateDistanceKm(
       previous.latitude as number,
       previous.longitude as number,
       current.latitude as number,
-      current.longitude as number
+      current.longitude as number,
     );
   }
 
@@ -109,6 +122,24 @@ function photoTypeLabel(type: string) {
       return "foto antes";
     case "after":
       return "foto depois";
+    case "checkout":
+      return "check-out";
+    case "supplier_before":
+      return "foto antes do fornecedor";
+    case "supplier_after":
+      return "foto depois do fornecedor";
+    case "leaflet":
+      return "panfleto";
+    case "gondola":
+      return "gondola";
+    case "display":
+      return "display";
+    case "island":
+      return "ilha";
+    case "promotional_material":
+      return "material promocional";
+    case "store_extra":
+      return "foto extra da loja";
     case "occurrence_extra":
       return "foto extra";
     default:
@@ -116,9 +147,48 @@ function photoTypeLabel(type: string) {
   }
 }
 
-function clientDisplayName(client: { name: string; tradeName?: string | null }) {
+function metadataObject(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function metadataString(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function metadataNumber(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && !(numberValue === 0)
+    ? numberValue
+    : null;
+}
+
+function supplierDisplayName(
+  supplier?: { name: string; tradeName: string | null } | null,
+) {
+  if (!supplier) {
+    return null;
+  }
+
+  const tradeName = supplier.tradeName?.trim();
+  return tradeName || supplier.name;
+}
+
+function clientDisplayName(client: {
+  name: string;
+  tradeName?: string | null;
+}) {
   const tradeName = client.tradeName?.trim();
-  return tradeName && tradeName !== client.name ? `${client.name} | Fantasia: ${tradeName}` : client.name;
+  return tradeName && tradeName !== client.name
+    ? `${client.name} | Fantasia: ${tradeName}`
+    : client.name;
 }
 
 function buildTimeline(input: {
@@ -134,7 +204,11 @@ function buildTimeline(input: {
     status: string;
     scheduledDate: Date | null;
     createdAt: Date;
-    items: Array<{ id: string; status: string; client: { name: string; tradeName: string | null } }>;
+    items: Array<{
+      id: string;
+      status: string;
+      client: { name: string; tradeName: string | null };
+    }>;
   } | null;
   visits: Array<{
     id: string;
@@ -144,7 +218,18 @@ function buildTimeline(input: {
     updatedAt: Date;
     client: { name: string; tradeName: string | null };
     route: { name: string } | null;
-    photos: Array<{ id: string; type: string; url: string; createdAt: Date }>;
+    photos: Array<{
+      id: string;
+      type: string;
+      url: string;
+      createdAt: Date;
+      capturedAtDevice: Date | null;
+      metadata: unknown;
+      supplier: { name: string; tradeName: string | null } | null;
+      supplierExecution: {
+        supplier: { name: string; tradeName: string | null } | null;
+      } | null;
+    }>;
     supplierExecutions: Array<{
       id: string;
       status: string;
@@ -160,19 +245,39 @@ function buildTimeline(input: {
 }) {
   const timeline: Array<{
     id: string;
-    kind: "route" | "visit_started" | "visit_completed" | "photo" | "signal" | "supplier_note";
+    kind:
+      | "route"
+      | "visit_started"
+      | "visit_completed"
+      | "photo"
+      | "signal"
+      | "supplier_note";
     occurredAt: Date;
     tone: "brand" | "success" | "warning" | "neutral";
     title: string;
     description: string;
     photoUrls?: string[];
+    photos?: Array<{
+      id: string;
+      type: string;
+      title: string;
+      url: string;
+      createdAt: Date;
+      capturedAt: Date;
+      gpsLatitude: number | null;
+      gpsLongitude: number | null;
+      supplierName: string | null;
+      categoryName: string | null;
+    }>;
     latitude?: number | null;
     longitude?: number | null;
   }> = [];
 
   if (input.routeOfDay) {
     const totalClients = input.routeOfDay.items.length;
-    const completedClients = input.routeOfDay.items.filter((item) => item.status === "COMPLETED").length;
+    const completedClients = input.routeOfDay.items.filter(
+      (item) => item.status === "COMPLETED",
+    ).length;
     timeline.push({
       id: `route-${input.routeOfDay.id}`,
       kind: "route",
@@ -182,7 +287,7 @@ function buildTimeline(input: {
         input.routeOfDay.status === "COMPLETED"
           ? `Roteiro ${input.routeOfDay.name} concluido`
           : `Roteiro ${input.routeOfDay.name} publicado`,
-      description: `${completedClients} de ${totalClients} cliente(s) do roteiro ja foram processados no dia.`
+      description: `${completedClients} de ${totalClients} cliente(s) do roteiro ja foram processados no dia.`,
     });
   }
 
@@ -198,7 +303,7 @@ function buildTimeline(input: {
           ? `Precisao aproximada de ${Math.round(input.latestLocation.accuracyMeters)} metro(s).`
           : "Sinal enviado sem precisao registrada.",
       latitude: input.latestLocation.latitude,
-      longitude: input.latestLocation.longitude
+      longitude: input.latestLocation.longitude,
     });
   }
 
@@ -213,13 +318,58 @@ function buildTimeline(input: {
         occurredAt: visit.startedAt,
         tone: "brand",
         title: `Inicio de atendimento em ${clientName}`,
-        description: `Roteiro ${routeName}.`
+        description: `Roteiro ${routeName}.`,
       });
     }
 
     if (visit.photos.length > 0) {
-      const latestPhoto = [...visit.photos].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
-      const photoKinds = Array.from(new Set(visit.photos.map((photo) => photoTypeLabel(photo.type)))).join(", ");
+      const latestPhoto = [...visit.photos].sort(
+        (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+      )[0];
+      const photoKinds = Array.from(
+        new Set(visit.photos.map((photo) => photoTypeLabel(photo.type))),
+      ).join(", ");
+      const timelinePhotos = visit.photos.slice(0, 5).map((photo) => {
+        const metadata = metadataObject(photo.metadata);
+        const supplierName =
+          supplierDisplayName(photo.supplier) ??
+          supplierDisplayName(photo.supplierExecution?.supplier) ??
+          null;
+        const categoryName = metadataString(metadata, "categoryName");
+        const gpsLatitude = metadataNumber(metadata, "gpsLatitude");
+        const gpsLongitude = metadataNumber(metadata, "gpsLongitude");
+        const capturedAt =
+          photo.capturedAtDevice ??
+          (metadataString(metadata, "capturedAt")
+            ? new Date(metadataString(metadata, "capturedAt") as string)
+            : photo.createdAt);
+        const baseLabel = photoTypeLabel(photo.type);
+        const titleParts = [supplierName, categoryName, baseLabel].filter(
+          Boolean,
+        );
+
+        return {
+          id: photo.id,
+          type: photo.type,
+          title: titleParts.length > 0 ? titleParts.join(" - ") : baseLabel,
+          url: photo.url,
+          createdAt: photo.createdAt,
+          capturedAt,
+          gpsLatitude,
+          gpsLongitude,
+          supplierName,
+          categoryName,
+        };
+      });
+      const latestPhotoMetadata = metadataObject(latestPhoto.metadata);
+      const latestPhotoLatitude = metadataNumber(
+        latestPhotoMetadata,
+        "gpsLatitude",
+      );
+      const latestPhotoLongitude = metadataNumber(
+        latestPhotoMetadata,
+        "gpsLongitude",
+      );
 
       timeline.push({
         id: `visit-photos-${visit.id}`,
@@ -227,15 +377,24 @@ function buildTimeline(input: {
         occurredAt: latestPhoto.createdAt,
         tone: "success",
         title: `${visit.photos.length} evidencia(s) registradas em ${clientName}`,
-        description: photoKinds ? `Tipos enviados: ${photoKinds}.` : "Evidencias visuais do atendimento.",
-        photoUrls: visit.photos.slice(0, 5).map((photo) => photo.url)
+        description: photoKinds
+          ? `Tipos enviados: ${photoKinds}.`
+          : "Evidencias visuais do atendimento.",
+        photoUrls: timelinePhotos.map((photo) => photo.url),
+        photos: timelinePhotos,
+        latitude: latestPhotoLatitude,
+        longitude: latestPhotoLongitude,
       });
     }
 
     for (const execution of visit.supplierExecutions) {
-      const supplierName = execution.supplier.tradeName ?? execution.supplier.name;
+      const supplierName =
+        execution.supplier.tradeName ?? execution.supplier.name;
       const notes = execution.notes?.trim();
-      const needsAttention = execution.deliveryReceived === false || execution.stockoutFound === true || Boolean(notes);
+      const needsAttention =
+        execution.deliveryReceived === false ||
+        execution.stockoutFound === true ||
+        Boolean(notes);
 
       if (!needsAttention) {
         continue;
@@ -252,9 +411,15 @@ function buildTimeline(input: {
         id: `supplier-note-${execution.id}`,
         kind: "supplier_note",
         occurredAt: execution.finishedAtDevice ?? execution.updatedAt,
-        tone: execution.deliveryReceived === false || execution.stockoutFound === true ? "warning" : "neutral",
+        tone:
+          execution.deliveryReceived === false ||
+          execution.stockoutFound === true
+            ? "warning"
+            : "neutral",
         title: `${statusLabel} - ${supplierName}`,
-        description: notes ? `Cliente ${clientName}: ${notes}` : `Cliente ${clientName} sem justificativa detalhada.`
+        description: notes
+          ? `Cliente ${clientName}: ${notes}`
+          : `Cliente ${clientName} sem justificativa detalhada.`,
       });
     }
 
@@ -265,7 +430,7 @@ function buildTimeline(input: {
         occurredAt: visit.finishedAt,
         tone: "success",
         title: `Atendimento concluido em ${clientName}`,
-        description: `Roteiro ${routeName} finalizado pelo promotor.`
+        description: `Roteiro ${routeName} finalizado pelo promotor.`,
       });
     } else if (visit.status === "in_progress") {
       timeline.push({
@@ -274,13 +439,15 @@ function buildTimeline(input: {
         occurredAt: visit.updatedAt,
         tone: "warning",
         title: `Atendimento em andamento em ${clientName}`,
-        description: `Promotor ainda em campo neste cliente do roteiro ${routeName}.`
+        description: `Promotor ainda em campo neste cliente do roteiro ${routeName}.`,
       });
     }
   }
 
   return timeline
-    .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())
+    .sort(
+      (left, right) => right.occurredAt.getTime() - left.occurredAt.getTime(),
+    )
     .slice(0, 12);
 }
 
@@ -288,7 +455,11 @@ promoterLocationsRouter.get(
   "/live",
   asyncHandler(async (req, res) => {
     if (!req.user || !["ADMIN", "SUPERVISOR"].includes(req.user.role)) {
-      throw new AppError(403, "LIVE_MAP_FORBIDDEN", "Only admins and supervisors can view the live map.");
+      throw new AppError(
+        403,
+        "LIVE_MAP_FORBIDDEN",
+        "Only admins and supervisors can view the live map.",
+      );
     }
 
     const today = dayBounds(new Date());
@@ -296,12 +467,16 @@ promoterLocationsRouter.get(
       req.user.role === "SUPERVISOR"
         ? await prisma.supervisor.findFirst({
             where: { ...scopedCompanyWhere(req), userId: req.user.id },
-            select: { id: true }
+            select: { id: true },
           })
         : null;
 
     if (req.user.role === "SUPERVISOR" && !supervisorScope) {
-      throw new AppError(403, "SUPERVISOR_PROFILE_NOT_FOUND", "Supervisor autenticado nao possui cadastro operacional.");
+      throw new AppError(
+        403,
+        "SUPERVISOR_PROFILE_NOT_FOUND",
+        "Supervisor autenticado nao possui cadastro operacional.",
+      );
     }
 
     const promoters = await prisma.promoter.findMany({
@@ -309,7 +484,7 @@ promoterLocationsRouter.get(
         ...scopedCompanyWhere(req),
         ...(supervisorScope ? { supervisorId: supervisorScope.id } : {}),
         status: "ACTIVE",
-        user: { status: "ACTIVE" }
+        user: { status: "ACTIVE" },
       },
       orderBy: { code: "asc" },
       include: {
@@ -319,11 +494,11 @@ promoterLocationsRouter.get(
           where: {
             capturedAt: {
               gte: today.start,
-              lte: today.end
-            }
+              lte: today.end,
+            },
           },
           orderBy: { capturedAt: "desc" },
-          take: 20
+          take: 20,
         },
         visits: {
           where: {
@@ -331,22 +506,22 @@ promoterLocationsRouter.get(
               {
                 startedAt: {
                   gte: today.start,
-                  lte: today.end
-                }
+                  lte: today.end,
+                },
               },
               {
                 finishedAt: {
                   gte: today.start,
-                  lte: today.end
-                }
+                  lte: today.end,
+                },
               },
               {
                 createdAt: {
                   gte: today.start,
-                  lte: today.end
-                }
-              }
-            ]
+                  lte: today.end,
+                },
+              },
+            ],
           },
           orderBy: { updatedAt: "desc" },
           take: 8,
@@ -355,7 +530,25 @@ promoterLocationsRouter.get(
             route: true,
             photos: {
               orderBy: { createdAt: "desc" },
-              take: 6
+              take: 6,
+              include: {
+                supplier: {
+                  select: {
+                    name: true,
+                    tradeName: true,
+                  },
+                },
+                supplierExecution: {
+                  include: {
+                    supplier: {
+                      select: {
+                        name: true,
+                        tradeName: true,
+                      },
+                    },
+                  },
+                },
+              },
             },
             supplierExecutions: {
               orderBy: { updatedAt: "desc" },
@@ -363,30 +556,30 @@ promoterLocationsRouter.get(
                 supplier: {
                   select: {
                     name: true,
-                    tradeName: true
-                  }
-                }
-              }
-            }
-          }
+                    tradeName: true,
+                  },
+                },
+              },
+            },
+          },
         },
         routes: {
           where: {
             ...buildRouteWindowWhere(today.start, today.end),
             status: {
-              in: ["PUBLISHED", "COMPLETED"]
-            }
+              in: ["PUBLISHED", "COMPLETED"],
+            },
           },
           orderBy: { scheduledDate: "desc" },
           take: 1,
           include: {
             items: {
               orderBy: { sequence: "asc" },
-              include: { client: true }
-            }
-          }
-        }
-      }
+              include: { client: true },
+            },
+          },
+        },
+      },
     });
 
     res.json({
@@ -397,17 +590,31 @@ promoterLocationsRouter.get(
           longitude: toNumber(location.longitude),
           accuracyMeters: toNumber(location.accuracyMeters),
           capturedAt: location.capturedAt,
-          receivedAt: location.receivedAt
+          receivedAt: location.receivedAt,
         }));
-        const activeVisit = promoter.visits.find((visit) => visit.status === "in_progress") ?? null;
+        const activeVisit =
+          promoter.visits.find((visit) => visit.status === "in_progress") ??
+          null;
         const routeOfDay = promoter.routes[0] ?? null;
-        const completedVisits = promoter.visits.filter((visit) => visit.status === "completed").length;
-        const inProgressVisits = promoter.visits.filter((visit) => visit.status === "in_progress").length;
-        const photoCount = promoter.visits.reduce((total, visit) => total + visit.photos.length, 0);
+        const completedVisits = promoter.visits.filter(
+          (visit) => visit.status === "completed",
+        ).length;
+        const inProgressVisits = promoter.visits.filter(
+          (visit) => visit.status === "in_progress",
+        ).length;
+        const photoCount = promoter.visits.reduce(
+          (total, visit) => total + visit.photos.length,
+          0,
+        );
         const completedRouteClients = routeOfDay
           ? Math.max(
-              routeOfDay.items.filter((item) => item.status === "COMPLETED").length,
-              promoter.visits.filter((visit) => visit.status === "completed" && visit.routeId === routeOfDay.id).length
+              routeOfDay.items.filter((item) => item.status === "COMPLETED")
+                .length,
+              promoter.visits.filter(
+                (visit) =>
+                  visit.status === "completed" &&
+                  visit.routeId === routeOfDay.id,
+              ).length,
             )
           : 0;
         const nextRouteItem =
@@ -419,7 +626,13 @@ promoterLocationsRouter.get(
             return total;
           }
 
-          return total + visitDurationMinutes(visit.startedAt, visit.status === "completed" ? visit.finishedAt : null);
+          return (
+            total +
+            visitDurationMinutes(
+              visit.startedAt,
+              visit.status === "completed" ? visit.finishedAt : null,
+            )
+          );
         }, 0);
         const timeline = buildTimeline({
           latestLocation: latestLocation
@@ -427,7 +640,7 @@ promoterLocationsRouter.get(
                 latitude: toNumber(latestLocation.latitude),
                 longitude: toNumber(latestLocation.longitude),
                 accuracyMeters: toNumber(latestLocation.accuracyMeters),
-                capturedAt: latestLocation.capturedAt
+                capturedAt: latestLocation.capturedAt,
               }
             : null,
           routeOfDay: routeOfDay
@@ -440,8 +653,11 @@ promoterLocationsRouter.get(
                 items: routeOfDay.items.map((item) => ({
                   id: item.id,
                   status: item.status,
-                  client: { name: item.client.name, tradeName: item.client.tradeName }
-                }))
+                  client: {
+                    name: item.client.name,
+                    tradeName: item.client.tradeName,
+                  },
+                })),
               }
             : null,
           visits: promoter.visits.map((visit) => ({
@@ -450,13 +666,20 @@ promoterLocationsRouter.get(
             startedAt: visit.startedAt,
             finishedAt: visit.finishedAt,
             updatedAt: visit.updatedAt,
-            client: { name: visit.client.name, tradeName: visit.client.tradeName },
+            client: {
+              name: visit.client.name,
+              tradeName: visit.client.tradeName,
+            },
             route: visit.route ? { name: visit.route.name } : null,
             photos: visit.photos.map((photo) => ({
               id: photo.id,
               type: photo.type,
               url: photo.url,
-              createdAt: photo.createdAt
+              createdAt: photo.createdAt,
+              capturedAtDevice: photo.capturedAtDevice,
+              metadata: photo.metadata,
+              supplier: photo.supplier,
+              supplierExecution: photo.supplierExecution,
             })),
             supplierExecutions: visit.supplierExecutions.map((execution) => ({
               id: execution.id,
@@ -469,10 +692,10 @@ promoterLocationsRouter.get(
               updatedAt: execution.updatedAt,
               supplier: {
                 name: execution.supplier.name,
-                tradeName: execution.supplier.tradeName
-              }
-            }))
-          }))
+                tradeName: execution.supplier.tradeName,
+              },
+            })),
+          })),
         });
 
         return {
@@ -481,14 +704,14 @@ promoterLocationsRouter.get(
             code: promoter.code,
             name: promoter.user.name,
             email: promoter.user.email,
-            supervisorName: promoter.supervisor?.user.name ?? null
+            supervisorName: promoter.supervisor?.user.name ?? null,
           },
           activeVisit: activeVisit
             ? {
                 id: activeVisit.id,
                 clientName: clientDisplayName(activeVisit.client),
                 routeName: activeVisit.route?.name ?? null,
-                startedAt: activeVisit.startedAt
+                startedAt: activeVisit.startedAt,
               }
             : null,
           activeRoute:
@@ -497,7 +720,9 @@ promoterLocationsRouter.get(
                   id: routeOfDay.id,
                   name: routeOfDay.name,
                   scheduledDate: routeOfDay.scheduledDate,
-                  nextClientName: nextRouteItem ? clientDisplayName(nextRouteItem.client) : null
+                  nextClientName: nextRouteItem
+                    ? clientDisplayName(nextRouteItem.client)
+                    : null,
                 }
               : null,
           routeOfDay: routeOfDay
@@ -508,8 +733,13 @@ promoterLocationsRouter.get(
                 scheduledDate: routeOfDay.scheduledDate,
                 totalClients: routeOfDay.items.length,
                 completedClients: completedRouteClients,
-                pendingClients: Math.max(routeOfDay.items.length - completedRouteClients, 0),
-                nextClientName: nextRouteItem ? clientDisplayName(nextRouteItem.client) : null
+                pendingClients: Math.max(
+                  routeOfDay.items.length - completedRouteClients,
+                  0,
+                ),
+                nextClientName: nextRouteItem
+                  ? clientDisplayName(nextRouteItem.client)
+                  : null,
               }
             : null,
           location: latestLocation
@@ -519,12 +749,14 @@ promoterLocationsRouter.get(
                 accuracyMeters: toNumber(latestLocation.accuracyMeters),
                 capturedAt: latestLocation.capturedAt,
                 receivedAt: latestLocation.receivedAt,
-                source: latestLocation.source
+                source: latestLocation.source,
               }
             : null,
           locationHistory,
           today: {
-            firstSignalAt: promoter.locations[promoter.locations.length - 1]?.capturedAt ?? null,
+            firstSignalAt:
+              promoter.locations[promoter.locations.length - 1]?.capturedAt ??
+              null,
             lastSignalAt: latestLocation?.capturedAt ?? null,
             signalCount: promoter.locations.length,
             completedVisits,
@@ -533,25 +765,31 @@ promoterLocationsRouter.get(
             distanceKm: calculateDistanceKm(locationHistory),
             serviceMinutes,
             routeClients: routeOfDay?.items.length ?? 0,
-            completedRouteClients
+            completedRouteClients,
           },
           timeline,
-          status: locationStatus(latestLocation?.capturedAt ?? null)
+          status: locationStatus(latestLocation?.capturedAt ?? null),
         };
-      })
+      }),
     });
-  })
+  }),
 );
 
 promoterLocationsRouter.post(
   "/heartbeat",
   asyncHandler(async (req, res) => {
     if (!req.user || req.user.role !== "PROMOTOR") {
-      throw new AppError(403, "PROMOTER_LOCATION_FORBIDDEN", "Only promoters can send live location heartbeats.");
+      throw new AppError(
+        403,
+        "PROMOTER_LOCATION_FORBIDDEN",
+        "Only promoters can send live location heartbeats.",
+      );
     }
 
     const input = locationSchema.parse(req.body);
-    const capturedAt = input.capturedAt ? new Date(input.capturedAt) : new Date();
+    const capturedAt = input.capturedAt
+      ? new Date(input.capturedAt)
+      : new Date();
     const { start, end } = dayBounds(capturedAt);
     const promoter = await prisma.promoter.findUnique({
       where: { userId: req.user.id },
@@ -559,24 +797,28 @@ promoterLocationsRouter.post(
         visits: {
           where: {
             status: "in_progress",
-            ...(input.visitId ? { id: input.visitId } : {})
+            ...(input.visitId ? { id: input.visitId } : {}),
           },
           orderBy: { updatedAt: "desc" },
-          take: 1
+          take: 1,
         },
         routes: {
           where: {
             status: "PUBLISHED",
-            ...buildRouteWindowWhere(start, end)
+            ...buildRouteWindowWhere(start, end),
           },
           orderBy: { scheduledDate: "asc" },
-          take: 1
-        }
-      }
+          take: 1,
+        },
+      },
     });
 
     if (!promoter || promoter.status !== "ACTIVE") {
-      throw new AppError(404, "PROMOTER_NOT_FOUND", "Promoter profile was not found.");
+      throw new AppError(
+        404,
+        "PROMOTER_NOT_FOUND",
+        "Promoter profile was not found.",
+      );
     }
 
     assertSameCompany(req, promoter.companyId);
@@ -588,7 +830,7 @@ promoterLocationsRouter.post(
       throw new AppError(
         409,
         "ACTIVE_JOURNEY_REQUIRED",
-        "Location heartbeat is allowed only during an active visit or a published route scheduled for today."
+        "Location heartbeat is allowed only during an active visit or a published route scheduled for today.",
       );
     }
 
@@ -601,8 +843,8 @@ promoterLocationsRouter.post(
         longitude: input.longitude,
         accuracyMeters: input.accuracyMeters,
         capturedAt,
-        source: "mobile"
-      }
+        source: "mobile",
+      },
     });
 
     res.status(201).json({
@@ -614,8 +856,8 @@ promoterLocationsRouter.post(
         longitude: toNumber(location.longitude),
         accuracyMeters: toNumber(location.accuracyMeters),
         capturedAt: location.capturedAt,
-        receivedAt: location.receivedAt
-      }
+        receivedAt: location.receivedAt,
+      },
     });
-  })
+  }),
 );
