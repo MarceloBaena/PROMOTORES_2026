@@ -10,6 +10,9 @@ interface RoutePlan {
   id: string;
   name: string;
   status: string;
+  scheduledDate?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   promoter?: { code?: number; user?: { name?: string } };
   supervisor?: { code?: number; user?: { name?: string } };
   items: Array<{
@@ -76,6 +79,69 @@ function clientLabel(client: ClientOption) {
   return `${code}${name}${fantasy}${city}`;
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatRoutePeriod(route: RoutePlan) {
+  const start = route.startDate ?? route.scheduledDate;
+  const end = route.endDate;
+
+  if (!start && !end) {
+    return "Periodo nao informado";
+  }
+
+  return `${formatDateTime(start)} ate ${formatDateTime(end)}`;
+}
+
+function formatRouteDuration(route: RoutePlan) {
+  const startValue = route.startDate ?? route.scheduledDate;
+  const endValue = route.endDate;
+
+  if (!startValue || !endValue) {
+    return "-";
+  }
+
+  const start = new Date(startValue);
+  const end = new Date(endValue);
+  const minutes = Math.max(
+    0,
+    Math.round((end.getTime() - start.getTime()) / 60000),
+  );
+
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return "0 min";
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (hours === 0) {
+    return `${remainingMinutes} min`;
+  }
+
+  if (remainingMinutes === 0) {
+    return `${hours}h`;
+  }
+
+  return `${hours}h ${remainingMinutes}min`;
+}
+
 export function RoutingPage() {
   const { user } = useAuth();
   const [routes, setRoutes] = useState<RoutePlan[]>([]);
@@ -85,7 +151,8 @@ export function RoutingPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [form, setForm] = useState({
     name: "",
-    scheduledDate: "",
+    startDate: "",
+    endDate: "",
     companyId: user?.companyId ?? "",
     supervisorId: "",
     promoterId: "",
@@ -141,8 +208,29 @@ export function RoutingPage() {
       return;
     }
 
-    if (!form.scheduledDate) {
-      setMessage("Informe a data da rota.");
+    if (!form.startDate) {
+      setMessage("Informe a data e hora inicial da rota.");
+      return;
+    }
+
+    if (!form.endDate) {
+      setMessage("Informe a data e hora final da rota.");
+      return;
+    }
+
+    const startDate = new Date(form.startDate);
+    const endDate = new Date(form.endDate);
+
+    if (
+      Number.isNaN(startDate.getTime()) ||
+      Number.isNaN(endDate.getTime())
+    ) {
+      setMessage("As datas da rota sao invalidas.");
+      return;
+    }
+
+    if (endDate < startDate) {
+      setMessage("A data final precisa ser maior ou igual a data inicial.");
       return;
     }
 
@@ -167,21 +255,25 @@ export function RoutingPage() {
     }
 
     try {
+      const startDateIso = startDate.toISOString();
+      const endDateIso = endDate.toISOString();
+
       await apiJson("/routes", {
         method: "POST",
         body: JSON.stringify({
           ...Object.fromEntries(
             Object.entries(form).filter(([, value]) => value !== ""),
           ),
-          scheduledDate: form.scheduledDate
-            ? new Date(form.scheduledDate).toISOString()
-            : undefined,
+          scheduledDate: startDateIso,
+          startDate: startDateIso,
+          endDate: endDateIso,
           clientIds: selectedClientIds,
         }),
       });
       setForm({
         name: "",
-        scheduledDate: "",
+        startDate: "",
+        endDate: "",
         companyId: user?.companyId ?? "",
         supervisorId: "",
         promoterId: "",
@@ -348,15 +440,30 @@ export function RoutingPage() {
             </label>
 
             <label className="block">
-              <span className="field-label">Data e hora</span>
+              <span className="field-label">Data/hora inicial</span>
               <input
                 className="input-control"
                 type="datetime-local"
-                value={form.scheduledDate}
+                value={form.startDate}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    scheduledDate: event.target.value,
+                    startDate: event.target.value,
+                  }))
+                }
+              />
+            </label>
+
+            <label className="block">
+              <span className="field-label">Data/hora final</span>
+              <input
+                className="input-control"
+                type="datetime-local"
+                value={form.endDate}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    endDate: event.target.value,
                   }))
                 }
               />
@@ -518,7 +625,9 @@ export function RoutingPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  <RouteInfo label="Periodo" value={formatRoutePeriod(route)} />
+                  <RouteInfo label="Duracao" value={formatRouteDuration(route)} />
                   <RouteInfo
                     label="Promotor"
                     value={personLabel(route.promoter, "PRO")}
