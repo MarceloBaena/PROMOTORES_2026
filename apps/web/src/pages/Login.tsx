@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { CheckCircle2, LockKeyhole, LogIn, MapPinned, ShieldCheck, Smartphone } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
 import { useAuth } from "../context/AuthContext";
@@ -21,6 +21,10 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(apiMessage);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setError(apiMessage);
+  }, [apiMessage]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();

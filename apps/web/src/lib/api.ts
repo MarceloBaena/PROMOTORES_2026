@@ -27,7 +27,7 @@ export const API_BASE_URL = resolveApiBaseUrl();
 
 export class ApiConnectionError extends Error {
   constructor() {
-    super("Servidor indisponivel. Verifique a conexao com a API.");
+    super("Servidor indisponivel. Verifique sua internet e tente novamente.");
   }
 }
 
@@ -195,12 +195,22 @@ export async function login(email: string, password: string) {
   });
 
   if (!response.ok) {
-    let message = "Acesso invalido ou API indisponivel.";
+    let message =
+      response.status === 401
+        ? "E-mail ou senha invalidos."
+        : response.status === 403
+          ? "Usuario sem permissao para acessar a retaguarda."
+          : `Nao foi possivel entrar. Erro HTTP ${response.status}.`;
     let code: string | undefined;
 
     try {
       const body = await response.json();
-      message = body.error?.message ?? body.message ?? message;
+      const apiMessage = body.error?.message ?? body.message;
+      if (body.error?.code === "INVALID_CREDENTIALS" || body.code === "INVALID_CREDENTIALS") {
+        message = "E-mail ou senha invalidos.";
+      } else if (apiMessage) {
+        message = apiMessage;
+      }
       code = body.error?.code ?? body.code;
     } catch {
       // Keep fallback message.
