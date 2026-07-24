@@ -14,6 +14,7 @@ import {
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { API_BASE_URL, apiJson } from "../lib/api";
+import { sortVisitEvidence } from "../lib/evidence-order";
 import { auditTypeLabel } from "../lib/labels";
 
 interface VisitPhoto {
@@ -33,6 +34,8 @@ interface VisitPhoto {
     | "store_extra"
     | "occurrence_extra";
   url: string;
+  supplierId?: string | null;
+  supplierExecutionId?: string | null;
   metadata?: {
     capturedAt?: string;
     gpsLatitude?: number | string | null;
@@ -46,6 +49,8 @@ interface VisitPhoto {
   } | null;
   supplier?: { name?: string | null; tradeName?: string | null } | null;
   supplierExecution?: {
+    id?: string | null;
+    supplierId?: string | null;
     supplier?: { name?: string | null; tradeName?: string | null } | null;
   } | null;
   createdAt: string;
@@ -294,6 +299,10 @@ export function VisitsPage() {
       selectedVisit?.photos.find((photo) => photo.id === selectedPhotoId) ??
       null,
     [selectedPhotoId, selectedVisit],
+  );
+  const selectedVisitPhotos = useMemo(
+    () => (selectedVisit ? sortVisitEvidence(selectedVisit.photos) : []),
+    [selectedVisit],
   );
 
   const completedCount = visits.filter(
@@ -585,7 +594,7 @@ export function VisitsPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {selectedVisit.photos.map((photo) => {
+                  {selectedVisitPhotos.map((photo) => {
                     const evidence = photoEvidence(photo, selectedVisit);
 
                     return (
@@ -786,6 +795,7 @@ function PhotoEvidenceDialog({
   const evidence = photoEvidence(photo, visit);
   const supplier = photoSupplierLabel(photo);
   const category = photo.metadata?.categoryName?.trim();
+  const activity = photo.metadata?.activityName?.trim();
 
   return (
     <div
@@ -848,6 +858,13 @@ function PhotoEvidenceDialog({
                 icon={<FileText className="h-4 w-4" />}
                 label="Categoria"
                 value={category}
+              />
+            ) : null}
+            {activity ? (
+              <InfoCard
+                icon={<FileText className="h-4 w-4" />}
+                label="Atividade"
+                value={activity}
               />
             ) : null}
             <InfoCard

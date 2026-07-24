@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { API_BASE_URL, apiJson } from "../lib/api";
+import { sortVisitEvidence } from "../lib/evidence-order";
 
 type LiveStatus = "online" | "stale" | "offline";
 type TimelineKind =
@@ -301,10 +302,10 @@ function validGpsPair(
 
 function timelinePhotoItems(event: LivePromoter["timeline"][number]) {
   if (event.photos && event.photos.length > 0) {
-    return event.photos;
+    return sortVisitEvidence(event.photos);
   }
 
-  return (event.photoUrls ?? []).map((url, index) => ({
+  return sortVisitEvidence((event.photoUrls ?? []).map((url, index) => ({
     id: `${event.id}-${index}`,
     title: `Evidencia ${index + 1}`,
     url,
@@ -312,7 +313,7 @@ function timelinePhotoItems(event: LivePromoter["timeline"][number]) {
     capturedAt: event.occurredAt,
     gpsLatitude: event.latitude,
     gpsLongitude: event.longitude,
-  }));
+  })));
 }
 
 function timelinePhotoGps(

@@ -181,6 +181,93 @@ function supplierDisplayName(
   return tradeName || supplier.name;
 }
 
+function compareText(left: string, right: string) {
+  return left.localeCompare(right, "pt-BR", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function evidenceSupplierName(photo: {
+  supplier: { name: string; tradeName: string | null } | null;
+  supplierExecution: {
+    supplier: { name: string; tradeName: string | null } | null;
+  } | null;
+}) {
+  return (
+    supplierDisplayName(photo.supplier) ??
+    supplierDisplayName(photo.supplierExecution?.supplier) ??
+    ""
+  );
+}
+
+function evidenceBucketOrder(photo: { type: string; metadata: unknown }) {
+  const metadata = metadataObject(photo.metadata);
+
+  if (metadataString(metadata, "categoryName") || metadataString(metadata, "categoryId")) {
+    return 20;
+  }
+
+  if (metadataString(metadata, "activityName") || metadataString(metadata, "activityId")) {
+    return 30;
+  }
+
+  switch (photo.type) {
+    case "checkin":
+      return 0;
+    case "before":
+      return 1;
+    case "supplier_before":
+      return 10;
+    case "supplier_after":
+      return 40;
+    case "after":
+      return 80;
+    case "checkout":
+      return 98;
+    default:
+      return 90;
+  }
+}
+
+function sortTimelinePhotos<
+  T extends {
+    type: string;
+    metadata: unknown;
+    createdAt: Date;
+    supplier: { name: string; tradeName: string | null } | null;
+    supplierExecution: {
+      supplier: { name: string; tradeName: string | null } | null;
+    } | null;
+  },
+>(photos: T[]) {
+  return [...photos].sort((left, right) => {
+    const leftSupplier = evidenceSupplierName(left);
+    const rightSupplier = evidenceSupplierName(right);
+    const supplierDiff = compareText(leftSupplier, rightSupplier);
+    if (supplierDiff !== 0) return supplierDiff;
+
+    const bucketDiff = evidenceBucketOrder(left) - evidenceBucketOrder(right);
+    if (bucketDiff !== 0) return bucketDiff;
+
+    const leftMetadata = metadataObject(left.metadata);
+    const rightMetadata = metadataObject(right.metadata);
+    const categoryDiff = compareText(
+      metadataString(leftMetadata, "categoryName") ?? "",
+      metadataString(rightMetadata, "categoryName") ?? "",
+    );
+    if (categoryDiff !== 0) return categoryDiff;
+
+    const activityDiff = compareText(
+      metadataString(leftMetadata, "activityName") ?? "",
+      metadataString(rightMetadata, "activityName") ?? "",
+    );
+    if (activityDiff !== 0) return activityDiff;
+
+    return left.createdAt.getTime() - right.createdAt.getTime();
+  });
+}
+
 function clientDisplayName(client: {
   name: string;
   tradeName?: string | null;
@@ -329,7 +416,8 @@ function buildTimeline(input: {
       const photoKinds = Array.from(
         new Set(visit.photos.map((photo) => photoTypeLabel(photo.type))),
       ).join(", ");
-      const timelinePhotos = visit.photos.slice(0, 5).map((photo) => {
+      const orderedPhotos = sortTimelinePhotos(visit.photos);
+      const timelinePhotos = orderedPhotos.slice(0, 8).map((photo) => {
         const metadata = metadataObject(photo.metadata);
         const supplierName =
           supplierDisplayName(photo.supplier) ??
