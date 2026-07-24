@@ -44,6 +44,7 @@ interface TimelinePhoto {
   gpsLongitude?: number | string | null;
   supplierName?: string | null;
   categoryName?: string | null;
+  activityName?: string | null;
 }
 
 interface LivePromoter {
@@ -1231,6 +1232,9 @@ function TimelinePhotoDialog({
             ) : null}
             {photo.categoryName ? (
               <InfoRow label="Categoria" value={photo.categoryName} />
+            ) : null}
+            {photo.activityName ? (
+              <InfoRow label="Atividade" value={photo.activityName} />
             ) : null}
             <InfoRow label="Evento" value={event.title} />
             <InfoRow

@@ -336,6 +336,7 @@ function buildTimeline(input: {
           supplierDisplayName(photo.supplierExecution?.supplier) ??
           null;
         const categoryName = metadataString(metadata, "categoryName");
+        const activityName = metadataString(metadata, "activityName");
         const gpsLatitude = metadataNumber(metadata, "gpsLatitude");
         const gpsLongitude = metadataNumber(metadata, "gpsLongitude");
         const capturedAt =
@@ -344,9 +345,12 @@ function buildTimeline(input: {
             ? new Date(metadataString(metadata, "capturedAt") as string)
             : photo.createdAt);
         const baseLabel = photoTypeLabel(photo.type);
-        const titleParts = [supplierName, categoryName, baseLabel].filter(
-          Boolean,
-        );
+        const titleParts = [
+          supplierName,
+          categoryName,
+          activityName,
+          baseLabel,
+        ].filter(Boolean);
 
         return {
           id: photo.id,
@@ -359,6 +363,7 @@ function buildTimeline(input: {
           gpsLongitude,
           supplierName,
           categoryName,
+          activityName,
         };
       });
       const latestPhotoMetadata = metadataObject(latestPhoto.metadata);

@@ -41,6 +41,8 @@ interface VisitPhoto {
     source?: string;
     categoryId?: string | null;
     categoryName?: string | null;
+    activityId?: string | null;
+    activityName?: string | null;
   } | null;
   supplier?: { name?: string | null; tradeName?: string | null } | null;
   supplierExecution?: {
@@ -109,6 +111,11 @@ function photoTitle(photo: VisitPhoto) {
   const categoryName = photo.metadata?.categoryName?.trim();
   if (categoryName) {
     return `Categoria - ${categoryName}`;
+  }
+
+  const activityName = photo.metadata?.activityName?.trim();
+  if (activityName) {
+    return `Atividade - ${activityName}`;
   }
 
   return photoLabels[photo.type];
@@ -614,6 +621,11 @@ export function VisitsPage() {
                           {photo.metadata?.categoryName?.trim() ? (
                             <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-brand">
                               Categoria: {photo.metadata.categoryName.trim()}
+                            </div>
+                          ) : null}
+                          {photo.metadata?.activityName?.trim() ? (
+                            <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                              Atividade: {photo.metadata.activityName.trim()}
                             </div>
                           ) : null}
                           <div className="grid gap-2 rounded-xl bg-muted/50 p-3 text-xs font-semibold text-stone-600">

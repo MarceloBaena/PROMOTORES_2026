@@ -85,6 +85,8 @@ const photoSchema = z.object({
   supplierId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
   categoryName: optionalText,
+  activityId: z.string().uuid().optional(),
+  activityName: optionalText,
   capturedAt: optionalDateTime,
   gpsLatitude: optionalCoordinate(-90, 90),
   gpsLongitude: optionalCoordinate(-180, 180),
@@ -916,6 +918,8 @@ visitsRouter.post(
           gpsLongitude: input.gpsLongitude,
           categoryId: input.categoryId,
           categoryName,
+          activityId: input.activityId,
+          activityName: input.activityName,
         },
       },
     });
@@ -1026,6 +1030,8 @@ visitsRouter.post(
           source: "mobile_base64",
           categoryId: input.categoryId,
           categoryName,
+          activityId: input.activityId,
+          activityName: input.activityName,
         },
       },
     });
