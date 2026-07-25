@@ -3,14 +3,17 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 const apiBaseUrl = String.fromEnvironment(
@@ -18,7 +21,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.8 (build 11)';
+const appVersionLabel = 'APK Flutter v1.1.9 (build 12)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -438,108 +441,129 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final pendingItems = routeItems.where((item) => !item.isDone).toList();
     final completedItems = routeItems.where((item) => item.isDone).length;
-    return AppShell(
-      child: Column(
-        children: [
-          AppTopBar(
-            title: 'Roteiro do promotor',
-            subtitle: 'Promotor: ${session.user.name}',
-            onLogout: () => unawaited(_confirmLogout(context)),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async => onRefresh(),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  DashboardGrid(
-                    cards: [
-                      MetricData(
-                        'Clientes liberados',
-                        routeItems.length.toString(),
-                        Icons.storefront,
-                      ),
-                      MetricData(
-                        'Pendentes',
-                        pendingItems.length.toString(),
-                        Icons.route,
-                      ),
-                      MetricData(
-                        'Atendidos',
-                        completedItems.toString(),
-                        Icons.verified,
-                      ),
-                      MetricData(
-                        'Fila sync',
-                        '${queueSummary.pending}',
-                        Icons.sync,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  OperatorIdentityCard(
-                    promoterName: session.user.name,
-                    promoterEmail: session.user.email,
-                    versionLabel: appVersionLabel,
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SecondaryButton(
-                          label: 'Atualizar roteiro',
-                          onPressed: busy ? null : onRefresh,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: PrimaryButton(
-                          label: busy ? 'Aguarde...' : 'Sync',
-                          onPressed: busy ? null : onSync,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  SecondaryButton(
-                    label: 'Ver fila de sincronizacao',
-                    onPressed: onOpenSync,
-                  ),
-                  const SizedBox(height: 10),
-                  DangerButton(
-                    label: 'Sair do app',
-                    onPressed: busy
-                        ? null
-                        : () => unawaited(_confirmLogout(context)),
-                  ),
-                  const SizedBox(height: 14),
-                  MessageBox(message: message),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Clientes para atendimento',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (pendingItems.isEmpty)
-                    const EmptyState(
-                      title: 'Nenhum cliente pendente',
-                      body:
-                          'Quando uma rota for publicada para este promotor, os clientes aparecem aqui.',
-                    )
-                  else
-                    ...pendingItems.map(
-                      (item) => RouteItemCard(
-                        item: item,
-                        onTap: () => onOpenVisit(item),
-                      ),
-                    ),
+    return DefaultTabController(
+      length: 2,
+      child: AppShell(
+        child: Column(
+          children: [
+            AppTopBar(
+              title: 'Roteiro do promotor',
+              subtitle: 'Promotor: ${session.user.name}',
+              onLogout: () => unawaited(_confirmLogout(context)),
+            ),
+            Container(
+              color: brandNavy,
+              child: const TabBar(
+                indicatorColor: brandGreen,
+                indicatorWeight: 4,
+                labelColor: Colors.white,
+                unselectedLabelColor: Color(0xFFCBD5E1),
+                labelStyle: TextStyle(fontWeight: FontWeight.w900),
+                tabs: [
+                  Tab(icon: Icon(Icons.list_alt), text: 'Roteiro'),
+                  Tab(icon: Icon(Icons.map), text: 'Mapa'),
                 ],
               ),
             ),
-          ),
-        ],
+            Expanded(
+              child: TabBarView(
+                children: [
+                  RefreshIndicator(
+                    onRefresh: () async => onRefresh(),
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        DashboardGrid(
+                          cards: [
+                            MetricData(
+                              'Clientes liberados',
+                              routeItems.length.toString(),
+                              Icons.storefront,
+                            ),
+                            MetricData(
+                              'Pendentes',
+                              pendingItems.length.toString(),
+                              Icons.route,
+                            ),
+                            MetricData(
+                              'Atendidos',
+                              completedItems.toString(),
+                              Icons.verified,
+                            ),
+                            MetricData(
+                              'Fila sync',
+                              '${queueSummary.pending}',
+                              Icons.sync,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        OperatorIdentityCard(
+                          promoterName: session.user.name,
+                          promoterEmail: session.user.email,
+                          versionLabel: appVersionLabel,
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SecondaryButton(
+                                label: 'Atualizar roteiro',
+                                onPressed: busy ? null : onRefresh,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: PrimaryButton(
+                                label: busy ? 'Aguarde...' : 'Sync',
+                                onPressed: busy ? null : onSync,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SecondaryButton(
+                          label: 'Ver fila de sincronizacao',
+                          onPressed: onOpenSync,
+                        ),
+                        const SizedBox(height: 10),
+                        DangerButton(
+                          label: 'Sair do app',
+                          onPressed: busy
+                              ? null
+                              : () => unawaited(_confirmLogout(context)),
+                        ),
+                        const SizedBox(height: 14),
+                        MessageBox(message: message),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Clientes para atendimento',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 10),
+                        if (pendingItems.isEmpty)
+                          const EmptyState(
+                            title: 'Nenhum cliente pendente',
+                            body:
+                                'Quando uma rota for publicada para este promotor, os clientes aparecem aqui.',
+                          )
+                        else
+                          ...pendingItems.map(
+                            (item) => RouteItemCard(
+                              item: item,
+                              onTap: () => onOpenVisit(item),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  RouteMapTab(items: pendingItems),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4354,6 +4378,425 @@ class RouteItemCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class RouteMapTab extends StatefulWidget {
+  const RouteMapTab({super.key, required this.items});
+
+  final List<RouteItemView> items;
+
+  @override
+  State<RouteMapTab> createState() => _RouteMapTabState();
+}
+
+class _RouteMapTabState extends State<RouteMapTab> {
+  RouteItemView? selectedItem;
+  GpsPoint? currentLocation;
+  bool locating = true;
+
+  List<RouteItemView> get mappedItems =>
+      widget.items.where((item) => item.hasCoordinates).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    selectedItem = mappedItems.isEmpty ? null : mappedItems.first;
+    unawaited(_loadCurrentLocation());
+  }
+
+  @override
+  void didUpdateWidget(covariant RouteMapTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (mappedItems.isEmpty) {
+      selectedItem = null;
+      return;
+    }
+
+    final selectedStillExists = mappedItems.any(
+      (item) => item.id == selectedItem?.id,
+    );
+    if (!selectedStillExists) {
+      selectedItem = mappedItems.first;
+    }
+  }
+
+  Future<void> _loadCurrentLocation() async {
+    final gps = await getGpsOrNull();
+    if (!mounted) return;
+    setState(() {
+      currentLocation = gps;
+      locating = false;
+    });
+  }
+
+  LatLng _initialCenter() {
+    final points = <LatLng>[
+      for (final item in mappedItems)
+        LatLng(item.clientLatitude!, item.clientLongitude!),
+      if (currentLocation != null)
+        LatLng(currentLocation!.latitude, currentLocation!.longitude),
+    ];
+
+    if (points.isEmpty) {
+      return const LatLng(-15.6014, -56.0979);
+    }
+
+    final latitude =
+        points.map((point) => point.latitude).reduce((a, b) => a + b) /
+        points.length;
+    final longitude =
+        points.map((point) => point.longitude).reduce((a, b) => a + b) /
+        points.length;
+    return LatLng(latitude, longitude);
+  }
+
+  Future<void> _openNavigation(RouteItemView item) async {
+    final latitude = item.clientLatitude;
+    final longitude = item.clientLongitude;
+    if (latitude == null || longitude == null) return;
+
+    final googleMapsUri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=driving',
+    );
+    final geoUri = Uri.parse(
+      'geo:$latitude,$longitude?q=$latitude,$longitude(${Uri.encodeComponent(item.clientName)})',
+    );
+
+    final opened = await launchUrl(
+      googleMapsUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (opened) {
+      return;
+    }
+
+    final openedGeo = await launchUrl(
+      geoUri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!openedGeo && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nao foi possivel abrir o mapa deste aparelho.'),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (mappedItems.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: const [
+          EmptyState(
+            title: 'Nenhum cliente com GPS',
+            body:
+                'Os clientes desta rota ainda nao possuem latitude e longitude cadastradas. Cadastre as coordenadas na retaguarda para aparecerem no mapa.',
+          ),
+        ],
+      );
+    }
+
+    final selected = selectedItem ?? mappedItems.first;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+          child: InfoCard(
+            title: 'Mapa do roteiro',
+            body:
+                '${mappedItems.length} cliente(s) com GPS. Toque em um ponto para selecionar e abrir a rota.',
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Stack(
+                children: [
+                  FlutterMap(
+                    options: MapOptions(
+                      initialCenter: _initialCenter(),
+                      initialZoom: mappedItems.length == 1 ? 15 : 12,
+                      minZoom: 4,
+                      maxZoom: 19,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'br.com.promotorpro.mobile',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          for (final item in mappedItems)
+                            Marker(
+                              point: LatLng(
+                                item.clientLatitude!,
+                                item.clientLongitude!,
+                              ),
+                              width: 58,
+                              height: 58,
+                              child: GestureDetector(
+                                onTap: () =>
+                                    setState(() => selectedItem = item),
+                                child: _ClientMapMarker(
+                                  sequence: item.sequence,
+                                  selected: selected.id == item.id,
+                                ),
+                              ),
+                            ),
+                          if (currentLocation != null)
+                            Marker(
+                              point: LatLng(
+                                currentLocation!.latitude,
+                                currentLocation!.longitude,
+                              ),
+                              width: 44,
+                              height: 44,
+                              child: const _CurrentLocationMarker(),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    right: 12,
+                    child: _MapOverlayCard(
+                      icon: locating ? Icons.gps_not_fixed : Icons.gps_fixed,
+                      title: locating
+                          ? 'Buscando sua posicao'
+                          : currentLocation == null
+                          ? 'Posicao do aparelho indisponivel'
+                          : 'Sua posicao foi carregada',
+                      body:
+                          'Clientes com marcador azul estao prontos para navegacao.',
+                    ),
+                  ),
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: _SelectedClientPanel(
+                      item: selected,
+                      onNavigate: () => unawaited(_openNavigation(selected)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ClientMapMarker extends StatelessWidget {
+  const _ClientMapMarker({required this.sequence, required this.selected});
+
+  final int sequence;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: selected ? 1.15 : 1,
+      duration: const Duration(milliseconds: 180),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected ? brandGreen : brandBlue,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 4),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            '$sequence',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrentLocationMarker extends StatelessWidget {
+  const _CurrentLocationMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: brandGreen.withValues(alpha: 0.2),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: brandGreen,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapOverlayCard extends StatelessWidget {
+  const _MapOverlayCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: brandBlue),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: brandNavy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  body,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectedClientPanel extends StatelessWidget {
+  const _SelectedClientPanel({required this.item, required this.onNavigate});
+
+  final RouteItemView item;
+  final VoidCallback onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            item.clientName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: brandNavy,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            item.clientAddress ?? 'Endereco nao informado',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${item.clientLatitude!.toStringAsFixed(6)}, ${item.clientLongitude!.toStringAsFixed(6)}',
+                  style: const TextStyle(
+                    color: Color(0xFF475569),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: onNavigate,
+                icon: const Icon(Icons.navigation),
+                label: const Text('Tracar rota'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: brandBlue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
