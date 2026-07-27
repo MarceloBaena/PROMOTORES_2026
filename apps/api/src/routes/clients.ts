@@ -80,6 +80,68 @@ async function syncClientSuppliers(
   });
 }
 
+function textFromRow(row: Record<string, string>, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function coordinateFromRow(row: Record<string, string>, keys: string[]) {
+  const rawValue = textFromRow(row, keys);
+  if (!rawValue) {
+    return undefined;
+  }
+
+  const value = Number(rawValue.replace(",", "."));
+  return Number.isFinite(value) ? value : undefined;
+}
+
+async function findDefaultPromoterId(companyId: string, row: Record<string, string>) {
+  const promoterCode = textFromRow(row, [
+    "promotorCodigo",
+    "codigoPromotor",
+    "codigo_promotor",
+    "promotor_codigo",
+    "promotorCode"
+  ]);
+  const promoterEmail = textFromRow(row, [
+    "promotorEmail",
+    "emailPromotor",
+    "email_promotor",
+    "promotor_email"
+  ]);
+  const promoterName = textFromRow(row, [
+    "promotor",
+    "promotorResponsavel",
+    "promotor_responsavel",
+    "defaultPromoter"
+  ]);
+
+  if (!promoterCode && !promoterEmail && !promoterName) {
+    return undefined;
+  }
+
+  const normalizedCode = promoterCode?.replace(/\D/g, "");
+  const promoter = await prisma.promoter.findFirst({
+    where: {
+      companyId,
+      OR: [
+        ...(normalizedCode ? [{ code: Number(normalizedCode) }] : []),
+        ...(promoterEmail ? [{ user: { email: { equals: promoterEmail, mode: Prisma.QueryMode.insensitive } } }] : []),
+        ...(promoterName ? [{ user: { name: { contains: promoterName, mode: Prisma.QueryMode.insensitive } } }] : [])
+      ]
+    },
+    select: { id: true }
+  });
+
+  return promoter?.id;
+}
+
 clientsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -260,44 +322,39 @@ clientsRouter.post(
 
     for (const [index, row] of records.entries()) {
       try {
-        const name = row.name || row.nome || row.cliente;
+        const name = textFromRow(row, ["name", "nome", "cliente", "razaoSocial", "razao_social"]);
 
         if (!name) {
           throw new Error("Missing client name.");
         }
 
-        const code = row.code || row.codigo || `CSV-${Date.now()}-${index}`;
+        const code = textFromRow(row, ["code", "codigo", "cod_cliente"]) || `CSV-${Date.now()}-${index}`;
+        const defaultPromoterId = await findDefaultPromoterId(companyId, row);
+        const clientData = {
+          companyId,
+          name,
+          tradeName: textFromRow(row, ["tradeName", "nomeFantasia", "nome_fantasia", "fantasia"]),
+          document: textFromRow(row, ["document", "documento", "cnpj", "cpf"]),
+          representative: textFromRow(row, ["representative", "representante", "vendedor"]),
+          address: textFromRow(row, ["address", "endereco", "logradouro"]),
+          addressNumber: textFromRow(row, ["addressNumber", "numero", "nro", "num"]),
+          district: textFromRow(row, ["district", "bairro"]),
+          city: textFromRow(row, ["city", "cidade", "municipio"]),
+          state: textFromRow(row, ["state", "uf", "estado"]),
+          latitude: coordinateFromRow(row, ["latitude", "lat"]),
+          longitude: coordinateFromRow(row, ["longitude", "lng", "lon"]),
+          defaultPromoterId,
+          status: "ACTIVE" as const
+        };
 
         await prisma.$transaction(async (tx) => {
           const client = await tx.client.upsert({
             where: { companyId_code: { companyId, code } },
             create: {
-              companyId,
               code,
-              name,
-              tradeName: row.tradeName || row.nomeFantasia || row.fantasia || undefined,
-              document: row.document || row.documento || undefined,
-              representative: row.representative || row.representante || undefined,
-              address: row.address || row.endereco || undefined,
-              addressNumber: row.addressNumber || row.numero || undefined,
-              district: row.district || row.bairro || undefined,
-              city: row.city || row.cidade || undefined,
-              state: row.state || row.uf || undefined,
-              status: "ACTIVE"
+              ...clientData
             },
-            update: {
-              companyId,
-              name,
-              tradeName: row.tradeName || row.nomeFantasia || row.fantasia || undefined,
-              document: row.document || row.documento || undefined,
-              representative: row.representative || row.representante || undefined,
-              address: row.address || row.endereco || undefined,
-              addressNumber: row.addressNumber || row.numero || undefined,
-              district: row.district || row.bairro || undefined,
-              city: row.city || row.cidade || undefined,
-              state: row.state || row.uf || undefined,
-              status: "ACTIVE"
-            },
+            update: clientData,
             select: { id: true }
           });
 
