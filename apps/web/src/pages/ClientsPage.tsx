@@ -22,6 +22,28 @@ function textValue(value: unknown, fallback = "-") {
   return text.length > 0 ? text : fallback;
 }
 
+function supplierName(link: unknown) {
+  const supplier = (link as { supplier?: { name?: string | null; tradeName?: string | null } } | null | undefined)
+    ?.supplier;
+  const tradeName = supplier?.tradeName?.trim();
+  const name = supplier?.name?.trim();
+  return tradeName || name || "Fornecedor";
+}
+
+function supplierMetrics(link: unknown) {
+  const supplier = (link as {
+    supplier?: {
+      categories?: Array<unknown>;
+      activities?: Array<unknown>;
+    };
+  } | null | undefined)?.supplier;
+
+  return {
+    categories: Array.isArray(supplier?.categories) ? supplier.categories.length : 0,
+    activities: Array.isArray(supplier?.activities) ? supplier.activities.length : 0
+  };
+}
+
 export function ClientsPage() {
   const { user } = useAuth();
   const [promoterOptions, setPromoterOptions] = useState<Array<{ value: string; label: string }>>([]);
@@ -173,7 +195,8 @@ export function ClientsPage() {
           value: (item) => {
             const code = textValue(item.code, "Sem codigo");
             const document = textValue(item.document, "Sem documento");
-            const tradeName = textValue(item.tradeName, "Sem nome fantasia");
+            const tradeName = String(item.tradeName ?? "").trim();
+            const legalName = textValue(item.name);
             const company = companyLabel(item.company as CompanyOption | null | undefined);
             const representative = textValue(item.representative, "Sem representante");
             const promoter = promoterLabel(item.defaultPromoter);
@@ -184,9 +207,13 @@ export function ClientsPage() {
                   <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-forest">
                     {code}
                   </span>
-                  <strong className="text-base leading-tight text-ink">{textValue(item.name)}</strong>
+                  <strong className="text-base leading-tight text-ink">
+                    {tradeName || legalName}
+                  </strong>
                 </div>
-                <div className="text-xs font-semibold text-stone-500">Fantasia: {tradeName}</div>
+                {tradeName && tradeName !== legalName ? (
+                  <div className="text-xs font-semibold text-stone-500">Razao social: {legalName}</div>
+                ) : null}
                 <div className="text-xs font-semibold text-stone-500">Documento: {document}</div>
                 <div className="text-xs font-semibold text-stone-500">Empresa: {company}</div>
                 <div className="text-xs font-semibold text-stone-500">Representante: {representative}</div>
@@ -197,7 +224,7 @@ export function ClientsPage() {
         },
         {
           label: "Endereco",
-          headerClassName: "w-[34%]",
+          headerClassName: "w-[26%]",
           className: "min-w-[240px]",
           value: (item) => {
             const street = textValue(item.address, "Sem endereco");
@@ -213,8 +240,58 @@ export function ClientsPage() {
           }
         },
         {
+          label: "Fornecedores",
+          headerClassName: "w-[22%]",
+          className: "min-w-[220px]",
+          value: (item) => {
+            const links = Array.isArray(item.suppliers) ? item.suppliers : [];
+            const visibleSuppliers = links.slice(0, 2);
+            const totals = links.reduce(
+              (acc, link) => {
+                const metrics = supplierMetrics(link);
+                return {
+                  categories: acc.categories + metrics.categories,
+                  activities: acc.activities + metrics.activities
+                };
+              },
+              { categories: 0, activities: 0 }
+            );
+
+            if (links.length === 0) {
+              return (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
+                  Sem fornecedor vinculado
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {visibleSuppliers.map((link, index) => (
+                    <span
+                      key={`${supplierName(link)}-${index}`}
+                      className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-blue-700"
+                    >
+                      {supplierName(link)}
+                    </span>
+                  ))}
+                  {links.length > visibleSuppliers.length ? (
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-black text-slate-600">
+                      +{links.length - visibleSuppliers.length}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-xs font-semibold text-stone-500">
+                  {links.length} fornecedor(es) | {totals.categories} categoria(s) | {totals.activities} atividade(s)
+                </div>
+              </div>
+            );
+          }
+        },
+        {
           label: "Cidade/UF",
-          headerClassName: "w-[16%]",
+          headerClassName: "w-[12%]",
           className: "min-w-[150px]",
           value: (item) => (
             <div className="font-bold leading-snug text-ink">

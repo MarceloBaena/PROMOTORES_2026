@@ -268,7 +268,7 @@ class _PromotorProAppState extends State<PromotorProApp> {
                 if (busy) return;
                 setState(() {
                   busy = true;
-                  message = 'Abrindo atendimento de ${item.clientName}...';
+                  message = 'Abrindo atendimento de ${item.navigationName}...';
                 });
                 try {
                   final resultMessage = await _pushPage<String>(
@@ -286,7 +286,7 @@ class _PromotorProAppState extends State<PromotorProApp> {
                   if (!mounted) return;
                   setState(
                     () => message =
-                        'Nao foi possivel abrir o cliente ${item.clientName}. ${normalizedError(error)}',
+                        'Nao foi possivel abrir o cliente ${item.navigationName}. ${normalizedError(error)}',
                   );
                   _showError('Falha ao abrir cliente', normalizedError(error));
                 } finally {
@@ -947,7 +947,7 @@ class _VisitPageState extends State<VisitPage> {
       );
       await widget.repository.addSyncLog(
         'pending',
-        'Fornecedor ${supplierLabel(supplier)} concluido offline para ${widget.item.clientName}.',
+        'Fornecedor ${supplierLabel(supplier)} concluido offline para ${widget.item.navigationName}.',
       );
       await _load();
       if (!mounted) return;
@@ -1607,7 +1607,7 @@ class AppRepository {
     await db.enqueue('visit', visit.localId);
     await db.addSyncLog(
       'pending',
-      'Atendimento iniciado offline para ${item.clientName}.',
+      'Atendimento iniciado offline para ${item.navigationName}.',
     );
     return visit;
   }
@@ -2410,6 +2410,7 @@ class LocalDatabase {
         route_items.sequence,
         route_items.status,
         clients.name AS clientName,
+        clients.payload_json AS clientPayloadJson,
         clients.address AS clientAddress,
         clients.latitude AS clientLatitude,
         clients.longitude AS clientLongitude,
@@ -3126,6 +3127,7 @@ class RouteItemView {
     required this.sequence,
     required this.status,
     required this.clientName,
+    this.clientTradeName,
     this.clientAddress,
     this.clientLatitude,
     this.clientLongitude,
@@ -3139,6 +3141,7 @@ class RouteItemView {
   final int sequence;
   final String status;
   final String clientName;
+  final String? clientTradeName;
   final String? clientAddress;
   final double? clientLatitude;
   final double? clientLongitude;
@@ -3148,20 +3151,37 @@ class RouteItemView {
   bool get isDone =>
       status.toUpperCase() == 'COMPLETED' || visitStatus == 'completed';
   bool get hasCoordinates => clientLatitude != null && clientLongitude != null;
+  String get navigationName {
+    final fantasyName = clientTradeName?.trim();
+    return fantasyName != null && fantasyName.isNotEmpty
+        ? fantasyName
+        : clientName;
+  }
 
-  factory RouteItemView.fromDb(Map<String, Object?> row) => RouteItemView(
-    id: row['id'] as String,
-    routeId: row['routeId'] as String,
-    clientId: row['clientId'] as String,
-    sequence: asInt(row['sequence']),
-    status: row['status'] as String,
-    clientName: row['clientName'] as String,
-    clientAddress: row['clientAddress'] as String?,
-    clientLatitude: asDouble(row['clientLatitude']),
-    clientLongitude: asDouble(row['clientLongitude']),
-    routeName: row['routeName'] as String,
-    visitStatus: row['visitStatus'] as String?,
-  );
+  factory RouteItemView.fromDb(Map<String, Object?> row) {
+    String? tradeName;
+    final payloadJson = row['clientPayloadJson'] as String?;
+    if (payloadJson != null && payloadJson.isNotEmpty) {
+      try {
+        final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+        tradeName = payload['tradeName'] as String?;
+      } catch (_) {}
+    }
+    return RouteItemView(
+      id: row['id'] as String,
+      routeId: row['routeId'] as String,
+      clientId: row['clientId'] as String,
+      sequence: asInt(row['sequence']),
+      status: row['status'] as String,
+      clientName: row['clientName'] as String,
+      clientTradeName: tradeName,
+      clientAddress: row['clientAddress'] as String?,
+      clientLatitude: asDouble(row['clientLatitude']),
+      clientLongitude: asDouble(row['clientLongitude']),
+      routeName: row['routeName'] as String,
+      visitStatus: row['visitStatus'] as String?,
+    );
+  }
 }
 
 class LocalVisit {
@@ -4274,6 +4294,66 @@ class MetricCard extends StatelessWidget {
   }
 }
 
+class ClientNameBlock extends StatelessWidget {
+  const ClientNameBlock({
+    super.key,
+    required this.item,
+    this.inverse = false,
+    this.fontSize = 16,
+    this.maxLines = 2,
+  });
+
+  final RouteItemView item;
+  final bool inverse;
+  final double fontSize;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final legalName = item.clientName.trim();
+    final fantasyName = item.clientTradeName?.trim();
+    final hasFantasy =
+        fantasyName != null &&
+        fantasyName.isNotEmpty &&
+        fantasyName.toLowerCase() != legalName.toLowerCase();
+    final primaryColor = inverse ? Colors.white : brandNavy;
+    final secondaryColor = inverse
+        ? const Color(0xFFE2E8F0)
+        : const Color(0xFF64748B);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          hasFantasy
+              ? fantasyName
+              : (legalName.isEmpty ? 'Cliente' : legalName),
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: primaryColor,
+            fontSize: fontSize,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        if (hasFantasy) ...[
+          const SizedBox(height: 3),
+          Text(
+            'Razao social: $legalName',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: secondaryColor,
+              fontSize: fontSize * 0.72,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class RouteItemCard extends StatelessWidget {
   const RouteItemCard({super.key, required this.item, required this.onTap});
 
@@ -4318,15 +4398,7 @@ class RouteItemCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          item.clientName,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            color: brandNavy,
-                          ),
-                        ),
+                        ClientNameBlock(item: item, fontSize: 16, maxLines: 3),
                         const SizedBox(height: 6),
                         Text(
                           item.clientAddress ?? 'Endereco nao informado',
@@ -4462,7 +4534,7 @@ class _RouteMapTabState extends State<RouteMapTab> {
       'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=driving',
     );
     final geoUri = Uri.parse(
-      'geo:$latitude,$longitude?q=$latitude,$longitude(${Uri.encodeComponent(item.clientName)})',
+      'geo:$latitude,$longitude?q=$latitude,$longitude(${Uri.encodeComponent(item.navigationName)})',
     );
 
     final opened = await launchUrl(
@@ -4752,16 +4824,7 @@ class _SelectedClientPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            item.clientName,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: brandNavy,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+          ClientNameBlock(item: item, fontSize: 16),
           const SizedBox(height: 4),
           Text(
             item.clientAddress ?? 'Endereco nao informado',
@@ -4827,16 +4890,7 @@ class ClientHero extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            item.clientName,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+          ClientNameBlock(item: item, inverse: true, fontSize: 24, maxLines: 4),
           const SizedBox(height: 6),
           Text(
             item.clientAddress ?? 'Endereco nao informado',

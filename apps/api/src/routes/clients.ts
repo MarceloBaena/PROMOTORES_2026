@@ -171,7 +171,43 @@ clientsRouter.get(
       take: 200,
       include: {
         company: true,
-        defaultPromoter: { include: { user: true } }
+        defaultPromoter: { include: { user: true } },
+        suppliers: {
+          include: {
+            supplier: {
+              select: {
+                id: true,
+                name: true,
+                tradeName: true,
+                status: true,
+                categories: {
+                  where: { category: { status: "ACTIVE" } },
+                  select: {
+                    category: {
+                      select: {
+                        id: true,
+                        code: true,
+                        name: true
+                      }
+                    }
+                  }
+                },
+                activities: {
+                  where: { activity: { status: "ACTIVE" } },
+                  select: {
+                    activity: {
+                      select: {
+                        id: true,
+                        code: true,
+                        name: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     });
 
