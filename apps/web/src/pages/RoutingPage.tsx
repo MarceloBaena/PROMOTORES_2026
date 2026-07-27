@@ -79,6 +79,28 @@ function clientLabel(client: ClientOption) {
   return `${code}${name}${fantasy}${city}`;
 }
 
+function clientHeadline(client: ClientOption) {
+  const code = client.code ? `${client.code} - ` : "";
+  const tradeName = client.tradeName?.trim();
+  const primaryName =
+    tradeName && tradeName !== client.name
+      ? tradeName
+      : client.name || "Cliente sem nome";
+
+  return `${code}${primaryName}`;
+}
+
+function clientSecondaryLine(client: ClientOption) {
+  const details = [
+    client.name && client.tradeName?.trim() !== client.name ? client.name : null,
+    client.city
+      ? `${client.city}${client.state ? `/${client.state}` : ""}`
+      : null,
+  ].filter(Boolean);
+
+  return details.join(" | ");
+}
+
 function formatDateTime(value?: string | null) {
   if (!value) {
     return "-";
@@ -535,32 +557,55 @@ export function RoutingPage() {
                   <button
                     key={client.id}
                     type="button"
-                    className="inline-flex items-center gap-2 rounded-full border border-line bg-field px-3 py-2 text-xs font-black text-graphite"
+                    className="inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-field px-3 py-2 text-left text-xs font-black text-graphite"
                     onClick={() => toggleClient(client.id)}
                     title="Remover cliente"
                   >
-                    {index + 1}. {clientLabel(client)}
+                    <span className="truncate">
+                      {index + 1}. {clientHeadline(client)}
+                    </span>
                     <X className="h-3 w-3" />
                   </button>
                 ))}
               </div>
 
-              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+              <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                 {filteredClients.map((client) => {
                   const selected = selectedClientIds.includes(client.id);
+                  const secondaryLine = clientSecondaryLine(client);
 
                   return (
                     <button
                       key={client.id}
                       type="button"
-                      className={`w-full rounded-xl border px-3 py-3 text-left text-sm font-bold transition ${
+                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
                         selected
                           ? "border-moss bg-emerald-50 text-forest"
                           : "border-line bg-white text-ink hover:bg-muted"
                       }`}
                       onClick={() => toggleClient(client.id)}
                     >
-                      {clientLabel(client)}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-black text-current">
+                            {clientHeadline(client)}
+                          </div>
+                          {secondaryLine ? (
+                            <div className="mt-1 text-xs font-semibold text-slateText">
+                              {secondaryLine}
+                            </div>
+                          ) : null}
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${
+                            selected
+                              ? "bg-white/80 text-forest"
+                              : "bg-field text-slateText"
+                          }`}
+                        >
+                          {selected ? "Selecionado" : "Disponivel"}
+                        </span>
+                      </div>
                     </button>
                   );
                 })}
