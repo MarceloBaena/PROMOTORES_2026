@@ -350,6 +350,10 @@ export function RoutingPage() {
   const selectedClients = selectedClientIds
     .map((id) => clients.find((client) => client.id === id))
     .filter((client): client is ClientOption => Boolean(client));
+  const selectedCompany = companies.find((company) => company.id === form.companyId);
+  const selectedPromoter = filteredPromoters.find(
+    (promoter) => promoter.id === form.promoterId,
+  );
 
   const publishedCount = useMemo(
     () => routes.filter((route) => route.status === "PUBLISHED").length,
@@ -435,131 +439,187 @@ export function RoutingPage() {
           </div>
 
           <div className="space-y-3 p-4">
-            <label className="block">
-              <span className="field-label">Empresa/Filial</span>
-              <select
-                className="input-control"
-                disabled={!isPlatformAdmin}
-                value={form.companyId}
-                onChange={(event) => {
-                  setForm((current) => ({
-                    ...current,
-                    companyId: event.target.value,
-                    supervisorId: "",
-                    promoterId: "",
-                  }));
-                  setSelectedClientIds([]);
-                }}
-              >
-                <option value="">Selecione a empresa/filial</option>
-                {companies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {companyLabel(company)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-line bg-field px-3 py-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                  Empresa
+                </div>
+                <div className="mt-1 text-sm font-black text-ink">
+                  {selectedCompany ? companyLabel(selectedCompany) : "Nao selecionada"}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-line bg-field px-3 py-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                  Equipe
+                </div>
+                <div className="mt-1 text-sm font-black text-ink">
+                  {selectedPromoter
+                    ? optionLabel(selectedPromoter, "PRO")
+                    : "Promotor nao definido"}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-line bg-field px-3 py-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                  Clientes
+                </div>
+                <div className="mt-1 text-sm font-black text-ink">
+                  {selectedClientIds.length} selecionado(s)
+                </div>
+              </div>
+            </div>
 
-            <label className="block">
-              <span className="field-label">Nome da rota</span>
-              <input
-                className="input-control"
-                type="text"
-                value={form.name}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    name: event.target.value,
-                  }))
-                }
-              />
-            </label>
+            <div className="rounded-[1.35rem] border border-line bg-white p-4">
+              <div className="mb-3">
+                <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
+                  Dados da rota
+                </div>
+                <div className="mt-1 text-xs font-semibold text-slateText">
+                  Configure empresa, janela operacional e equipe responsavel.
+                </div>
+              </div>
 
-            <label className="block">
-              <span className="field-label">Data/hora inicial</span>
-              <input
-                className="input-control"
-                type="datetime-local"
-                value={form.startDate}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    startDate: event.target.value,
-                  }))
-                }
-              />
-            </label>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block md:col-span-2">
+                  <span className="field-label">Empresa/Filial</span>
+                  <select
+                    className="input-control"
+                    disabled={!isPlatformAdmin}
+                    value={form.companyId}
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        companyId: event.target.value,
+                        supervisorId: "",
+                        promoterId: "",
+                      }));
+                      setSelectedClientIds([]);
+                    }}
+                  >
+                    <option value="">Selecione a empresa/filial</option>
+                    {companies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {companyLabel(company)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <label className="block">
-              <span className="field-label">Data/hora final</span>
-              <input
-                className="input-control"
-                type="datetime-local"
-                value={form.endDate}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    endDate: event.target.value,
-                  }))
-                }
-              />
-            </label>
-
-            <label className="block">
-              <span className="field-label">Supervisor</span>
-              <select
-                className="input-control"
-                value={form.supervisorId}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    supervisorId: event.target.value,
-                  }))
-                }
-              >
-                <option value="">Selecione um supervisor</option>
-                {filteredSupervisors.map((supervisor) => (
-                  <option key={supervisor.id} value={supervisor.id}>
-                    {optionLabel(supervisor, "SUP")}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="field-label">Promotor de vendas</span>
-              <select
-                className="input-control"
-                value={form.promoterId}
-                onChange={(event) => {
-                  const promoterId = event.target.value;
-                  setForm((current) => ({ ...current, promoterId }));
-
-                  if (promoterId) {
-                    const promoterClientIds = clients
-                      .filter(
-                        (client) => client.defaultPromoter?.id === promoterId,
-                      )
-                      .map((client) => client.id);
-
-                    if (promoterClientIds.length > 0) {
-                      setSelectedClientIds((current) =>
-                        Array.from(new Set([...current, ...promoterClientIds])),
-                      );
+                <label className="block md:col-span-2">
+                  <span className="field-label">Nome da rota</span>
+                  <input
+                    className="input-control"
+                    type="text"
+                    value={form.name}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
                     }
-                  }
-                }}
-              >
-                <option value="">Selecione um promotor</option>
-                {filteredPromoters.map((promoter) => (
-                  <option key={promoter.id} value={promoter.id}>
-                    {optionLabel(promoter, "PRO")}
-                  </option>
-                ))}
-              </select>
-            </label>
+                  />
+                </label>
 
-            <div className="rounded-2xl border border-line bg-white p-3">
+                <label className="block">
+                  <span className="field-label">Data/hora inicial</span>
+                  <input
+                    className="input-control"
+                    type="datetime-local"
+                    value={form.startDate}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        startDate: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="field-label">Data/hora final</span>
+                  <input
+                    className="input-control"
+                    type="datetime-local"
+                    value={form.endDate}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        endDate: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="field-label">Supervisor</span>
+                  <select
+                    className="input-control"
+                    value={form.supervisorId}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        supervisorId: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Selecione um supervisor</option>
+                    {filteredSupervisors.map((supervisor) => (
+                      <option key={supervisor.id} value={supervisor.id}>
+                        {optionLabel(supervisor, "SUP")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="field-label">Promotor de vendas</span>
+                  <select
+                    className="input-control"
+                    value={form.promoterId}
+                    onChange={(event) => {
+                      const promoterId = event.target.value;
+                      setForm((current) => ({ ...current, promoterId }));
+
+                      if (promoterId) {
+                        const promoterClientIds = clients
+                          .filter(
+                            (client) => client.defaultPromoter?.id === promoterId,
+                          )
+                          .map((client) => client.id);
+
+                        if (promoterClientIds.length > 0) {
+                          setSelectedClientIds((current) =>
+                            Array.from(
+                              new Set([...current, ...promoterClientIds]),
+                            ),
+                          );
+                        }
+                      }
+                    }}
+                  >
+                    <option value="">Selecione um promotor</option>
+                    {filteredPromoters.map((promoter) => (
+                      <option key={promoter.id} value={promoter.id}>
+                        {optionLabel(promoter, "PRO")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-[1.35rem] border border-line bg-white p-3">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="field-label">Clientes do roteiro</span>
+                  <div className="mt-1 text-xs font-semibold text-slateText">
+                    Marque os clientes que farão parte da jornada desta rota.
+                  </div>
+                </div>
+                <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                  {filteredClients.length} disponivel(is)
+                </span>
+              </div>
+
               <span className="field-label">Clientes do roteiro</span>
               <div className="mb-3 flex flex-wrap gap-2">
                 {selectedClients.length === 0 ? (
@@ -682,7 +742,7 @@ export function RoutingPage() {
                       <Send className="h-4 w-4" />
                     </button>
                   </div>
-                </div>
+              </div>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                   <RouteInfo label="Periodo" value={formatRoutePeriod(route)} />
@@ -708,7 +768,7 @@ export function RoutingPage() {
                   </div>
 
                   {route.items.length > 0 ? (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
                       {route.items.map((item) => {
                         const secondaryName = routeClientSecondaryName(
                           item.client,
