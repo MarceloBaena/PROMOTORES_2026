@@ -101,6 +101,20 @@ function clientSecondaryLine(client: ClientOption) {
   return details.join(" | ");
 }
 
+function routeClientPrimaryName(client: RoutePlan["items"][number]["client"]) {
+  const tradeName = client.tradeName?.trim();
+  return tradeName || client.name || "Cliente sem nome";
+}
+
+function routeClientSecondaryName(client: RoutePlan["items"][number]["client"]) {
+  const tradeName = client.tradeName?.trim();
+  if (!tradeName || tradeName === client.name) {
+    return null;
+  }
+
+  return client.name;
+}
+
 function formatDateTime(value?: string | null) {
   if (!value) {
     return "-";
@@ -681,22 +695,54 @@ export function RoutingPage() {
                     label="Supervisor"
                     value={personLabel(route.supervisor, "SUP")}
                   />
-                  <RouteInfo
-                    label="Clientes"
-                    value={
-                      route.items.length > 0
-                        ? route.items
-                            .map((item) =>
-                              item.client.tradeName?.trim() &&
-                              item.client.tradeName !== item.client.name
-                                ? `${item.client.name} / ${item.client.tradeName}`
-                                : item.client.name,
-                            )
-                            .slice(0, 2)
-                            .join(" | ")
-                        : "Sem clientes"
-                    }
-                  />
+                </div>
+
+                <div className="mt-3 rounded-2xl border border-line bg-field p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                      Clientes da rota
+                    </div>
+                    <div className="text-[11px] font-bold text-slateText">
+                      {route.items.length} cliente(s)
+                    </div>
+                  </div>
+
+                  {route.items.length > 0 ? (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {route.items.map((item) => {
+                        const secondaryName = routeClientSecondaryName(
+                          item.client,
+                        );
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="rounded-xl border border-line bg-white px-3 py-2"
+                          >
+                            <div className="flex items-start gap-2">
+                              <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-50 px-1.5 text-[10px] font-black text-brand">
+                                {item.sequence}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="text-sm font-black leading-5 text-ink">
+                                  {routeClientPrimaryName(item.client)}
+                                </div>
+                                {secondaryName ? (
+                                  <div className="mt-1 text-xs font-semibold text-slateText">
+                                    Razao social: {secondaryName}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-sm font-semibold text-stone-500">
+                      Sem clientes vinculados nesta rota.
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
