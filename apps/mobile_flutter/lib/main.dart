@@ -21,7 +21,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.10 (build 13)';
+const appVersionLabel = 'APK Flutter v1.1.11 (build 14)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -94,16 +94,55 @@ class _PromotorProAppState extends State<PromotorProApp> {
     _restartHeartbeat();
   }
 
+  bool _isExpiredSessionError(Object error) {
+    final text = normalizedError(error).toLowerCase();
+    return text.contains('invalid or expired access token') ||
+        text.contains('invalid access token') ||
+        text.contains('expired access token') ||
+        text.contains('invalid or expired refresh token') ||
+        text.contains('unauthorized');
+  }
+
+  Future<T> _runWithSessionRetry<T>(
+    Future<T> Function(Session activeSession) action,
+  ) async {
+    final currentSession = session;
+    if (currentSession == null) {
+      throw Exception('Sessao nao encontrada neste aparelho.');
+    }
+
+    try {
+      return await action(currentSession);
+    } catch (error) {
+      if (!_isExpiredSessionError(error)) {
+        rethrow;
+      }
+
+      final refreshedSession = await widget.repository.refreshSession(
+        currentSession,
+      );
+      await widget.repository.saveSession(refreshedSession);
+      if (mounted) {
+        setState(() => session = refreshedSession);
+      } else {
+        session = refreshedSession;
+      }
+      return action(refreshedSession);
+    }
+  }
+
   void _restartHeartbeat() {
     heartbeatTimer?.cancel();
-    final currentSession = session;
-    if (currentSession == null || !routeItems.any((item) => !item.isDone)) {
+    if (session == null || !routeItems.any((item) => !item.isDone)) {
       return;
     }
 
     Future<void> send() async {
       try {
-        await widget.repository.sendHeartbeat(currentSession.accessToken);
+        await _runWithSessionRetry(
+          (activeSession) =>
+              widget.repository.sendHeartbeat(activeSession.accessToken),
+        );
       } catch (_) {
         // Heartbeat must never block the field workflow.
       }
@@ -150,8 +189,7 @@ class _PromotorProAppState extends State<PromotorProApp> {
   }
 
   Future<void> _refreshRoute() async {
-    final currentSession = session;
-    if (currentSession == null) return;
+    if (session == null) return;
 
     setState(() {
       busy = true;
@@ -159,8 +197,9 @@ class _PromotorProAppState extends State<PromotorProApp> {
     });
 
     try {
-      final snapshot = await widget.repository.downloadSnapshot(
-        currentSession.accessToken,
+      final snapshot = await _runWithSessionRetry(
+        (activeSession) =>
+            widget.repository.downloadSnapshot(activeSession.accessToken),
       );
       await widget.repository.saveSnapshot(snapshot);
       await _reload(
@@ -175,16 +214,16 @@ class _PromotorProAppState extends State<PromotorProApp> {
   }
 
   Future<void> _syncNow() async {
-    final currentSession = session;
-    if (currentSession == null) return;
+    if (session == null) return;
     setState(() {
       busy = true;
       message = 'Sincronizando fila local...';
     });
 
     try {
-      final result = await widget.repository.syncPending(
-        currentSession.accessToken,
+      final result = await _runWithSessionRetry(
+        (activeSession) =>
+            widget.repository.syncPending(activeSession.accessToken),
       );
       await _refreshRoute();
       await _reload(
@@ -1546,6 +1585,7 @@ class AppRepository {
   Future<void> init() async {
     prefs = await SharedPreferences.getInstance();
     await db.open();
+    await db.normalizeLegacyOperationalData();
   }
 
   Future<Session?> getSession() async {
@@ -1565,6 +1605,8 @@ class AppRepository {
 
   Future<Session> login(String email, String password) =>
       api.login(email, password);
+  Future<Session> refreshSession(Session session) =>
+      api.refreshSession(session.refreshToken);
   Future<MobileSnapshot> downloadSnapshot(String accessToken) =>
       api.downloadSnapshot(accessToken);
   Future<void> saveSnapshot(MobileSnapshot snapshot) =>
@@ -1735,6 +1777,32 @@ class AppRepository {
     );
   }
 
+  LocalVisit _normalizeVisitForSync(LocalVisit visit) {
+    final normalizedNotes = (visit.notes ?? '').trim();
+    final normalizedFinishedAt = visit.status == 'completed'
+        ? (visit.finishedAt ?? visit.updatedAt)
+        : visit.finishedAt;
+    return visit.copyWith(
+      finishedAt: normalizedFinishedAt,
+      notes: normalizedNotes,
+      updatedAt: visit.updatedAt,
+    );
+  }
+
+  LocalSupplierExecution _normalizeSupplierExecutionForSync(
+    LocalSupplierExecution execution,
+  ) {
+    final normalizedNotes = (execution.notes ?? '').trim();
+    final normalizedFinishedAt = execution.status == 'completed'
+        ? (execution.finishedAtDevice ?? execution.updatedAt)
+        : execution.finishedAtDevice;
+    return execution.copyWith(
+      notes: normalizedNotes,
+      finishedAtDevice: normalizedFinishedAt,
+      updatedAt: execution.updatedAt,
+    );
+  }
+
   Future<SyncResult> syncPending(String accessToken) async {
     final queue = await db.getPendingQueue();
     var synced = 0;
@@ -1895,8 +1963,10 @@ class AppRepository {
   }
 
   Future<void> _syncVisit(String accessToken, String localId) async {
-    final visit = await db.getVisit(localId);
-    if (visit == null) return;
+    final originalVisit = await db.getVisit(localId);
+    if (originalVisit == null) return;
+    final visit = _normalizeVisitForSync(originalVisit);
+    await db.upsertVisit(visit);
     await db.updateVisitSyncStatus(localId, 'syncing');
 
     if (visit.status != 'completed') {
@@ -1951,8 +2021,10 @@ class AppRepository {
     String accessToken,
     String localId,
   ) async {
-    final execution = await db.getSupplierExecution(localId);
-    if (execution == null) return;
+    final originalExecution = await db.getSupplierExecution(localId);
+    if (originalExecution == null) return;
+    final execution = _normalizeSupplierExecutionForSync(originalExecution);
+    await db.upsertSupplierExecution(execution);
     if (execution.serverId != null && execution.syncStatus == 'synced') {
       return;
     }
@@ -1977,35 +2049,43 @@ class AppRepository {
     String serverVisitId,
     LocalSupplierExecution execution,
   ) async {
-    if (execution.serverId != null && execution.syncStatus == 'synced') {
-      return execution.serverId!;
+    final normalizedExecution = _normalizeSupplierExecutionForSync(execution);
+    await db.upsertSupplierExecution(normalizedExecution);
+
+    if (normalizedExecution.serverId != null &&
+        normalizedExecution.syncStatus == 'synced') {
+      return normalizedExecution.serverId!;
     }
 
-    final client = await db.getClientSnapshot(execution.clientId);
+    final client = await db.getClientSnapshot(normalizedExecution.clientId);
     final supplier = supplierById(
       suppliersFromPayload(client?.payload),
-      execution.supplierId,
+      normalizedExecution.supplierId,
     );
-    if (execution.status == 'completed' && supplier != null) {
-      final executionPhotos = (await db.listPhotos(execution.visitLocalId))
+    if (normalizedExecution.status == 'completed' && supplier != null) {
+      final executionPhotos =
+          (await db.listPhotos(normalizedExecution.visitLocalId))
           .where((photo) => photo.supplierExecutionLocalId == execution.localId)
           .toList();
       _assertSupplierExecutionReady(
-        execution,
+        normalizedExecution,
         executionPhotos,
         supplier,
         activitiesForSupplier(supplier, client),
       );
     }
 
-    await db.updateSupplierExecutionSyncStatus(execution.localId, 'syncing');
+    await db.updateSupplierExecutionSyncStatus(
+      normalizedExecution.localId,
+      'syncing',
+    );
     final serverId = await api.sendSupplierExecution(
       accessToken,
       serverVisitId,
-      execution,
+      normalizedExecution,
     );
     await db.updateSupplierExecutionServerId(
-      execution.localId,
+      normalizedExecution.localId,
       serverId,
       'synced',
     );
@@ -2132,6 +2212,16 @@ class ApiClient {
       '/auth/login',
       method: 'POST',
       body: {'email': email.trim().toLowerCase(), 'password': password},
+    );
+    return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<Session> refreshSession(String refreshToken) async {
+    final response = await _request(
+      '/auth/refresh',
+      method: 'POST',
+      body: {'refreshToken': refreshToken},
+      timeout: const Duration(seconds: 60),
     );
     return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
@@ -2277,7 +2367,7 @@ class LocalDatabase {
     final path = p.join(directory.path, 'promotorpro_flutter.db');
     _db = await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE clients (id TEXT PRIMARY KEY, code TEXT, name TEXT NOT NULL, address TEXT, city TEXT, state TEXT, latitude REAL, longitude REAL, payload_json TEXT NOT NULL)',
@@ -2346,12 +2436,49 @@ class LocalDatabase {
             );
           } catch (_) {}
         }
+        if (oldVersion < 6) {
+          await db.execute(
+            "UPDATE visits SET notes = '' WHERE notes IS NULL",
+          );
+          await db.execute(
+            "UPDATE visits SET finished_at = COALESCE(updated_at, started_at) WHERE status = 'completed' AND finished_at IS NULL",
+          );
+          await db.execute(
+            "UPDATE supplier_executions SET notes = '' WHERE notes IS NULL",
+          );
+          await db.execute(
+            "UPDATE supplier_executions SET finished_at_device = COALESCE(updated_at, started_at_device) WHERE status = 'completed' AND finished_at_device IS NULL",
+          );
+          await db.execute(
+            "UPDATE sync_queue SET status = 'pending', updated_at = datetime('now') WHERE status = 'syncing'",
+          );
+        }
       },
     );
     return _db!;
   }
 
   String nowIso() => DateTime.now().toUtc().toIso8601String();
+
+  Future<void> normalizeLegacyOperationalData() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.execute("UPDATE visits SET notes = '' WHERE notes IS NULL");
+      await txn.execute(
+        "UPDATE visits SET finished_at = COALESCE(updated_at, started_at) WHERE status = 'completed' AND finished_at IS NULL",
+      );
+      await txn.execute(
+        "UPDATE supplier_executions SET notes = '' WHERE notes IS NULL",
+      );
+      await txn.execute(
+        "UPDATE supplier_executions SET finished_at_device = COALESCE(updated_at, started_at_device) WHERE status = 'completed' AND finished_at_device IS NULL",
+      );
+      await txn.execute(
+        "UPDATE sync_queue SET status = 'pending', updated_at = ? WHERE status = 'syncing'",
+        [nowIso()],
+      );
+    });
+  }
 
   Future<void> saveSnapshot(MobileSnapshot snapshot) async {
     final db = await database;

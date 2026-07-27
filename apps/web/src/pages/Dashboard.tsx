@@ -8,7 +8,6 @@ import {
   Navigation,
   RadioTower,
   Route,
-  Store,
   Users
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -129,6 +128,32 @@ export function Dashboard() {
     [fieldWork]
   );
 
+  const quickSummary = useMemo(
+    () => [
+      {
+        label: "Promotores ativos",
+        value: fieldWork.activePromoters,
+        helper: "Equipe pronta para jornada"
+      },
+      {
+        label: "Rotas publicadas",
+        value: routeDay.total,
+        helper: "Rotas validas no periodo"
+      },
+      {
+        label: "Clientes liberados",
+        value: fieldWork.releasedClientsToday,
+        helper: "Pontos previstos para hoje"
+      },
+      {
+        label: "Clientes atendidos",
+        value: fieldWork.attendedClientsToday,
+        helper: "Concluidos pelo aplicativo"
+      }
+    ],
+    [fieldWork.activePromoters, fieldWork.attendedClientsToday, fieldWork.releasedClientsToday, routeDay.total]
+  );
+
   return (
     <section>
       <PageHeader
@@ -180,14 +205,13 @@ export function Dashboard() {
                   Resumo da operacao em campo
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-white/68">
-                  Veja rapidamente quem esta trabalhando, quantos clientes foram liberados e o que realmente exige acao.
+                  Veja rapidamente o que foi liberado, o que ja foi concluido e quais pontos ainda exigem acompanhamento.
                 </p>
 
                 <div className="mt-5 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))]">
-                  <CommandStat label="Base ativa" value={summary?.clients ?? 0} />
-                  <CommandStat label="Promotores" value={fieldWork.activePromoters} />
-                  <CommandStat label="Liberados" value={fieldWork.releasedClientsToday} />
-                  <CommandStat label="Atendidos" value={fieldWork.attendedClientsToday} />
+                  {quickSummary.map((item) => (
+                    <CommandStat key={item.label} label={item.label} value={item.value} helper={item.helper} />
+                  ))}
                 </div>
 
                 <div className="mt-4 rounded-lg border border-white/10 bg-white/10 p-4">
@@ -219,7 +243,7 @@ export function Dashboard() {
                   <RouteStep label="Rotas do dia" value={routeDay.total} active={routeDay.total > 0} />
                   <RouteStep label="Clientes liberados" value={fieldWork.releasedClientsToday} active={fieldWork.releasedClientsToday > 0} />
                   <RouteStep label="Clientes atendidos" value={fieldWork.attendedClientsToday} active={fieldWork.attendedClientsToday > 0} />
-                  <RouteStep label="Dentro do prazo" value={fieldWork.openUnder48} active={fieldWork.openUnder48 > 0} />
+                  <RouteStep label="Em atendimento" value={fieldWork.inServiceNow} active={fieldWork.inServiceNow > 0} />
                 </div>
               </div>
             </div>
@@ -245,45 +269,54 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="panel overflow-hidden">
           <div className="panel-header">
             <div>
-              <h2 className="panel-title">Resumo operacional</h2>
-              <p className="panel-subtitle">Dados reais do roteiro publicado e dos atendimentos recebidos pelo aplicativo.</p>
+              <h2 className="panel-title">Leitura rapida do dia</h2>
+              <p className="panel-subtitle">Sem repeticao: somente os numeros que ajudam na decisao imediata.</p>
             </div>
           </div>
-          <div className="grid gap-3 p-5 [grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))]">
-            <OperationalTile icon={Store} label="Base ativa" value={summary?.clients ?? 0} description="Clientes cadastrados e ativos" />
-            <OperationalTile icon={Route} label="Rotas cadastradas" value={summary?.routes ?? 0} description="Historico de roteirizacoes" />
-            <OperationalTile icon={CheckCircle2} label="Check-ins hoje" value={summary?.checkinsToday ?? 0} description="Evidencias iniciadas no app" />
-            <OperationalTile icon={AlertTriangle} label="Canceladas hoje" value={routeDay.cancelled} description="Rotas canceladas no dia" danger={routeDay.cancelled > 0} />
+          <div className="grid gap-3 p-5 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
+            <OperationalTile icon={Route} label="Rotas publicadas" value={summary?.routes ?? 0} description="Base historica de roteirizacoes ativas e concluidas" />
+            <OperationalTile icon={CheckCircle2} label="Check-ins hoje" value={summary?.checkinsToday ?? 0} description="Chegadas registradas pelo aplicativo" />
+            <OperationalTile icon={Clock3} label="Dentro do prazo" value={fieldWork.openUnder48} description="Clientes ainda no tempo operacional" />
+            <OperationalTile icon={AlertTriangle} label="Canceladas hoje" value={routeDay.cancelled} description="Rotas canceladas no periodo" danger={routeDay.cancelled > 0} />
           </div>
         </div>
 
         <div className="panel overflow-hidden">
           <div className="panel-header">
             <div>
-              <h2 className="panel-title">Acompanhamento do dia</h2>
-              <p className="panel-subtitle">Linha do tempo dos promotores, roteiro em andamento e ultimo ponto recebido.</p>
+              <h2 className="panel-title">Acesso rapido</h2>
+              <p className="panel-subtitle">Atalhos diretos para supervisao do dia sem poluir a tela inicial.</p>
             </div>
-            <Link to="/mapa" className="secondary-button h-10">
-              Abrir painel
-            </Link>
           </div>
-          <div className="mini-map-grid relative h-[18rem] overflow-hidden bg-skywash">
-            <div className="absolute left-[18%] top-[26%] h-3 w-3 rounded-full bg-execution shadow-[0_0_0_10px_rgba(16,185,129,0.18)]" />
-            <div className="absolute left-[58%] top-[36%] h-3 w-3 rounded-full bg-brand shadow-[0_0_0_10px_rgba(37,99,235,0.16)]" />
-            <div className="absolute left-[72%] top-[68%] h-3 w-3 rounded-full bg-warning shadow-[0_0_0_10px_rgba(245,158,11,0.18)]" />
-            <div className="absolute bottom-5 left-5 right-5 rounded-lg border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-900/10 backdrop-blur">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">Equipe em campo</p>
-                  <p className="mt-1 text-sm font-black text-ink">{fieldWork.activePromoters} promotor(es) ativo(s)</p>
-                </div>
-                <MapPinned className="h-6 w-6 text-brand" />
-              </div>
-            </div>
+          <div className="grid gap-3 p-5 sm:grid-cols-2">
+            <QuickLinkCard
+              title="Acompanhamento do dia"
+              body="Abra o painel de jornada para ver posicoes, linha do tempo e ultimas evidencias."
+              to="/mapa"
+              icon={Navigation}
+            />
+            <QuickLinkCard
+              title="Visitas recebidas"
+              body="Confira visitas sincronizadas, detalhes da execucao e fotos enviadas pelo aplicativo."
+              to="/visitas"
+              icon={ClipboardCheck}
+            />
+            <QuickLinkCard
+              title="Roteirizacao"
+              body="Publique novas rotas ou revise o que ja foi executado pela equipe."
+              to="/roteirizacao"
+              icon={Route}
+            />
+            <QuickLinkCard
+              title="Auditoria"
+              body="Resolva excecoes reais sem navegar por blocos repetidos do painel."
+              to="/auditoria"
+              icon={AlertTriangle}
+            />
           </div>
         </div>
       </div>
@@ -291,11 +324,22 @@ export function Dashboard() {
   );
 }
 
-function CommandStat({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
+function CommandStat({
+  label,
+  value,
+  helper,
+  danger = false
+}: {
+  label: string;
+  value: number;
+  helper?: string;
+  danger?: boolean;
+}) {
   return (
     <div className="min-w-0 rounded-lg border border-white/10 bg-white/10 p-3">
       <div className="break-words text-[10px] font-black uppercase leading-4 tracking-[0.1em] text-white/48">{label}</div>
       <div className={`mt-1 font-display text-xl font-black leading-none sm:text-2xl ${danger ? "text-warning" : "text-white"}`}>{value}</div>
+      {helper ? <div className="mt-2 text-[11px] font-semibold leading-4 text-white/50">{helper}</div> : null}
     </div>
   );
 }
@@ -356,5 +400,34 @@ function OperationalTile({
       </div>
       <p className="mt-3 text-xs font-bold leading-5 text-slateText">{description}</p>
     </div>
+  );
+}
+
+function QuickLinkCard({
+  title,
+  body,
+  to,
+  icon: Icon
+}: {
+  title: string;
+  body: string;
+  to: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <Link
+      to={to}
+      className="rounded-lg border border-line bg-white p-4 shadow-sm shadow-slate-900/5 transition hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-black text-ink">{title}</p>
+          <p className="mt-2 text-xs font-semibold leading-5 text-slateText">{body}</p>
+        </div>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brandSoft text-brand">
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+    </Link>
   );
 }

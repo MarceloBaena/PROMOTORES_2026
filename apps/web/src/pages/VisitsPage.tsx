@@ -141,6 +141,18 @@ function promoterLabel(promoter?: Visit["promoter"]) {
   return formattedCode ? `${formattedCode} - ${name}` : name;
 }
 
+function promoterFilterValue(promoter?: Visit["promoter"]) {
+  if (!promoter) {
+    return "__without_promoter";
+  }
+
+  const code = promoter.code ? String(promoter.code) : "";
+  const name = promoter.user?.name?.trim() ?? "";
+  const email = promoter.user?.email?.trim() ?? "";
+
+  return [code, name, email].join("|");
+}
+
 function formatDate(value?: string | null) {
   if (!value) {
     return "-";
@@ -286,13 +298,56 @@ export function VisitsPage() {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [promoterFilter, setPromoterFilter] = useState("all");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const promoterOptions = useMemo(() => {
+    const options = new Map<
+      string,
+      { value: string; label: string; count: number }
+    >();
+
+    visits.forEach((visit) => {
+      const value = promoterFilterValue(visit.promoter);
+      const current = options.get(value);
+
+      if (current) {
+        current.count += 1;
+        return;
+      }
+
+      options.set(value, {
+        value,
+        label:
+          value === "__without_promoter"
+            ? "Sem promotor vinculado"
+            : promoterLabel(visit.promoter),
+        count: 1,
+      });
+    });
+
+    return Array.from(options.values()).sort((left, right) =>
+      left.label.localeCompare(right.label, "pt-BR"),
+    );
+  }, [visits]);
+
+  const filteredVisits = useMemo(() => {
+    if (promoterFilter === "all") {
+      return visits;
+    }
+
+    return visits.filter(
+      (visit) => promoterFilterValue(visit.promoter) === promoterFilter,
+    );
+  }, [promoterFilter, visits]);
+
   const selectedVisit = useMemo(
     () =>
-      visits.find((visit) => visit.id === selectedVisitId) ?? visits[0] ?? null,
-    [selectedVisitId, visits],
+      filteredVisits.find((visit) => visit.id === selectedVisitId) ??
+      filteredVisits[0] ??
+      null,
+    [filteredVisits, selectedVisitId],
   );
   const selectedPhoto = useMemo(
     () =>
@@ -305,13 +360,13 @@ export function VisitsPage() {
     [selectedVisit],
   );
 
-  const completedCount = visits.filter(
+  const completedCount = filteredVisits.filter(
     (visit) => visit.status === "completed",
   ).length;
-  const inProgressCount = visits.filter(
+  const inProgressCount = filteredVisits.filter(
     (visit) => visit.status === "in_progress",
   ).length;
-  const evidencesReadyCount = visits.filter((visit) =>
+  const evidencesReadyCount = filteredVisits.filter((visit) =>
     hasRequiredPhotos(visit),
   ).length;
 
@@ -352,6 +407,17 @@ export function VisitsPage() {
 
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    if (
+      selectedVisitId &&
+      filteredVisits.some((visit) => visit.id === selectedVisitId)
+    ) {
+      return;
+    }
+
+    setSelectedVisitId(filteredVisits[0]?.id ?? null);
+  }, [filteredVisits, selectedVisitId]);
 
   useEffect(() => {
     if (!selectedPhoto) {
@@ -423,7 +489,7 @@ export function VisitsPage() {
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <OperationalMetric
           label="Visitas no painel"
-          value={visits.length}
+          value={filteredVisits.length}
           helper="Atendimentos recebidos da operacao mobile."
         />
         <OperationalMetric
@@ -445,6 +511,32 @@ export function VisitsPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
         <div className="table-wrap">
+          <div className="border-b border-line p-4">
+            <div className="grid gap-3 md:grid-cols-[minmax(260px,360px)_auto] md:items-end">
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
+                  Promotor
+                </span>
+                <select
+                  className="field-select"
+                  value={promoterFilter}
+                  onChange={(event) => setPromoterFilter(event.target.value)}
+                >
+                  <option value="all">Todos os promotores</option>
+                  {promoterOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label} ({option.count})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="rounded-full bg-field px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-slateText md:justify-self-end">
+                Exibindo {filteredVisits.length} visita(s)
+              </div>
+            </div>
+          </div>
+
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Fila operacional de visitas</h2>
@@ -454,12 +546,12 @@ export function VisitsPage() {
               </p>
             </div>
             <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
-              {visits.length} registro(s)
+              {filteredVisits.length} registro(s)
             </span>
           </div>
 
           <div className="space-y-3 p-4">
-            {visits.map((visit) => {
+            {filteredVisits.map((visit) => {
               const isSelected = visit.id === selectedVisit?.id;
 
               return (
@@ -509,10 +601,9 @@ export function VisitsPage() {
               );
             })}
 
-            {visits.length === 0 ? (
+            {filteredVisits.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-line bg-white px-4 py-8 text-center text-sm font-semibold text-stone-500">
-                Nenhuma visita encontrada. Sincronize o aplicativo para enviar
-                os atendimentos.
+                Nenhuma visita encontrada para o promotor selecionado.
               </div>
             ) : null}
           </div>
