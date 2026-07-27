@@ -21,7 +21,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.9 (build 12)';
+const appVersionLabel = 'APK Flutter v1.1.10 (build 13)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
