@@ -51,13 +51,27 @@ function ClientName({ client, inverse = false }: { client: AuditFlag["visit"]["c
 export function AuditPage() {
   const [flags, setFlags] = useState<AuditFlag[]>([]);
   const [selectedFlagId, setSelectedFlagId] = useState<string | null>(null);
+  const [severityFilter, setSeverityFilter] = useState("all");
   const [message, setMessage] = useState<string | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const filteredFlags = useMemo(() => {
+    if (severityFilter === "all") {
+      return flags;
+    }
+
+    return flags.filter(
+      (flag) => String(flag.severity).toLowerCase() === severityFilter,
+    );
+  }, [flags, severityFilter]);
+
   const selectedFlag = useMemo(
-    () => flags.find((flag) => flag.id === selectedFlagId) ?? flags[0] ?? null,
-    [flags, selectedFlagId]
+    () =>
+      filteredFlags.find((flag) => flag.id === selectedFlagId) ??
+      filteredFlags[0] ??
+      null,
+    [filteredFlags, selectedFlagId]
   );
 
   const criticalCount = flags.filter((flag) => String(flag.severity).toLowerCase() === "high").length;
@@ -86,6 +100,17 @@ export function AuditPage() {
   useEffect(() => {
     void loadFlags();
   }, [loadFlags]);
+
+  useEffect(() => {
+    if (
+      selectedFlagId &&
+      filteredFlags.some((flag) => flag.id === selectedFlagId)
+    ) {
+      return;
+    }
+
+    setSelectedFlagId(filteredFlags[0]?.id ?? null);
+  }, [filteredFlags, selectedFlagId]);
 
   async function resolveFlag(flagId: string) {
     setLoadingAction(`resolve-${flagId}`);
@@ -141,19 +166,66 @@ export function AuditPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="table-wrap">
+          <div className="border-b border-line bg-white p-4">
+            <div className="grid gap-3 lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
+              <label className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
+                  Severidade
+                </span>
+                <select
+                  className="field-select"
+                  value={severityFilter}
+                  onChange={(event) => setSeverityFilter(event.target.value)}
+                >
+                  <option value="all">Todas as severidades</option>
+                  <option value="high">Alta</option>
+                  <option value="medium">Media</option>
+                  <option value="low">Baixa</option>
+                </select>
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <AuditFilterStat
+                  label="Em tela"
+                  value={`${filteredFlags.length}`}
+                  helper="Alertas visiveis no filtro atual."
+                />
+                <AuditFilterStat
+                  label="Alta"
+                  value={`${criticalCount}`}
+                  helper="Exigem prioridade operacional."
+                />
+                <AuditFilterStat
+                  label="Promotores"
+                  value={`${impactedPromoters}`}
+                  helper="Equipe impactada na fila."
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Fila da auditoria</h2>
               <p className="panel-subtitle">Selecione um alerta para decidir se ele deve ser encerrado ou voltar para a roteirizacao.</p>
             </div>
             <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
-              {flags.length} item(ns)
+              {filteredFlags.length} item(ns)
             </span>
           </div>
 
           <div className="space-y-3 p-4">
-            {flags.map((flag) => {
+            {filteredFlags.map((flag) => {
               const isSelected = selectedFlag?.id === flag.id;
+              const tradeName = flag.visit.client.tradeName?.trim();
+              const primaryName =
+                tradeName && tradeName !== flag.visit.client.name
+                  ? tradeName
+                  : flag.visit.client.name;
+              const secondaryName =
+                tradeName && tradeName !== flag.visit.client.name
+                  ? flag.visit.client.name
+                  : null;
 
               return (
                 <button
@@ -168,9 +240,16 @@ export function AuditPage() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <ClientName client={flag.visit.client} />
+                      <div className="text-base font-black text-ink">{primaryName}</div>
+                      {secondaryName ? (
+                        <div className="mt-1 text-xs font-semibold text-slateText">
+                          Razao social: {secondaryName}
+                        </div>
+                      ) : null}
                       <div className="mt-1 text-xs font-semibold text-slateText">{promoterLabel(flag.visit.promoter)}</div>
-                      <div className="mt-2 text-xs font-semibold text-slateText">{auditTypeLabel(flag.type)}</div>
+                      <div className="mt-2 inline-flex rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-brand">
+                        {auditTypeLabel(flag.type)}
+                      </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <StatusPill value={flag.severity} />
@@ -181,9 +260,9 @@ export function AuditPage() {
               );
             })}
 
-            {flags.length === 0 ? (
+            {filteredFlags.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-line bg-white px-4 py-8 text-center text-sm font-semibold text-stone-500">
-                Nenhum alerta aberto encontrado.
+                Nenhum alerta encontrado para o filtro selecionado.
               </div>
             ) : null}
           </div>
@@ -208,9 +287,16 @@ export function AuditPage() {
                 <div className="mt-3"><StatusPill value={selectedFlag.severity} /></div>
               </div>
 
-              <AuditInfoRow label="Tipo de alerta" value={auditTypeLabel(selectedFlag.type)} />
-              <AuditInfoRow label="Criado em" value={formatDate(selectedFlag.createdAt)} />
-              <AuditInfoRow label="Situacao" value={selectedFlag.resolved ? "Resolvida" : "Aberta"} />
+              <div className="rounded-[1.35rem] border border-line bg-field p-3">
+                <div className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
+                  Leitura rapida
+                </div>
+                <div className="grid gap-3">
+                  <AuditInfoRow label="Tipo de alerta" value={auditTypeLabel(selectedFlag.type)} />
+                  <AuditInfoRow label="Criado em" value={formatDate(selectedFlag.createdAt)} />
+                  <AuditInfoRow label="Situacao" value={selectedFlag.resolved ? "Resolvida" : "Aberta"} />
+                </div>
+              </div>
 
               <div className="surface-card">
                 <h3 className="font-display text-lg font-black text-ink">Acoes disponiveis</h3>
@@ -280,6 +366,24 @@ function AuditMetric({
         </span>
       </div>
       <div className="relative z-[1] mt-2 text-xs font-bold leading-5 text-slateText">{helper}</div>
+    </div>
+  );
+}
+
+function AuditFilterStat({
+  label,
+  value,
+  helper
+}: {
+  label: string;
+  value: string;
+  helper: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-field px-3 py-3">
+      <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">{label}</div>
+      <div className="mt-1 text-lg font-black text-ink">{value}</div>
+      <div className="mt-1 text-[11px] font-semibold leading-5 text-slateText">{helper}</div>
     </div>
   );
 }

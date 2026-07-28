@@ -305,6 +305,12 @@ export function ReportsPage() {
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Atualizar painel
           </button>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <MiniInfo label="Periodo" value={`${startDate || "-"} a ${endDate || "-"}`} />
+            <MiniInfo label="Promotor" value={selectedPromoter ? selectedPromoter.promoterName : "Todos"} />
+            <MiniInfo label="Visitas em tela" value={`${filteredVisits.length}`} />
+          </div>
         </div>
 
         <div className="relative overflow-hidden rounded-[1.6rem] bg-navy p-6 text-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
@@ -579,8 +585,12 @@ export function ReportsPage() {
         </div>
       </div>
 
-      {loading ? <div className="mt-4 text-sm font-bold text-slateText">Carregando produtividade...</div> : null}
-      <div className="mt-3 text-xs font-bold text-slateText">
+      {loading ? (
+        <div className="mt-4 rounded-2xl border border-line bg-field px-4 py-3 text-sm font-bold text-slateText">
+          Carregando produtividade...
+        </div>
+      ) : null}
+      <div className="mt-3 rounded-2xl border border-line bg-field px-4 py-3 text-xs font-bold text-slateText">
         Regra: {statusLabel("completed")} conta como visita concluida. Tempo no cliente usa inicio e fim do atendimento. Deslocamento usa o fim da visita anterior e o inicio da proxima visita do mesmo promotor.
       </div>
     </section>
