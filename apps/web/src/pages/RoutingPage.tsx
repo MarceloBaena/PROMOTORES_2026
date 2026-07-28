@@ -396,7 +396,7 @@ export function RoutingPage() {
 
       {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         <RouteMetric
           label="Rotas no painel"
           value={routes.length}
@@ -423,10 +423,10 @@ export function RoutingPage() {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[460px_minmax(0,1fr)]">
+      <div className="grid gap-4 2xl:grid-cols-[430px_minmax(0,1fr)]">
         <form
           onSubmit={createRoute}
-          className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start"
+          className="panel overflow-hidden 2xl:sticky 2xl:top-20 2xl:self-start"
         >
           <div className="panel-header">
             <div>
@@ -438,12 +438,12 @@ export function RoutingPage() {
           </div>
 
           <div className="space-y-3 p-4">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-1">
               <div className="rounded-2xl border border-line bg-field px-3 py-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
                   Empresa
                 </div>
-                <div className="mt-1 text-sm font-black text-ink">
+                <div className="mt-1 text-sm font-black leading-6 text-ink">
                   {selectedCompany ? companyLabel(selectedCompany) : "Nao selecionada"}
                 </div>
               </div>
@@ -451,7 +451,7 @@ export function RoutingPage() {
                 <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
                   Equipe
                 </div>
-                <div className="mt-1 text-sm font-black text-ink">
+                <div className="mt-1 text-sm font-black leading-6 text-ink">
                   {selectedPromoter
                     ? optionLabel(selectedPromoter, "PRO")
                     : "Promotor nao definido"}
@@ -703,19 +703,19 @@ export function RoutingPage() {
                       }`}
                       onClick={() => toggleClient(client.id)}
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                         <div className="min-w-0">
-                          <div className="text-sm font-black text-current">
+                          <div className="text-sm font-black leading-6 text-current break-words">
                             {clientHeadline(client)}
                           </div>
                           {secondaryLine ? (
-                            <div className="mt-1 text-xs font-semibold text-slateText">
+                            <div className="mt-1 text-xs font-semibold leading-5 text-slateText break-words">
                               {secondaryLine}
                             </div>
                           ) : null}
                         </div>
                         <span
-                          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${
+                          className={`self-start rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] sm:shrink-0 ${
                             selected
                               ? "bg-white/80 text-forest"
                               : "bg-field text-slateText"
@@ -765,9 +765,9 @@ export function RoutingPage() {
                 key={route.id}
                 className="rounded-[1.35rem] border border-line bg-white p-4 shadow-sm shadow-slate-900/5"
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
-                    <div className="text-base font-black text-ink">
+                    <div className="text-base font-black leading-7 text-ink break-words">
                       {route.name}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -779,7 +779,7 @@ export function RoutingPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 self-start">
                     <StatusPill value={route.status} />
                     <button
                       className="icon-button text-moss"
@@ -792,7 +792,7 @@ export function RoutingPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="mt-4 grid gap-2 md:grid-cols-2 2xl:grid-cols-4">
                   <RouteInfo label="Periodo" value={formatRoutePeriod(route)} />
                   <RouteInfo label="Duracao" value={formatRouteDuration(route)} />
                   <RouteInfo
@@ -832,11 +832,11 @@ export function RoutingPage() {
                                 {item.sequence}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <div className="text-sm font-black leading-6 text-ink">
+                                <div className="text-sm font-black leading-6 text-ink break-words">
                                   {routeClientPrimaryName(item.client)}
                                 </div>
                                 {secondaryName ? (
-                                  <div className="mt-1 text-xs font-semibold leading-5 text-slateText">
+                                  <div className="mt-1 text-xs font-semibold leading-5 text-slateText break-words">
                                     Razao social: {secondaryName}
                                   </div>
                                 ) : null}
