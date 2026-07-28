@@ -342,7 +342,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
     required this.repository,
@@ -368,6 +368,13 @@ class HomePage extends StatelessWidget {
   final Future<void> Function({String? nextMessage}) onChanged;
   final VoidCallback onLogout;
 
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  bool showMapTab = false;
+
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed = await confirmAction(
       context,
@@ -377,7 +384,7 @@ class HomePage extends StatelessWidget {
       confirmLabel: 'Sair agora',
     );
     if (confirmed == true) {
-      onLogout();
+      widget.onLogout();
     }
   }
 
@@ -385,23 +392,10 @@ class HomePage extends StatelessWidget {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SyncPage(
-          repository: repository,
-          promoterName: session.user.name,
-          onSync: onSync,
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openMap(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RouteMapPage(
-          repository: repository,
-          promoterName: session.user.name,
-          routeItems: routeItems,
-          onVisitChanged: onChanged,
+          repository: widget.repository,
+          promoterName: widget.session.user.name,
+          onSync: widget.onSync,
+          onChanged: widget.onChanged,
         ),
       ),
     );
@@ -411,30 +405,30 @@ class HomePage extends StatelessWidget {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => VisitPage(
-          repository: repository,
+          repository: widget.repository,
           item: item,
-          promoterName: session.user.name,
+          promoterName: widget.session.user.name,
         ),
       ),
     );
-    await onChanged();
+    await widget.onChanged();
   }
 
   @override
   Widget build(BuildContext context) {
-    final pendingItems = routeItems.where((item) => !item.isDone).toList();
-    final completedItems = routeItems.where((item) => item.isDone).length;
+    final pendingItems = widget.routeItems.where((item) => !item.isDone).toList();
+    final completedItems = widget.routeItems.where((item) => item.isDone).length;
     return AppShell(
       child: Column(
         children: [
           AppTopBar(
             title: 'Roteiro do promotor',
-            subtitle: 'Promotor: ${session.user.name}',
+            subtitle: 'Promotor: ${widget.session.user.name}',
             onLogout: () => unawaited(_confirmLogout(context)),
           ),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () async => onRefresh(),
+              onRefresh: () async => widget.onRefresh(),
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -442,7 +436,7 @@ class HomePage extends StatelessWidget {
                     cards: [
                       MetricData(
                         'Clientes liberados',
-                        routeItems.length.toString(),
+                        widget.routeItems.length.toString(),
                         Icons.storefront,
                       ),
                       MetricData(
@@ -457,16 +451,21 @@ class HomePage extends StatelessWidget {
                       ),
                       MetricData(
                         'Fila sync',
-                        '${queueSummary.pending}',
+                        '${widget.queueSummary.pending}',
                         Icons.sync,
                       ),
                     ],
                   ),
                   const SizedBox(height: 14),
                   OperatorIdentityCard(
-                    promoterName: session.user.name,
-                    promoterEmail: session.user.email,
+                    promoterName: widget.session.user.name,
+                    promoterEmail: widget.session.user.email,
                     versionLabel: appVersionLabel,
+                  ),
+                  const SizedBox(height: 14),
+                  _HomeSectionSwitch(
+                    showMap: showMapTab,
+                    onChange: (value) => setState(() => showMapTab = value),
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -474,14 +473,14 @@ class HomePage extends StatelessWidget {
                       Expanded(
                         child: SecondaryButton(
                           label: 'Atualizar roteiro',
-                          onPressed: busy ? null : onRefresh,
+                          onPressed: widget.busy ? null : widget.onRefresh,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: PrimaryButton(
-                          label: busy ? 'Aguarde...' : 'Sync',
-                          onPressed: busy ? null : onSync,
+                          label: widget.busy ? 'Aguarde...' : 'Sync',
+                          onPressed: widget.busy ? null : widget.onSync,
                         ),
                       ),
                     ],
@@ -492,40 +491,32 @@ class HomePage extends StatelessWidget {
                     onPressed: () => unawaited(_openSync(context)),
                   ),
                   const SizedBox(height: 10),
-                  SecondaryButton(
-                    label: 'Abrir mapa do roteiro',
-                    onPressed: () => unawaited(_openMap(context)),
-                  ),
-                  const SizedBox(height: 10),
                   DangerButton(
                     label: 'Sair do app',
-                    onPressed: busy
+                    onPressed: widget.busy
                         ? null
                         : () => unawaited(_confirmLogout(context)),
                   ),
                   const SizedBox(height: 14),
-                  MessageBox(message: message),
+                  MessageBox(message: widget.message),
                   const SizedBox(height: 16),
-                  Text(
-                    'Clientes para atendimento',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: showMapTab
+                        ? RouteMapContent(
+                            key: const ValueKey('route-map-tab'),
+                            repository: widget.repository,
+                            promoterName: widget.session.user.name,
+                            routeItems: widget.routeItems,
+                            onVisitChanged: widget.onChanged,
+                            embedded: true,
+                          )
+                        : _HomeRouteListSection(
+                            key: const ValueKey('route-list-tab'),
+                            pendingItems: pendingItems,
+                            onOpenVisit: (item) => _openVisit(context, item),
+                          ),
                   ),
-                  const SizedBox(height: 10),
-                  if (pendingItems.isEmpty)
-                    const EmptyState(
-                      title: 'Nenhum cliente pendente',
-                      body:
-                          'Quando uma rota for publicada para este promotor, os clientes aparecem aqui.',
-                    )
-                  else
-                    ...pendingItems.map(
-                      (item) => RouteItemCard(
-                        item: item,
-                        onTap: () => unawaited(_openVisit(context, item)),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -536,7 +527,137 @@ class HomePage extends StatelessWidget {
   }
 }
 
-class RouteMapPage extends StatefulWidget {
+class _HomeSectionSwitch extends StatelessWidget {
+  const _HomeSectionSwitch({
+    required this.showMap,
+    required this.onChange,
+  });
+
+  final bool showMap;
+  final ValueChanged<bool> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _HomeSectionButton(
+              label: 'Atendimento',
+              icon: Icons.list_alt,
+              selected: !showMap,
+              onPressed: () => onChange(false),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _HomeSectionButton(
+              label: 'Mapa',
+              icon: Icons.map_outlined,
+              selected: showMap,
+              onPressed: () => onChange(true),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeSectionButton extends StatelessWidget {
+  const _HomeSectionButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? brandBlue : Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? Colors.white : brandNavy,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? Colors.white : brandNavy,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeRouteListSection extends StatelessWidget {
+  const _HomeRouteListSection({
+    super.key,
+    required this.pendingItems,
+    required this.onOpenVisit,
+  });
+
+  final List<RouteItemView> pendingItems;
+  final Future<void> Function(RouteItemView item) onOpenVisit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Clientes para atendimento',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (pendingItems.isEmpty)
+          const EmptyState(
+            title: 'Nenhum cliente pendente',
+            body:
+                'Quando uma rota for publicada para este promotor, os clientes aparecem aqui.',
+          )
+        else
+          ...pendingItems.map(
+            (item) => RouteItemCard(
+              item: item,
+              onTap: () => unawaited(onOpenVisit(item)),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class RouteMapPage extends StatelessWidget {
   const RouteMapPage({
     super.key,
     required this.repository,
@@ -551,10 +672,50 @@ class RouteMapPage extends StatefulWidget {
   final Future<void> Function({String? nextMessage}) onVisitChanged;
 
   @override
-  State<RouteMapPage> createState() => _RouteMapPageState();
+  Widget build(BuildContext context) {
+    return AppShell(
+      child: Column(
+        children: [
+          AppTopBar(
+            title: 'Mapa do roteiro',
+            subtitle: 'Promotor: $promoterName',
+            showBack: true,
+          ),
+          Expanded(
+            child: RouteMapContent(
+              repository: repository,
+              promoterName: promoterName,
+              routeItems: routeItems,
+              onVisitChanged: onVisitChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _RouteMapPageState extends State<RouteMapPage> {
+class RouteMapContent extends StatefulWidget {
+  const RouteMapContent({
+    super.key,
+    required this.repository,
+    required this.promoterName,
+    required this.routeItems,
+    required this.onVisitChanged,
+    this.embedded = false,
+  });
+
+  final AppRepository repository;
+  final String promoterName;
+  final List<RouteItemView> routeItems;
+  final Future<void> Function({String? nextMessage}) onVisitChanged;
+  final bool embedded;
+
+  @override
+  State<RouteMapContent> createState() => _RouteMapContentState();
+}
+
+class _RouteMapContentState extends State<RouteMapContent> {
   final MapController mapController = MapController();
   RouteItemView? selectedItem;
   bool showOnlyPending = false;
@@ -740,250 +901,234 @@ class _RouteMapPageState extends State<RouteMapPage> {
       nextRouteItemAfterCurrent,
     );
 
-    return AppShell(
-      child: Column(
-        children: [
-          AppTopBar(
-            title: 'Mapa do roteiro',
-            subtitle: 'Promotor: ${widget.promoterName}',
-            showBack: true,
+    return ListView(
+      padding: EdgeInsets.fromLTRB(16, widget.embedded ? 0 : 16, 16, 16),
+      children: [
+        if (!widget.embedded) ...[
+          const InfoCard(
+            title: 'Mapa de apoio',
+            body:
+                'Veja os clientes com coordenadas salvas e use a navegacao externa para chegar ao ponto de venda.',
           ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
+          const SizedBox(height: 12),
+        ],
+        DashboardGrid(
+          cards: [
+            MetricData(
+              'Rota total',
+              orderedRouteItems.length.toString(),
+              Icons.route,
+            ),
+            MetricData(
+              'Cliente atual',
+              currentRouteItem?.sequence.toString() ?? '-',
+              Icons.navigation,
+            ),
+            MetricData(
+              'Pendentes',
+              pendingCount.toString(),
+              Icons.pending_actions,
+            ),
+            MetricData(
+              'Concluidos',
+              doneCount.toString(),
+              Icons.verified,
+            ),
+            MetricData(
+              'Proximo salto',
+              currentToNextLabel,
+              Icons.near_me,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const _MapLegendCard(),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: SecondaryButton(
+                label: showOnlyPending ? 'Mostrar todos' : 'Mostrar so pendentes',
+                onPressed: () {
+                  setState(() {
+                    showOnlyPending = !showOnlyPending;
+                    if (showOnlyPending &&
+                        selectedItem != null &&
+                        selectedItem!.isDone) {
+                      selectedItem = nextPendingRouteItem;
+                    }
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: PrimaryButton(
+                label: 'Ir para proximo',
+                onPressed: nextPendingRouteItem != null &&
+                        nextPendingRouteItem!.hasCoordinates
+                    ? () => _focusOnItem(nextPendingRouteItem!)
+                    : null,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        PrimaryButton(
+          label: currentRouteItem == null
+              ? 'Rota concluida'
+              : 'Iniciar cliente atual',
+          onPressed: currentRouteItem == null
+              ? null
+              : () => unawaited(_openVisit(currentRouteItem!)),
+        ),
+        const SizedBox(height: 12),
+        if (visibleItemsWithCoordinates.isEmpty)
+          const EmptyState(
+            title: 'Nenhum cliente com coordenadas',
+            body:
+                'Quando o cadastro do cliente tiver latitude e longitude, o ponto aparecera aqui no mapa.',
+          )
+        else ...[
+          Container(
+            height: 320,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: line),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: FlutterMap(
+              mapController: mapController,
+              options: MapOptions(
+                initialCenter: highlightedItem?.hasCoordinates == true
+                    ? LatLng(
+                        highlightedItem!.clientLatitude!,
+                        highlightedItem.clientLongitude!,
+                      )
+                    : initialCenter,
+                initialZoom: 12,
+              ),
               children: [
-                const InfoCard(
-                  title: 'Mapa de apoio',
-                  body:
-                      'Veja os clientes com coordenadas salvas e use a navegacao externa para chegar ao ponto de venda.',
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'promotorpro_mobile',
                 ),
-                const SizedBox(height: 12),
-                DashboardGrid(
-                  cards: [
-                    MetricData(
-                      'Rota total',
-                      orderedRouteItems.length.toString(),
-                      Icons.route,
-                    ),
-                    MetricData(
-                      'Cliente atual',
-                      currentRouteItem?.sequence.toString() ?? '-',
-                      Icons.navigation,
-                    ),
-                    MetricData(
-                      'Pendentes',
-                      pendingCount.toString(),
-                      Icons.pending_actions,
-                    ),
-                    MetricData(
-                      'Concluidos',
-                      doneCount.toString(),
-                      Icons.verified,
-                    ),
-                    MetricData(
-                      'Proximo salto',
-                      currentToNextLabel,
-                      Icons.near_me,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const _MapLegendCard(),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SecondaryButton(
-                        label: showOnlyPending
-                            ? 'Mostrar todos'
-                            : 'Mostrar so pendentes',
-                        onPressed: () {
-                          setState(() {
-                            showOnlyPending = !showOnlyPending;
-                            if (showOnlyPending &&
-                                selectedItem != null &&
-                                selectedItem!.isDone) {
-                              selectedItem = nextPendingRouteItem;
-                            }
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: PrimaryButton(
-                        label: 'Ir para proximo',
-                        onPressed: nextPendingRouteItem != null &&
-                                nextPendingRouteItem!.hasCoordinates
-                            ? () => _focusOnItem(nextPendingRouteItem!)
-                            : null,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                PrimaryButton(
-                  label: currentRouteItem == null
-                      ? 'Rota concluida'
-                      : 'Iniciar cliente atual',
-                  onPressed: currentRouteItem == null
-                      ? null
-                      : () => unawaited(_openVisit(currentRouteItem!)),
-                ),
-                const SizedBox(height: 12),
-                if (visibleItemsWithCoordinates.isEmpty)
-                  const EmptyState(
-                    title: 'Nenhum cliente com coordenadas',
-                    body:
-                        'Quando o cadastro do cliente tiver latitude e longitude, o ponto aparecera aqui no mapa.',
-                  )
-                else ...[
-                  Container(
-                    height: 320,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: line),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: FlutterMap(
-                      mapController: mapController,
-                      options: MapOptions(
-                        initialCenter: highlightedItem?.hasCoordinates == true
-                            ? LatLng(
-                                highlightedItem!.clientLatitude!,
-                                highlightedItem.clientLongitude!,
-                              )
-                            : initialCenter,
-                        initialZoom: 12,
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'promotorpro_mobile',
-                        ),
-                        if (visibleItemsWithCoordinates.length > 1)
-                          PolylineLayer(
-                            polylines: [
-                              Polyline(
-                                points: visibleItemsWithCoordinates
-                                    .map(
-                                      (item) => LatLng(
-                                        item.clientLatitude!,
-                                        item.clientLongitude!,
-                                      ),
-                                    )
-                                    .toList(),
-                                strokeWidth: 4,
-                                color: brandBlue.withValues(alpha: 0.7),
-                              ),
-                            ],
-                          ),
-                        MarkerLayer(
-                          markers: visibleItemsWithCoordinates.map((item) {
-                            final isSelected = selectedItem?.id == item.id;
-                            final isCurrent = currentRouteItem?.id == item.id;
-                            final isDone = item.isDone;
-                            return Marker(
-                              point: LatLng(
+                if (visibleItemsWithCoordinates.length > 1)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: visibleItemsWithCoordinates
+                            .map(
+                              (item) => LatLng(
                                 item.clientLatitude!,
                                 item.clientLongitude!,
                               ),
-                              width: 52,
-                              height: 52,
-                              child: GestureDetector(
-                                onTap: () => _focusOnItem(item, zoom: 16),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
-                                  decoration: BoxDecoration(
-                                    color: isCurrent
-                                        ? const Color(0xFFF59E0B)
-                                        : isDone
-                                        ? brandGreen
-                                        : isSelected
-                                        ? brandBlue
-                                        : const Color(0xFF334155),
-                                    shape: BoxShape.circle,
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        color: Color(0x33172233),
-                                        blurRadius: 12,
-                                        offset: Offset(0, 6),
-                                      ),
-                                    ],
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 3,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      '${item.sequence}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                            )
+                            .toList(),
+                        strokeWidth: 4,
+                        color: brandBlue.withValues(alpha: 0.7),
+                      ),
+                    ],
+                  ),
+                MarkerLayer(
+                  markers: visibleItemsWithCoordinates.map((item) {
+                    final isSelected = selectedItem?.id == item.id;
+                    final isCurrent = currentRouteItem?.id == item.id;
+                    final isDone = item.isDone;
+                    return Marker(
+                      point: LatLng(
+                        item.clientLatitude!,
+                        item.clientLongitude!,
+                      ),
+                      width: 52,
+                      height: 52,
+                      child: GestureDetector(
+                        onTap: () => _focusOnItem(item, zoom: 16),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          decoration: BoxDecoration(
+                            color: isCurrent
+                                ? const Color(0xFFF59E0B)
+                                : isDone
+                                ? brandGreen
+                                : isSelected
+                                ? brandBlue
+                                : const Color(0xFF334155),
+                            shape: BoxShape.circle,
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x33172233),
+                                blurRadius: 12,
+                                offset: Offset(0, 6),
                               ),
-                            );
-                          }).toList(),
+                            ],
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 3,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${item.sequence}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                if (highlightedItem != null)
-                    _MapRouteItemCard(
-                      item: highlightedItem,
-                      isCurrent: currentRouteItem?.id == highlightedItem.id,
-                      distanceFromCurrent: highlightedItem.id == currentRouteItem?.id
-                          ? null
-                          : _distanceLabel(currentRouteItem, highlightedItem),
-                      onOpenVisit: () => unawaited(_openVisit(highlightedItem)),
-                      onOpenNavigation: highlightedItem.hasCoordinates
-                          ? () => _openExternalNavigation(highlightedItem)
-                          : null,
-                    ),
-                ],
-                const SizedBox(height: 16),
-                Text(
-                  'Clientes do roteiro',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-                const SizedBox(height: 10),
-                ...visibleRouteItems.map(
-                  (item) => _RouteMapListTile(
-                    item: item,
-                    isCurrent: currentRouteItem?.id == item.id,
-                    selected: selectedItem?.id == item.id,
-                    onTap: item.hasCoordinates
-                        ? () => _focusOnItem(item)
-                        : null,
-                    onOpenVisit: () => unawaited(_openVisit(item)),
-                    onOpenNavigation: item.hasCoordinates
-                        ? () => _openExternalNavigation(item)
-                        : null,
-                  ),
-                ),
-                if (itemsWithoutCoordinates.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  InfoCard(
-                    title: 'Clientes sem coordenadas',
-                    body:
-                        '${itemsWithoutCoordinates.length} cliente(s) ainda nao possuem latitude e longitude cadastradas na retaguarda.',
-                  ),
-                ],
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          if (highlightedItem != null)
+            _MapRouteItemCard(
+              item: highlightedItem,
+              isCurrent: currentRouteItem?.id == highlightedItem.id,
+              distanceFromCurrent: highlightedItem.id == currentRouteItem?.id
+                  ? null
+                  : _distanceLabel(currentRouteItem, highlightedItem),
+              onOpenVisit: () => unawaited(_openVisit(highlightedItem)),
+              onOpenNavigation: highlightedItem.hasCoordinates
+                  ? () => _openExternalNavigation(highlightedItem)
+                  : null,
+            ),
         ],
-      ),
+        const SizedBox(height: 16),
+        Text(
+          'Clientes do roteiro',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...visibleRouteItems.map(
+          (item) => _RouteMapListTile(
+            item: item,
+            isCurrent: currentRouteItem?.id == item.id,
+            selected: selectedItem?.id == item.id,
+            onTap: item.hasCoordinates ? () => _focusOnItem(item) : null,
+            onOpenVisit: () => unawaited(_openVisit(item)),
+            onOpenNavigation: item.hasCoordinates
+                ? () => _openExternalNavigation(item)
+                : null,
+          ),
+        ),
+        if (itemsWithoutCoordinates.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          InfoCard(
+            title: 'Clientes sem coordenadas',
+            body:
+                '${itemsWithoutCoordinates.length} cliente(s) ainda nao possuem latitude e longitude cadastradas na retaguarda.',
+          ),
+        ],
+      ],
     );
   }
 }
