@@ -230,6 +230,7 @@ class _PromotorProAppState extends State<PromotorProApp> {
       home: session == null
           ? LoginPage(busy: busy, message: message, onLogin: _handleLogin)
           : HomePage(
+              repository: widget.repository,
               session: session!,
               routeItems: routeItems,
               queueSummary: queueSummary,
@@ -237,52 +238,7 @@ class _PromotorProAppState extends State<PromotorProApp> {
               busy: busy,
               onRefresh: _refreshRoute,
               onSync: _syncNow,
-              onOpenSync: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SyncPage(
-                    repository: widget.repository,
-                    promoterName: session!.user.name,
-                    onSync: _syncNow,
-                    onChanged: _reload,
-                  ),
-                ),
-              ),
-              onOpenMap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => RouteMapPage(
-                    promoterName: session!.user.name,
-                    routeItems: routeItems,
-                    onOpenVisit: (item) async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => VisitPage(
-                            repository: widget.repository,
-                            item: item,
-                            promoterName: session!.user.name,
-                          ),
-                        ),
-                      );
-                      await _reload();
-                    },
-                  ),
-                ),
-              ),
-              onOpenVisit: (item) async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => VisitPage(
-                      repository: widget.repository,
-                      item: item,
-                      promoterName: session!.user.name,
-                    ),
-                  ),
-                );
-                await _reload();
-              },
+              onChanged: _reload,
               onLogout: () async {
                 heartbeatTimer?.cancel();
                 await widget.repository.clearSessionOnly();
@@ -389,6 +345,7 @@ class _LoginPageState extends State<LoginPage> {
 class HomePage extends StatelessWidget {
   const HomePage({
     super.key,
+    required this.repository,
     required this.session,
     required this.routeItems,
     required this.queueSummary,
@@ -396,22 +353,19 @@ class HomePage extends StatelessWidget {
     required this.busy,
     required this.onRefresh,
     required this.onSync,
-    required this.onOpenSync,
-    required this.onOpenMap,
-    required this.onOpenVisit,
+    required this.onChanged,
     required this.onLogout,
   });
 
+  final AppRepository repository;
   final Session session;
   final List<RouteItemView> routeItems;
   final QueueSummary queueSummary;
   final String message;
   final bool busy;
   final VoidCallback onRefresh;
-  final VoidCallback onSync;
-  final VoidCallback onOpenSync;
-  final VoidCallback onOpenMap;
-  final void Function(RouteItemView item) onOpenVisit;
+  final Future<void> Function() onSync;
+  final Future<void> Function({String? nextMessage}) onChanged;
   final VoidCallback onLogout;
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -425,6 +379,45 @@ class HomePage extends StatelessWidget {
     if (confirmed == true) {
       onLogout();
     }
+  }
+
+  Future<void> _openSync(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SyncPage(
+          repository: repository,
+          promoterName: session.user.name,
+          onSync: onSync,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openMap(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RouteMapPage(
+          repository: repository,
+          promoterName: session.user.name,
+          routeItems: routeItems,
+          onVisitChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openVisit(BuildContext context, RouteItemView item) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VisitPage(
+          repository: repository,
+          item: item,
+          promoterName: session.user.name,
+        ),
+      ),
+    );
+    await onChanged();
   }
 
   @override
@@ -496,12 +489,12 @@ class HomePage extends StatelessWidget {
                   const SizedBox(height: 10),
                   SecondaryButton(
                     label: 'Ver fila de sincronizacao',
-                    onPressed: onOpenSync,
+                    onPressed: () => unawaited(_openSync(context)),
                   ),
                   const SizedBox(height: 10),
                   SecondaryButton(
                     label: 'Abrir mapa do roteiro',
-                    onPressed: onOpenMap,
+                    onPressed: () => unawaited(_openMap(context)),
                   ),
                   const SizedBox(height: 10),
                   DangerButton(
@@ -530,7 +523,7 @@ class HomePage extends StatelessWidget {
                     ...pendingItems.map(
                       (item) => RouteItemCard(
                         item: item,
-                        onTap: () => onOpenVisit(item),
+                        onTap: () => unawaited(_openVisit(context, item)),
                       ),
                     ),
                 ],
@@ -546,14 +539,16 @@ class HomePage extends StatelessWidget {
 class RouteMapPage extends StatefulWidget {
   const RouteMapPage({
     super.key,
+    required this.repository,
     required this.promoterName,
     required this.routeItems,
-    required this.onOpenVisit,
+    required this.onVisitChanged,
   });
 
+  final AppRepository repository;
   final String promoterName;
   final List<RouteItemView> routeItems;
-  final void Function(RouteItemView item) onOpenVisit;
+  final Future<void> Function({String? nextMessage}) onVisitChanged;
 
   @override
   State<RouteMapPage> createState() => _RouteMapPageState();
@@ -665,6 +660,19 @@ class _RouteMapPageState extends State<RouteMapPage> {
     if (await canLaunchUrl(geoUri)) {
       await launchUrl(geoUri, mode: LaunchMode.externalApplication);
     }
+  }
+
+  Future<void> _openVisit(RouteItemView item) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VisitPage(
+          repository: widget.repository,
+          item: item,
+          promoterName: widget.promoterName,
+        ),
+      ),
+    );
+    await widget.onVisitChanged();
   }
 
   void _focusOnItem(RouteItemView item, {double zoom = 15}) {
@@ -820,7 +828,7 @@ class _RouteMapPageState extends State<RouteMapPage> {
                       : 'Iniciar cliente atual',
                   onPressed: currentRouteItem == null
                       ? null
-                      : () => widget.onOpenVisit(currentRouteItem!),
+                      : () => unawaited(_openVisit(currentRouteItem!)),
                 ),
                 const SizedBox(height: 12),
                 if (visibleItemsWithCoordinates.isEmpty)
@@ -935,7 +943,7 @@ class _RouteMapPageState extends State<RouteMapPage> {
                       distanceFromCurrent: highlightedItem.id == currentRouteItem?.id
                           ? null
                           : _distanceLabel(currentRouteItem, highlightedItem),
-                      onOpenVisit: () => widget.onOpenVisit(highlightedItem),
+                      onOpenVisit: () => unawaited(_openVisit(highlightedItem)),
                       onOpenNavigation: highlightedItem.hasCoordinates
                           ? () => _openExternalNavigation(highlightedItem)
                           : null,
@@ -957,7 +965,7 @@ class _RouteMapPageState extends State<RouteMapPage> {
                     onTap: item.hasCoordinates
                         ? () => _focusOnItem(item)
                         : null,
-                    onOpenVisit: () => widget.onOpenVisit(item),
+                    onOpenVisit: () => unawaited(_openVisit(item)),
                     onOpenNavigation: item.hasCoordinates
                         ? () => _openExternalNavigation(item)
                         : null,
