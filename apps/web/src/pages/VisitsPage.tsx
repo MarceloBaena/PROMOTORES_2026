@@ -294,25 +294,89 @@ function visitEvidenceSectionLabel(photo: VisitPhoto) {
   return supplier;
 }
 
+type VisitEvidencePhotoGroup = {
+  key: string;
+  title: string;
+  subtitle: string;
+  photos: VisitPhoto[];
+};
+
+type VisitEvidenceSection = {
+  key: string;
+  title: string;
+  subtitle: string;
+  photos: VisitPhoto[];
+  groups: VisitEvidencePhotoGroup[];
+};
+
+function photoGroupKey(photo: VisitPhoto) {
+  const category = photoCategoryLabel(photo);
+  if (category) {
+    return `category:${category}`;
+  }
+
+  const activity = photoActivityLabel(photo);
+  if (activity) {
+    return `activity:${activity}`;
+  }
+
+  if (photo.type === "supplier_before") {
+    return "supplier:before";
+  }
+
+  if (photo.type === "supplier_after") {
+    return "supplier:after";
+  }
+
+  return `photo:${photo.type}`;
+}
+
+function photoGroupTitle(photo: VisitPhoto) {
+  const category = photoCategoryLabel(photo);
+  if (category) {
+    return `Categoria - ${category}`;
+  }
+
+  const activity = photoActivityLabel(photo);
+  if (activity) {
+    return `Atividade - ${activity}`;
+  }
+
+  return photoTitle(photo);
+}
+
+function photoGroupSubtitle(photo: VisitPhoto) {
+  const category = photoCategoryLabel(photo);
+  if (category) {
+    return "Evidencias registradas nesta categoria.";
+  }
+
+  const activity = photoActivityLabel(photo);
+  if (activity) {
+    return "Evidencias registradas nesta atividade.";
+  }
+
+  if (photo.type === "supplier_before" || photo.type === "supplier_after") {
+    return "Fotos operacionais do fornecedor.";
+  }
+
+  return "Etapas e evidencias gerais da visita.";
+}
+
 function buildVisitEvidenceSections(visit: Visit) {
   const ordered = sortVisitEvidence(visit.photos);
-  const sections: Array<{
-    key: string;
-    title: string;
-    subtitle: string;
-    photos: VisitPhoto[];
-  }> = [];
+  const sections: VisitEvidenceSection[] = [];
 
   for (const photo of ordered) {
     const supplier = photoSupplierLabel(photo);
     const key = supplier
-      ? `supplier:${visitEvidenceSectionLabel(photo)}`
+      ? `supplier:${supplier}`
       : "visit:general";
     const title = supplier
-      ? `Fornecedor: ${visitEvidenceSectionLabel(photo)}`
+      ? `Fornecedor: ${supplier}`
       : "Etapas gerais da visita";
     const subtitle = supplier
-      ? "Fotos organizadas por fornecedor, categoria e atividade."
+      ? "Fotos organizadas por etapas do fornecedor, categorias e atividades."
       : "Check-in, evidencias gerais e check-out do atendimento.";
 
     const existing = sections.find((section) => section.key === key);
@@ -326,8 +390,32 @@ function buildVisitEvidenceSections(visit: Visit) {
       title,
       subtitle,
       photos: [photo],
+      groups: [],
     });
   }
+
+  sections.forEach((section) => {
+    const groups: VisitEvidencePhotoGroup[] = [];
+
+    section.photos.forEach((photo) => {
+      const groupKey = photoGroupKey(photo);
+      const existingGroup = groups.find((group) => group.key === groupKey);
+
+      if (existingGroup) {
+        existingGroup.photos.push(photo);
+        return;
+      }
+
+      groups.push({
+        key: groupKey,
+        title: photoGroupTitle(photo),
+        subtitle: photoGroupSubtitle(photo),
+        photos: [photo],
+      });
+    });
+
+    section.groups = groups;
+  });
 
   return sections;
 }
@@ -886,74 +974,97 @@ export function VisitsPage() {
                         </div>
                       </div>
 
-                      <div className="space-y-3">
-                        {section.photos.map((photo) => {
-                          const evidence = photoEvidence(photo, selectedVisit);
-
-                          return (
-                            <div
-                              key={photo.id}
-                              className="overflow-hidden rounded-2xl border border-line bg-white"
-                            >
-                              <button
-                                type="button"
-                                className="group relative block w-full overflow-hidden text-left"
-                                onClick={() => setSelectedPhotoId(photo.id)}
-                                aria-label={`Ampliar evidencia ${photoTitle(photo)}`}
-                              >
-                                <img
-                                  className="h-44 w-full object-cover transition duration-200 group-hover:scale-[1.03]"
-                                  src={photoUrl(photo.url)}
-                                  alt={photoTitle(photo)}
-                                />
-                                <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-navy/85 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-white shadow-lg">
-                                  <Maximize2 className="h-3.5 w-3.5" />
-                                  Ampliar
-                                </span>
-                              </button>
-                              <div className="space-y-2 p-3 text-sm">
-                                <div className="font-black text-ink">
-                                  {photoTitle(photo)}
-                                </div>
-                                {photoSupplierLabel(photo) ? (
-                                  <div className="text-xs font-bold text-slateText">
-                                    Fornecedor: {photoSupplierLabel(photo)}
-                                  </div>
-                                ) : null}
-                                {photo.metadata?.categoryName?.trim() ? (
-                                  <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-brand">
-                                    Categoria: {photo.metadata.categoryName.trim()}
-                                  </div>
-                                ) : null}
-                                {photo.metadata?.activityName?.trim() ? (
-                                  <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">
-                                    Atividade: {photo.metadata.activityName.trim()}
-                                  </div>
-                                ) : null}
-                                <div className="grid gap-2 rounded-xl bg-muted/50 p-3 text-xs font-semibold text-stone-600">
-                                  <div>
-                                    <span className="font-black text-ink">
-                                      Data:
-                                    </span>{" "}
-                                    {formatOnlyDate(evidence.capturedAt)}
-                                  </div>
-                                  <div>
-                                    <span className="font-black text-ink">
-                                      Hora:
-                                    </span>{" "}
-                                    {formatOnlyTime(evidence.capturedAt)}
-                                  </div>
-                                  <div>
-                                    <span className="font-black text-ink">
-                                      {evidence.gpsLabel}:
-                                    </span>{" "}
-                                    {evidence.gpsValue}
-                                  </div>
-                                </div>
+                      <div className="space-y-4">
+                        {section.groups.map((group) => (
+                          <div
+                            key={`${section.key}-${group.key}`}
+                            className="rounded-[1.2rem] border border-line/80 bg-white p-3"
+                          >
+                            <div className="mb-3 rounded-2xl bg-muted/40 px-3 py-2">
+                              <div className="text-sm font-black text-ink">
+                                {group.title}
+                              </div>
+                              <div className="mt-1 text-xs font-semibold text-stone-500">
+                                {group.subtitle}
                               </div>
                             </div>
-                          );
-                        })}
+
+                            <div className="grid gap-3 lg:grid-cols-2">
+                              {group.photos.map((photo) => {
+                                const evidence = photoEvidence(
+                                  photo,
+                                  selectedVisit,
+                                );
+
+                                return (
+                                  <div
+                                    key={photo.id}
+                                    className="overflow-hidden rounded-2xl border border-line bg-white"
+                                  >
+                                    <button
+                                      type="button"
+                                      className="group relative block w-full overflow-hidden text-left"
+                                      onClick={() => setSelectedPhotoId(photo.id)}
+                                      aria-label={`Ampliar evidencia ${photoTitle(photo)}`}
+                                    >
+                                      <img
+                                        className="h-44 w-full object-cover transition duration-200 group-hover:scale-[1.03]"
+                                        src={photoUrl(photo.url)}
+                                        alt={photoTitle(photo)}
+                                      />
+                                      <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-navy/85 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-white shadow-lg">
+                                        <Maximize2 className="h-3.5 w-3.5" />
+                                        Ampliar
+                                      </span>
+                                    </button>
+                                    <div className="space-y-2 p-3 text-sm">
+                                      <div className="font-black text-ink">
+                                        {photoTitle(photo)}
+                                      </div>
+                                      {photoSupplierLabel(photo) ? (
+                                        <div className="text-xs font-bold text-slateText">
+                                          Fornecedor: {photoSupplierLabel(photo)}
+                                        </div>
+                                      ) : null}
+                                      <div className="flex flex-wrap gap-2">
+                                        {photo.metadata?.categoryName?.trim() ? (
+                                          <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-brand">
+                                            Categoria: {photo.metadata.categoryName.trim()}
+                                          </div>
+                                        ) : null}
+                                        {photo.metadata?.activityName?.trim() ? (
+                                          <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                                            Atividade: {photo.metadata.activityName.trim()}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                      <div className="grid gap-2 rounded-xl bg-muted/50 p-3 text-xs font-semibold text-stone-600">
+                                        <div>
+                                          <span className="font-black text-ink">
+                                            Data:
+                                          </span>{" "}
+                                          {formatOnlyDate(evidence.capturedAt)}
+                                        </div>
+                                        <div>
+                                          <span className="font-black text-ink">
+                                            Hora:
+                                          </span>{" "}
+                                          {formatOnlyTime(evidence.capturedAt)}
+                                        </div>
+                                        <div>
+                                          <span className="font-black text-ink">
+                                            {evidence.gpsLabel}:
+                                          </span>{" "}
+                                          {evidence.gpsValue}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ))}

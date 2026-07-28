@@ -1132,18 +1132,23 @@ function TimelineEntry({
               <button
                 key={photo.id || `${event.id}-${index}`}
                 type="button"
-                className="group relative h-16 w-16 overflow-hidden rounded-2xl border border-line bg-field text-left transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-brand"
+                className="group w-[88px] text-left"
                 onClick={() => onOpenPhoto(photo, index)}
                 aria-label={`Ampliar ${photo.title || `evidencia ${index + 1}`} do acompanhamento`}
                 title={photo.title || `Evidencia ${index + 1}`}
               >
-                <img
-                  src={timelinePhotoUrl(photo.url)}
-                  alt={photo.title || `Evidencia ${index + 1}`}
-                  className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
-                />
-                <span className="absolute inset-0 grid place-items-center bg-navy/0 text-white opacity-0 transition group-hover:bg-navy/35 group-hover:opacity-100">
-                  <Maximize2 className="h-4 w-4" />
+                <span className="relative block h-16 w-16 overflow-hidden rounded-2xl border border-line bg-field transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-brand">
+                  <img
+                    src={timelinePhotoUrl(photo.url)}
+                    alt={photo.title || `Evidencia ${index + 1}`}
+                    className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                  />
+                  <span className="absolute inset-0 grid place-items-center bg-navy/0 text-white opacity-0 transition group-hover:bg-navy/35 group-hover:opacity-100">
+                    <Maximize2 className="h-4 w-4" />
+                  </span>
+                </span>
+                <span className="mt-2 line-clamp-2 block text-[11px] font-bold leading-4 text-slateText">
+                  {photo.title || `Evidencia ${index + 1}`}
                 </span>
               </button>
             ))}
