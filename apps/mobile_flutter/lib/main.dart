@@ -2,15 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 const apiBaseUrl = String.fromEnvironment(
@@ -245,6 +248,28 @@ class _PromotorProAppState extends State<PromotorProApp> {
                   ),
                 ),
               ),
+              onOpenMap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RouteMapPage(
+                    promoterName: session!.user.name,
+                    routeItems: routeItems,
+                    onOpenVisit: (item) async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => VisitPage(
+                            repository: widget.repository,
+                            item: item,
+                            promoterName: session!.user.name,
+                          ),
+                        ),
+                      );
+                      await _reload();
+                    },
+                  ),
+                ),
+              ),
               onOpenVisit: (item) async {
                 await Navigator.push(
                   context,
@@ -372,6 +397,7 @@ class HomePage extends StatelessWidget {
     required this.onRefresh,
     required this.onSync,
     required this.onOpenSync,
+    required this.onOpenMap,
     required this.onOpenVisit,
     required this.onLogout,
   });
@@ -384,6 +410,7 @@ class HomePage extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onSync;
   final VoidCallback onOpenSync;
+  final VoidCallback onOpenMap;
   final void Function(RouteItemView item) onOpenVisit;
   final VoidCallback onLogout;
 
@@ -472,6 +499,11 @@ class HomePage extends StatelessWidget {
                     onPressed: onOpenSync,
                   ),
                   const SizedBox(height: 10),
+                  SecondaryButton(
+                    label: 'Abrir mapa do roteiro',
+                    onPressed: onOpenMap,
+                  ),
+                  const SizedBox(height: 10),
                   DangerButton(
                     label: 'Sair do app',
                     onPressed: busy
@@ -506,6 +538,379 @@ class HomePage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class RouteMapPage extends StatefulWidget {
+  const RouteMapPage({
+    super.key,
+    required this.promoterName,
+    required this.routeItems,
+    required this.onOpenVisit,
+  });
+
+  final String promoterName;
+  final List<RouteItemView> routeItems;
+  final void Function(RouteItemView item) onOpenVisit;
+
+  @override
+  State<RouteMapPage> createState() => _RouteMapPageState();
+}
+
+class _RouteMapPageState extends State<RouteMapPage> {
+  RouteItemView? selectedItem;
+
+  List<RouteItemView> get itemsWithCoordinates =>
+      widget.routeItems.where((item) => item.hasCoordinates).toList();
+
+  List<RouteItemView> get itemsWithoutCoordinates =>
+      widget.routeItems.where((item) => !item.hasCoordinates).toList();
+
+  LatLng get initialCenter {
+    if (itemsWithCoordinates.isEmpty) {
+      return const LatLng(-15.6014, -56.0979);
+    }
+
+    final latitudes = itemsWithCoordinates
+        .map((item) => item.clientLatitude!)
+        .toList();
+    final longitudes = itemsWithCoordinates
+        .map((item) => item.clientLongitude!)
+        .toList();
+
+    final averageLat =
+        latitudes.reduce((first, second) => first + second) / latitudes.length;
+    final averageLng =
+        longitudes.reduce((first, second) => first + second) / longitudes.length;
+    return LatLng(averageLat, averageLng);
+  }
+
+  Future<void> _openExternalNavigation(RouteItemView item) async {
+    if (!item.hasCoordinates) {
+      return;
+    }
+
+    final latitude = item.clientLatitude!;
+    final longitude = item.clientLongitude!;
+    final encodedLabel = Uri.encodeComponent(item.clientName);
+    final googleUri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+    );
+    final geoUri = Uri.parse('geo:$latitude,$longitude?q=$latitude,$longitude($encodedLabel)');
+
+    if (await canLaunchUrl(googleUri)) {
+      await launchUrl(googleUri, mode: LaunchMode.externalApplication);
+      return;
+    }
+
+    if (await canLaunchUrl(geoUri)) {
+      await launchUrl(geoUri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final highlightedItem = selectedItem ??
+        (itemsWithCoordinates.isNotEmpty ? itemsWithCoordinates.first : null);
+
+    return AppShell(
+      child: Column(
+        children: [
+          AppTopBar(
+            title: 'Mapa do roteiro',
+            subtitle: 'Promotor: ${widget.promoterName}',
+            showBack: true,
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const InfoCard(
+                  title: 'Mapa de apoio',
+                  body:
+                      'Veja os clientes com coordenadas salvas e use a navegacao externa para chegar ao ponto de venda.',
+                ),
+                const SizedBox(height: 12),
+                if (itemsWithCoordinates.isEmpty)
+                  const EmptyState(
+                    title: 'Nenhum cliente com coordenadas',
+                    body:
+                        'Quando o cadastro do cliente tiver latitude e longitude, o ponto aparecera aqui no mapa.',
+                  )
+                else ...[
+                  Container(
+                    height: 320,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: line),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: FlutterMap(
+                      options: MapOptions(
+                        initialCenter: initialCenter,
+                        initialZoom: 12,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'promotorpro_mobile',
+                        ),
+                        MarkerLayer(
+                          markers: itemsWithCoordinates.map((item) {
+                            final isSelected = selectedItem?.id == item.id;
+                            return Marker(
+                              point: LatLng(
+                                item.clientLatitude!,
+                                item.clientLongitude!,
+                              ),
+                              width: 52,
+                              height: 52,
+                              child: GestureDetector(
+                                onTap: () => setState(() => selectedItem = item),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? brandGreen : brandBlue,
+                                    shape: BoxShape.circle,
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0x33172233),
+                                        blurRadius: 12,
+                                        offset: Offset(0, 6),
+                                      ),
+                                    ],
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 3,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.storefront,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (highlightedItem != null)
+                    _MapRouteItemCard(
+                      item: highlightedItem,
+                      onOpenVisit: () => widget.onOpenVisit(highlightedItem),
+                      onOpenNavigation: highlightedItem.hasCoordinates
+                          ? () => _openExternalNavigation(highlightedItem)
+                          : null,
+                    ),
+                ],
+                const SizedBox(height: 16),
+                Text(
+                  'Clientes do roteiro',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...widget.routeItems.map(
+                  (item) => _RouteMapListTile(
+                    item: item,
+                    selected: selectedItem?.id == item.id,
+                    onTap: item.hasCoordinates
+                        ? () => setState(() => selectedItem = item)
+                        : null,
+                    onOpenVisit: () => widget.onOpenVisit(item),
+                    onOpenNavigation: item.hasCoordinates
+                        ? () => _openExternalNavigation(item)
+                        : null,
+                  ),
+                ),
+                if (itemsWithoutCoordinates.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  InfoCard(
+                    title: 'Clientes sem coordenadas',
+                    body:
+                        '${itemsWithoutCoordinates.length} cliente(s) ainda nao possuem latitude e longitude cadastradas na retaguarda.',
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapRouteItemCard extends StatelessWidget {
+  const _MapRouteItemCard({
+    required this.item,
+    required this.onOpenVisit,
+    required this.onOpenNavigation,
+  });
+
+  final RouteItemView item;
+  final VoidCallback onOpenVisit;
+  final VoidCallback? onOpenNavigation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.clientName,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item.clientAddress?.trim().isNotEmpty == true
+                ? item.clientAddress!
+                : 'Endereco nao informado',
+            style: const TextStyle(
+              color: Color(0xFF475569),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Rota: ${item.routeName}',
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (item.hasCoordinates) ...[
+            const SizedBox(height: 8),
+            Text(
+              'GPS: ${item.clientLatitude!.toStringAsFixed(6)}, ${item.clientLongitude!.toStringAsFixed(6)}',
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: SecondaryButton(
+                  label: 'Abrir atendimento',
+                  onPressed: onOpenVisit,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: PrimaryButton(
+                  label: 'Navegar',
+                  onPressed: onOpenNavigation,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteMapListTile extends StatelessWidget {
+  const _RouteMapListTile({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+    required this.onOpenVisit,
+    required this.onOpenNavigation,
+  });
+
+  final RouteItemView item;
+  final bool selected;
+  final VoidCallback? onTap;
+  final VoidCallback onOpenVisit;
+  final VoidCallback? onOpenNavigation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: selected ? brandBlue : line),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: CircleAvatar(
+          backgroundColor: item.hasCoordinates ? brandBlue : const Color(0xFF94A3B8),
+          child: Icon(
+            item.hasCoordinates ? Icons.location_on : Icons.location_off,
+            color: Colors.white,
+          ),
+        ),
+        title: Text(
+          item.clientName,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.clientAddress?.trim().isNotEmpty == true
+                    ? item.clientAddress!
+                    : 'Endereco nao informado',
+              ),
+              const SizedBox(height: 2),
+              Text(
+                item.hasCoordinates
+                    ? 'GPS disponivel'
+                    : 'Cliente sem coordenadas cadastradas',
+                style: TextStyle(
+                  color: item.hasCoordinates ? brandGreen : const Color(0xFFB45309),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'visit') {
+              onOpenVisit();
+            } else if (value == 'navigate') {
+              onOpenNavigation?.call();
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem<String>(
+              value: 'visit',
+              child: Text('Abrir atendimento'),
+            ),
+            PopupMenuItem<String>(
+              value: 'navigate',
+              enabled: onOpenNavigation != null,
+              child: const Text('Abrir navegacao'),
+            ),
+          ],
+        ),
       ),
     );
   }
