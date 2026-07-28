@@ -303,6 +303,7 @@ export function VisitsPage() {
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [promoterFilter, setPromoterFilter] = useState("all");
+  const [visitSearch, setVisitSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -337,14 +338,39 @@ export function VisitsPage() {
   }, [visits]);
 
   const filteredVisits = useMemo(() => {
-    if (promoterFilter === "all") {
-      return visits;
-    }
+    const normalizedSearch = visitSearch.trim().toLocaleLowerCase("pt-BR");
 
-    return visits.filter(
-      (visit) => promoterFilterValue(visit.promoter) === promoterFilter,
-    );
-  }, [promoterFilter, visits]);
+    return visits.filter((visit) => {
+      const promoterMatches =
+        promoterFilter === "all" ||
+        promoterFilterValue(visit.promoter) === promoterFilter;
+
+      if (!promoterMatches) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const haystack = [
+        visit.client.code,
+        visit.client.name,
+        visit.client.tradeName,
+        visit.client.address,
+        visit.client.city,
+        visit.client.state,
+        visit.route?.name,
+        visit.promoter?.user?.name,
+        visit.promoter?.user?.email,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("pt-BR");
+
+      return haystack.includes(normalizedSearch);
+    });
+  }, [promoterFilter, visitSearch, visits]);
 
   const selectedVisit = useMemo(
     () =>
@@ -516,7 +542,7 @@ export function VisitsPage() {
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="table-wrap">
           <div className="border-b border-line bg-white p-4">
-            <div className="grid gap-3 xl:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
+            <div className="grid gap-3 xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
               <label className="space-y-2">
                 <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
                   Promotor
@@ -535,22 +561,48 @@ export function VisitsPage() {
                 </select>
               </label>
 
-              <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                <FilterStat
-                  label="Em tela"
-                  value={`${filteredVisits.length}`}
-                  helper="Visitas mostradas no filtro atual."
-                />
-                <FilterStat
-                  label="Concluidas"
-                  value={`${completedCount}`}
-                  helper="Atendimentos finalizados."
-                />
-                <FilterStat
-                  label="Em andamento"
-                  value={`${inProgressCount}`}
-                  helper="Visitas ainda abertas no app."
-                />
+              <div className="grid gap-3">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                  <label className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
+                      Buscar cliente, rota ou cidade
+                    </span>
+                    <input
+                      className="input-control"
+                      value={visitSearch}
+                      onChange={(event) => setVisitSearch(event.target.value)}
+                      placeholder="Digite nome fantasia, razao social, rota ou cidade"
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      className="secondary-button w-full lg:w-auto"
+                      onClick={() => setVisitSearch("")}
+                      disabled={!visitSearch}
+                    >
+                      Limpar busca
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                  <FilterStat
+                    label="Em tela"
+                    value={`${filteredVisits.length}`}
+                    helper="Visitas mostradas no filtro atual."
+                  />
+                  <FilterStat
+                    label="Concluidas"
+                    value={`${completedCount}`}
+                    helper="Atendimentos finalizados."
+                  />
+                  <FilterStat
+                    label="Em andamento"
+                    value={`${inProgressCount}`}
+                    helper="Visitas ainda abertas no app."
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -559,8 +611,9 @@ export function VisitsPage() {
             <div>
               <h2 className="panel-title">Fila operacional de visitas</h2>
               <p className="panel-subtitle">
-                Clique em uma visita para abrir os detalhes, evidencias e
-                auditorias do atendimento.
+                Clique em uma visita para abrir detalhes, evidencias e
+                auditorias. O filtro por promotor funciona junto com a busca
+                por cliente, rota ou cidade.
               </p>
             </div>
             <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
