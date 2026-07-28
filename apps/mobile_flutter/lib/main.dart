@@ -307,8 +307,8 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           const SizedBox(height: 40),
           const BrandHeader(
-            title: 'Operacao de campo',
-            subtitle: 'PromotorPro Flutter',
+            title: 'Controle de equipe de campo',
+            subtitle: 'Aplicativo operacional PromotorPro',
           ),
           const SizedBox(height: 28),
           InfoCard(
