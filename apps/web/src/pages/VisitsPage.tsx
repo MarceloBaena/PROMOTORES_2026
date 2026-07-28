@@ -294,6 +294,10 @@ function visitAddress(visit: Visit) {
   );
 }
 
+function routeVisitLabel(visit: Visit) {
+  return visit.route?.name ?? "Sem rota vinculada";
+}
+
 export function VisitsPage() {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
@@ -511,8 +515,8 @@ export function VisitsPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
         <div className="table-wrap">
-          <div className="border-b border-line p-4">
-            <div className="grid gap-3 md:grid-cols-[minmax(260px,360px)_auto] md:items-end">
+          <div className="border-b border-line bg-white p-4">
+            <div className="grid gap-3 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
               <label className="space-y-2">
                 <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
                   Promotor
@@ -531,8 +535,22 @@ export function VisitsPage() {
                 </select>
               </label>
 
-              <div className="rounded-full bg-field px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-slateText md:justify-self-end">
-                Exibindo {filteredVisits.length} visita(s)
+              <div className="grid gap-3 sm:grid-cols-3">
+                <FilterStat
+                  label="Em tela"
+                  value={`${filteredVisits.length}`}
+                  helper="Visitas mostradas no filtro atual."
+                />
+                <FilterStat
+                  label="Concluidas"
+                  value={`${completedCount}`}
+                  helper="Atendimentos finalizados."
+                />
+                <FilterStat
+                  label="Em andamento"
+                  value={`${inProgressCount}`}
+                  helper="Visitas ainda abertas no app."
+                />
               </div>
             </div>
           </div>
@@ -553,6 +571,15 @@ export function VisitsPage() {
           <div className="space-y-3 p-4">
             {filteredVisits.map((visit) => {
               const isSelected = visit.id === selectedVisit?.id;
+              const tradeName = visit.client.tradeName?.trim();
+              const primaryName =
+                tradeName && tradeName !== visit.client.name
+                  ? tradeName
+                  : visit.client.name;
+              const secondaryName =
+                tradeName && tradeName !== visit.client.name
+                  ? visit.client.name
+                  : null;
 
               return (
                 <button
@@ -567,9 +594,23 @@ export function VisitsPage() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      {clientNameBlock(visit.client)}
-                      <div className="mt-1 text-xs font-semibold text-slateText">
-                        {visit.route?.name ?? "Sem rota vinculada"}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {visit.client.code ? (
+                          <span className="rounded-full bg-field px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                            {visit.client.code}
+                          </span>
+                        ) : null}
+                        <span className="text-base font-black text-ink">
+                          {primaryName}
+                        </span>
+                      </div>
+                      {secondaryName ? (
+                        <div className="mt-1 text-xs font-semibold text-slateText">
+                          Razao social: {secondaryName}
+                        </div>
+                      ) : null}
+                      <div className="mt-2 inline-flex rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-brand">
+                        {routeVisitLabel(visit)}
                       </div>
                       <div className="mt-2 text-xs font-semibold text-slateText">
                         {visitAddress(visit)}
@@ -583,7 +624,7 @@ export function VisitsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     <MiniVisitInfo
                       label="Promotor"
                       value={promoterLabel(visit.promoter)}
@@ -591,6 +632,10 @@ export function VisitsPage() {
                     <MiniVisitInfo
                       label="Fotos"
                       value={`${visit.photos.length} evidencia(s)`}
+                    />
+                    <MiniVisitInfo
+                      label="Inicio"
+                      value={formatDate(visit.startedAt)}
                     />
                     <MiniVisitInfo
                       label="Criada em"
@@ -626,18 +671,31 @@ export function VisitsPage() {
           ) : (
             <div className="space-y-4 p-5">
               <div className="rounded-[1.35rem] bg-navy p-4 text-white">
-                <div className="text-[11px] font-black uppercase tracking-[0.14em] text-white/55">
-                  Cliente
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedVisit.client.code ? (
+                    <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/75">
+                      {selectedVisit.client.code}
+                    </span>
+                  ) : null}
+                  <div className="text-[11px] font-black uppercase tracking-[0.14em] text-white/55">
+                    Cliente
+                  </div>
                 </div>
                 <div className="mt-2 font-display text-2xl font-black">
-                  {selectedVisit.client.name}
+                  {selectedVisit.client.tradeName?.trim() &&
+                  selectedVisit.client.tradeName !== selectedVisit.client.name
+                    ? selectedVisit.client.tradeName
+                    : selectedVisit.client.name}
                 </div>
                 {selectedVisit.client.tradeName &&
                 selectedVisit.client.tradeName !== selectedVisit.client.name ? (
                   <div className="mt-1 text-sm font-black text-blue-100">
-                    Fantasia: {selectedVisit.client.tradeName}
+                    Razao social: {selectedVisit.client.name}
                   </div>
                 ) : null}
+                <div className="mt-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-blue-100">
+                  {routeVisitLabel(selectedVisit)}
+                </div>
                 <div className="mt-2 text-sm font-semibold text-white/75">
                   {visitAddress(selectedVisit)}
                 </div>
@@ -646,7 +704,11 @@ export function VisitsPage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-[1.35rem] border border-line bg-field p-3">
+                <div className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
+                  Leitura rapida
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                 <InfoCard
                   icon={<UserRound className="h-4 w-4" />}
                   label="Promotor"
@@ -667,6 +729,7 @@ export function VisitsPage() {
                   label="GPS da visita"
                   value={visitGpsText(selectedVisit)}
                 />
+                </div>
               </div>
 
               <div className="surface-card">
@@ -1006,6 +1069,28 @@ function OperationalMetric({
         {value}
       </div>
       <div className="mt-2 text-xs font-bold leading-5 text-slateText">
+        {helper}
+      </div>
+    </div>
+  );
+}
+
+function FilterStat({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-field px-3 py-3">
+      <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+        {label}
+      </div>
+      <div className="mt-1 text-lg font-black text-ink">{value}</div>
+      <div className="mt-1 text-[11px] font-semibold leading-5 text-slateText">
         {helper}
       </div>
     </div>
