@@ -3,17 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 const apiBaseUrl = String.fromEnvironment(
@@ -21,7 +18,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.11 (build 14)';
+const appVersionLabel = 'APK Flutter v1.1.0 (build 3)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -46,7 +43,6 @@ class PromotorProApp extends StatefulWidget {
 }
 
 class _PromotorProAppState extends State<PromotorProApp> {
-  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   Session? session;
   List<RouteItemView> routeItems = [];
   QueueSummary queueSummary = const QueueSummary(pending: 0, failed: 0);
@@ -94,55 +90,16 @@ class _PromotorProAppState extends State<PromotorProApp> {
     _restartHeartbeat();
   }
 
-  bool _isExpiredSessionError(Object error) {
-    final text = normalizedError(error).toLowerCase();
-    return text.contains('invalid or expired access token') ||
-        text.contains('invalid access token') ||
-        text.contains('expired access token') ||
-        text.contains('invalid or expired refresh token') ||
-        text.contains('unauthorized');
-  }
-
-  Future<T> _runWithSessionRetry<T>(
-    Future<T> Function(Session activeSession) action,
-  ) async {
-    final currentSession = session;
-    if (currentSession == null) {
-      throw Exception('Sessao nao encontrada neste aparelho.');
-    }
-
-    try {
-      return await action(currentSession);
-    } catch (error) {
-      if (!_isExpiredSessionError(error)) {
-        rethrow;
-      }
-
-      final refreshedSession = await widget.repository.refreshSession(
-        currentSession,
-      );
-      await widget.repository.saveSession(refreshedSession);
-      if (mounted) {
-        setState(() => session = refreshedSession);
-      } else {
-        session = refreshedSession;
-      }
-      return action(refreshedSession);
-    }
-  }
-
   void _restartHeartbeat() {
     heartbeatTimer?.cancel();
-    if (session == null || !routeItems.any((item) => !item.isDone)) {
+    final currentSession = session;
+    if (currentSession == null || !routeItems.any((item) => !item.isDone)) {
       return;
     }
 
     Future<void> send() async {
       try {
-        await _runWithSessionRetry(
-          (activeSession) =>
-              widget.repository.sendHeartbeat(activeSession.accessToken),
-        );
+        await widget.repository.sendHeartbeat(currentSession.accessToken);
       } catch (_) {
         // Heartbeat must never block the field workflow.
       }
@@ -189,7 +146,8 @@ class _PromotorProAppState extends State<PromotorProApp> {
   }
 
   Future<void> _refreshRoute() async {
-    if (session == null) return;
+    final currentSession = session;
+    if (currentSession == null) return;
 
     setState(() {
       busy = true;
@@ -197,9 +155,8 @@ class _PromotorProAppState extends State<PromotorProApp> {
     });
 
     try {
-      final snapshot = await _runWithSessionRetry(
-        (activeSession) =>
-            widget.repository.downloadSnapshot(activeSession.accessToken),
+      final snapshot = await widget.repository.downloadSnapshot(
+        currentSession.accessToken,
       );
       await widget.repository.saveSnapshot(snapshot);
       await _reload(
@@ -214,16 +171,16 @@ class _PromotorProAppState extends State<PromotorProApp> {
   }
 
   Future<void> _syncNow() async {
-    if (session == null) return;
+    final currentSession = session;
+    if (currentSession == null) return;
     setState(() {
       busy = true;
       message = 'Sincronizando fila local...';
     });
 
     try {
-      final result = await _runWithSessionRetry(
-        (activeSession) =>
-            widget.repository.syncPending(activeSession.accessToken),
+      final result = await widget.repository.syncPending(
+        currentSession.accessToken,
       );
       await _refreshRoute();
       await _reload(
@@ -237,24 +194,9 @@ class _PromotorProAppState extends State<PromotorProApp> {
     }
   }
 
-  Future<T?> _pushPage<T>(Widget page) async {
-    final navigator = navigatorKey.currentState;
-    if (navigator == null) {
-      throw Exception(
-        'A navegacao do aplicativo ainda nao esta pronta. Feche e abra o app novamente.',
-      );
-    }
-    return navigator.push<T>(MaterialPageRoute(builder: (_) => page));
-  }
-
   void _showError(String title, String text) {
-    final dialogContext = navigatorKey.currentContext;
-    if (dialogContext == null) {
-      debugPrint('Falha ao abrir dialogo: $title - $text');
-      return;
-    }
     showDialog<void>(
-      context: dialogContext,
+      context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
         content: Text(text),
@@ -272,7 +214,6 @@ class _PromotorProAppState extends State<PromotorProApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      navigatorKey: navigatorKey,
       title: 'PromotorPro',
       theme: ThemeData(
         useMaterial3: true,
@@ -293,9 +234,10 @@ class _PromotorProAppState extends State<PromotorProApp> {
               busy: busy,
               onRefresh: _refreshRoute,
               onSync: _syncNow,
-              onOpenSync: () => unawaited(
-                _pushPage(
-                  SyncPage(
+              onOpenSync: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SyncPage(
                     repository: widget.repository,
                     promoterName: session!.user.name,
                     onSync: _syncNow,
@@ -304,35 +246,17 @@ class _PromotorProAppState extends State<PromotorProApp> {
                 ),
               ),
               onOpenVisit: (item) async {
-                if (busy) return;
-                setState(() {
-                  busy = true;
-                  message = 'Abrindo atendimento de ${item.navigationName}...';
-                });
-                try {
-                  final resultMessage = await _pushPage<String>(
-                    VisitPage(
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => VisitPage(
                       repository: widget.repository,
                       item: item,
                       promoterName: session!.user.name,
                     ),
-                  );
-                  await _reload(nextMessage: resultMessage);
-                } catch (error, stackTrace) {
-                  debugPrint(
-                    'Falha ao abrir atendimento ${item.id}: $error\n$stackTrace',
-                  );
-                  if (!mounted) return;
-                  setState(
-                    () => message =
-                        'Nao foi possivel abrir o cliente ${item.navigationName}. ${normalizedError(error)}',
-                  );
-                  _showError('Falha ao abrir cliente', normalizedError(error));
-                } finally {
-                  if (mounted) {
-                    setState(() => busy = false);
-                  }
-                }
+                  ),
+                );
+                await _reload();
               },
               onLogout: () async {
                 heartbeatTimer?.cancel();
@@ -460,7 +384,7 @@ class HomePage extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onSync;
   final VoidCallback onOpenSync;
-  final Future<void> Function(RouteItemView item) onOpenVisit;
+  final void Function(RouteItemView item) onOpenVisit;
   final VoidCallback onLogout;
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -480,129 +404,108 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final pendingItems = routeItems.where((item) => !item.isDone).toList();
     final completedItems = routeItems.where((item) => item.isDone).length;
-    return DefaultTabController(
-      length: 2,
-      child: AppShell(
-        child: Column(
-          children: [
-            AppTopBar(
-              title: 'Roteiro do promotor',
-              subtitle: 'Promotor: ${session.user.name}',
-              onLogout: () => unawaited(_confirmLogout(context)),
-            ),
-            Container(
-              color: brandNavy,
-              child: const TabBar(
-                indicatorColor: brandGreen,
-                indicatorWeight: 4,
-                labelColor: Colors.white,
-                unselectedLabelColor: Color(0xFFCBD5E1),
-                labelStyle: TextStyle(fontWeight: FontWeight.w900),
-                tabs: [
-                  Tab(icon: Icon(Icons.list_alt), text: 'Roteiro'),
-                  Tab(icon: Icon(Icons.map), text: 'Mapa'),
-                ],
-              ),
-            ),
-            Expanded(
-              child: TabBarView(
+    return AppShell(
+      child: Column(
+        children: [
+          AppTopBar(
+            title: 'Roteiro do promotor',
+            subtitle: 'Promotor: ${session.user.name}',
+            onLogout: () => unawaited(_confirmLogout(context)),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async => onRefresh(),
+              child: ListView(
+                padding: const EdgeInsets.all(16),
                 children: [
-                  RefreshIndicator(
-                    onRefresh: () async => onRefresh(),
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        DashboardGrid(
-                          cards: [
-                            MetricData(
-                              'Clientes liberados',
-                              routeItems.length.toString(),
-                              Icons.storefront,
-                            ),
-                            MetricData(
-                              'Pendentes',
-                              pendingItems.length.toString(),
-                              Icons.route,
-                            ),
-                            MetricData(
-                              'Atendidos',
-                              completedItems.toString(),
-                              Icons.verified,
-                            ),
-                            MetricData(
-                              'Fila sync',
-                              '${queueSummary.pending}',
-                              Icons.sync,
-                            ),
-                          ],
+                  DashboardGrid(
+                    cards: [
+                      MetricData(
+                        'Clientes liberados',
+                        routeItems.length.toString(),
+                        Icons.storefront,
+                      ),
+                      MetricData(
+                        'Pendentes',
+                        pendingItems.length.toString(),
+                        Icons.route,
+                      ),
+                      MetricData(
+                        'Atendidos',
+                        completedItems.toString(),
+                        Icons.verified,
+                      ),
+                      MetricData(
+                        'Fila sync',
+                        '${queueSummary.pending}',
+                        Icons.sync,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  OperatorIdentityCard(
+                    promoterName: session.user.name,
+                    promoterEmail: session.user.email,
+                    versionLabel: appVersionLabel,
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SecondaryButton(
+                          label: 'Atualizar roteiro',
+                          onPressed: busy ? null : onRefresh,
                         ),
-                        const SizedBox(height: 14),
-                        OperatorIdentityCard(
-                          promoterName: session.user.name,
-                          promoterEmail: session.user.email,
-                          versionLabel: appVersionLabel,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: PrimaryButton(
+                          label: busy ? 'Aguarde...' : 'Sync',
+                          onPressed: busy ? null : onSync,
                         ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: SecondaryButton(
-                                label: 'Atualizar roteiro',
-                                onPressed: busy ? null : onRefresh,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: PrimaryButton(
-                                label: busy ? 'Aguarde...' : 'Sync',
-                                onPressed: busy ? null : onSync,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        SecondaryButton(
-                          label: 'Ver fila de sincronizacao',
-                          onPressed: onOpenSync,
-                        ),
-                        const SizedBox(height: 10),
-                        DangerButton(
-                          label: 'Sair do app',
-                          onPressed: busy
-                              ? null
-                              : () => unawaited(_confirmLogout(context)),
-                        ),
-                        const SizedBox(height: 14),
-                        MessageBox(message: message),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Clientes para atendimento',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w900),
-                        ),
-                        const SizedBox(height: 10),
-                        if (pendingItems.isEmpty)
-                          const EmptyState(
-                            title: 'Nenhum cliente pendente',
-                            body:
-                                'Quando uma rota for publicada para este promotor, os clientes aparecem aqui.',
-                          )
-                        else
-                          ...pendingItems.map(
-                            (item) => RouteItemCard(
-                              item: item,
-                              onTap: () => onOpenVisit(item),
-                            ),
-                          ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SecondaryButton(
+                    label: 'Ver fila de sincronizacao',
+                    onPressed: onOpenSync,
+                  ),
+                  const SizedBox(height: 10),
+                  DangerButton(
+                    label: 'Sair do app',
+                    onPressed: busy
+                        ? null
+                        : () => unawaited(_confirmLogout(context)),
+                  ),
+                  const SizedBox(height: 14),
+                  MessageBox(message: message),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Clientes para atendimento',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
-                  RouteMapTab(items: pendingItems),
+                  const SizedBox(height: 10),
+                  if (pendingItems.isEmpty)
+                    const EmptyState(
+                      title: 'Nenhum cliente pendente',
+                      body:
+                          'Quando uma rota for publicada para este promotor, os clientes aparecem aqui.',
+                    )
+                  else
+                    ...pendingItems.map(
+                      (item) => RouteItemCard(
+                        item: item,
+                        onTap: () => onOpenVisit(item),
+                      ),
+                    ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -638,8 +541,7 @@ class _VisitPageState extends State<VisitPage> {
   bool busy = false;
   String message = 'Pronto para iniciar atendimento.';
 
-  List<SupplierSnapshot> get clientSuppliers =>
-      suppliersFromPayload(client?.payload);
+  List<SupplierSnapshot> get clientSuppliers => suppliersFromPayload(client?.payload);
   List<LocalPhoto> get visitLevelPhotos =>
       photos.where((photo) => photo.supplierExecutionLocalId == null).toList();
   Set<String> get visitPhotoTypes =>
@@ -656,12 +558,15 @@ class _VisitPageState extends State<VisitPage> {
       findSupplierExecution(supplierExecutions, activeSupplierId);
   SupplierSnapshot? get activeSupplier =>
       supplierById(clientSuppliers, activeSupplierId);
-  List<SupplierSnapshot> get incompleteSuppliers => clientSuppliers.where((
-    supplier,
-  ) {
-    final execution = findSupplierExecution(supplierExecutions, supplier.id);
-    return execution == null || execution.status != 'completed';
-  }).toList();
+  List<SupplierSnapshot> get incompleteSuppliers => clientSuppliers
+      .where((supplier) {
+        final execution = findSupplierExecution(
+          supplierExecutions,
+          supplier.id,
+        );
+        return execution == null || execution.status != 'completed';
+      })
+      .toList();
   bool get allSuppliersCompleted =>
       legacyFlowEnabled || incompleteSuppliers.isEmpty;
 
@@ -679,76 +584,49 @@ class _VisitPageState extends State<VisitPage> {
   }
 
   Future<void> _load() async {
-    try {
-      final currentVisit = await widget.repository.getVisitByRouteItem(
-        widget.item.id,
-      );
-      final currentClient = await widget.repository.getClientSnapshot(
-        widget.item.clientId,
-      );
-      if (currentClient == null) {
-        throw Exception(
-          'Cliente nao encontrado no aparelho. Atualize o roteiro e tente novamente.',
-        );
-      }
-      final currentPhotos = currentVisit == null
-          ? <LocalPhoto>[]
-          : await widget.repository.listPhotos(currentVisit.localId);
-      final currentSupplierExecutions = currentVisit == null
-          ? <LocalSupplierExecution>[]
-          : await widget.repository.listSupplierExecutions(
-              currentVisit.localId,
-            );
-      if (!mounted) return;
+    final currentVisit = await widget.repository.getVisitByRouteItem(
+      widget.item.id,
+    );
+    final currentClient = await widget.repository.getClientSnapshot(
+      widget.item.clientId,
+    );
+    final currentPhotos = currentVisit == null
+        ? <LocalPhoto>[]
+        : await widget.repository.listPhotos(currentVisit.localId);
+    final currentSupplierExecutions = currentVisit == null
+        ? <LocalSupplierExecution>[]
+        : await widget.repository.listSupplierExecutions(currentVisit.localId);
+    if (!mounted) return;
 
-      final selectedExecution = findSupplierExecution(
-        currentSupplierExecutions,
-        activeSupplierId,
-      );
+    final selectedExecution = findSupplierExecution(
+      currentSupplierExecutions,
+      activeSupplierId,
+    );
 
-      setState(() {
-        client = currentClient;
-        visit = currentVisit;
-        photos = currentPhotos;
-        supplierExecutions = currentSupplierExecutions;
-        notesController.text = currentVisit?.notes ?? '';
-        if (selectedExecution != null) {
-          supplierNotesController.text = selectedExecution.notes ?? '';
-          deliveryReceived = selectedExecution.deliveryReceived;
-          productsReplenished = selectedExecution.productsReplenished;
-          stockoutFound = selectedExecution.stockoutFound;
-        } else {
-          activeSupplierId = null;
-          supplierNotesController.clear();
-          deliveryReceived = null;
-          productsReplenished = null;
-          stockoutFound = null;
-        }
-        message = currentVisit == null
-            ? 'Inicie o atendimento para liberar as evidencias.'
-            : currentVisit.status == 'completed'
-            ? 'Atendimento concluido localmente. Sincronize quando houver internet.'
-            : 'Atendimento salvo localmente.';
-      });
-    } catch (error, stackTrace) {
-      debugPrint(
-        'Falha ao carregar atendimento ${widget.item.id}: $error\n$stackTrace',
-      );
-      if (!mounted) return;
-      setState(() {
-        client = null;
-        visit = null;
-        photos = const <LocalPhoto>[];
-        supplierExecutions = const <LocalSupplierExecution>[];
+    setState(() {
+      client = currentClient;
+      visit = currentVisit;
+      photos = currentPhotos;
+      supplierExecutions = currentSupplierExecutions;
+      notesController.text = currentVisit?.notes ?? '';
+      if (selectedExecution != null) {
+        supplierNotesController.text = selectedExecution.notes ?? '';
+        deliveryReceived = selectedExecution.deliveryReceived;
+        productsReplenished = selectedExecution.productsReplenished;
+        stockoutFound = selectedExecution.stockoutFound;
+      } else {
         activeSupplierId = null;
         supplierNotesController.clear();
         deliveryReceived = null;
         productsReplenished = null;
         stockoutFound = null;
-        message =
-            'Nao foi possivel abrir este cliente agora. ${normalizedError(error)}';
-      });
-    }
+      }
+      message = currentVisit == null
+          ? 'Inicie o atendimento para liberar as evidencias.'
+          : currentVisit.status == 'completed'
+          ? 'Atendimento concluido localmente. Sincronize quando houver internet.'
+          : 'Atendimento salvo localmente.';
+    });
   }
 
   Future<void> _startVisit() async {
@@ -757,9 +635,10 @@ class _VisitPageState extends State<VisitPage> {
       final created = await widget.repository.startVisit(widget.item);
       await _load();
       setState(
-        () => message = legacyFlowEnabled
-            ? 'Atendimento iniciado offline. Primeiro capture o check-in para liberar as demais evidencias.'
-            : 'Atendimento iniciado offline. Primeiro capture o check-in para liberar os fornecedores.',
+        () => message =
+            legacyFlowEnabled
+            ? 'Atendimento iniciado offline. Agora capture check-in, antes, depois e check-out.'
+            : 'Atendimento iniciado offline. Capture check-in, passe por todos os fornecedores e finalize com o check-out.',
       );
       unawaited(widget.repository.sendHeartbeatFromVisit(created));
     } catch (error) {
@@ -774,14 +653,6 @@ class _VisitPageState extends State<VisitPage> {
     if (currentVisit == null) {
       setState(() {
         message = 'Inicie o atendimento antes de registrar o fornecedor.';
-      });
-      return;
-    }
-
-    if (!hasCheckin) {
-      setState(() {
-        message =
-            'Check-in obrigatorio: registre a chegada no cliente antes de executar o fornecedor.';
       });
       return;
     }
@@ -823,23 +694,13 @@ class _VisitPageState extends State<VisitPage> {
       return;
     }
 
-    if (!hasCheckin) {
-      setState(
-        () => message =
-            'Check-in obrigatorio: registre a chegada no cliente antes de responder o fornecedor.',
-      );
-      return;
-    }
-
     final execution =
         activeSupplierExecution ??
-        await widget.repository.ensureSupplierExecution(
-          currentVisit,
-          supplier.id,
-        );
+        await widget.repository.ensureSupplierExecution(currentVisit, supplier.id);
 
     final effectiveDelivery = nextDeliveryReceived ?? deliveryReceived;
-    final normalizedProducts = effectiveDelivery == false
+    final normalizedProducts =
+        effectiveDelivery == false
         ? false
         : nextProductsReplenished ?? productsReplenished;
     final normalizedStockout = effectiveDelivery == false
@@ -868,14 +729,6 @@ class _VisitPageState extends State<VisitPage> {
       return;
     }
 
-    if (!hasCheckin) {
-      setState(
-        () => message =
-            'Check-in obrigatorio: registre a chegada no cliente antes de concluir fornecedor.',
-      );
-      return;
-    }
-
     if (deliveryReceived == null) {
       setState(
         () => message =
@@ -889,19 +742,6 @@ class _VisitPageState extends State<VisitPage> {
         .toList();
     final executionTypes = executionPhotos.map((photo) => photo.type).toSet();
     final requiresDeliveryFlow = supplierRequiresDeliveryFlow(deliveryReceived);
-    final notes = supplierNotesController.text.trim();
-
-    if (supplierExecutionRequiresJustification(
-          deliveryReceived: deliveryReceived,
-          stockoutFound: stockoutFound,
-        ) &&
-        notes.length < 5) {
-      setState(
-        () => message =
-            'Explique na observacao o motivo da falta de entrega ou ruptura do fornecedor ${supplierLabel(supplier)}.',
-      );
-      return;
-    }
 
     if (requiresDeliveryFlow &&
         (!executionTypes.contains('supplier_before') ||
@@ -911,52 +751,6 @@ class _VisitPageState extends State<VisitPage> {
             'Conclua o fornecedor ${supplierLabel(supplier)} com foto antes e foto depois.',
       );
       return;
-    }
-
-    if (requiresDeliveryFlow) {
-      CategorySnapshot? missingCategory;
-      for (final category in supplier.categories) {
-        final hasEvidence = executionPhotos.any(
-          (photo) =>
-              photo.categoryId == category.id ||
-              photo.categoryName == category.displayName,
-        );
-        if (!hasEvidence) {
-          missingCategory = category;
-          break;
-        }
-      }
-
-      if (missingCategory != null) {
-        final categoryName = missingCategory.displayName;
-        setState(
-          () => message =
-              'Categoria $categoryName precisa de foto de evidencia antes de concluir o fornecedor.',
-        );
-        return;
-      }
-
-      ActivitySnapshot? missingActivity;
-      for (final activity in activitiesForSupplier(supplier, client)) {
-        final hasEvidence = executionPhotos.any(
-          (photo) =>
-              photo.activityId == activity.id ||
-              photo.activityName == activity.displayName,
-        );
-        if (!hasEvidence) {
-          missingActivity = activity;
-          break;
-        }
-      }
-
-      if (missingActivity != null) {
-        final activityName = missingActivity.displayName;
-        setState(
-          () => message =
-              'Atividade $activityName precisa de foto de evidencia antes de concluir o fornecedor.',
-        );
-        return;
-      }
     }
 
     if (requiresDeliveryFlow &&
@@ -978,7 +772,7 @@ class _VisitPageState extends State<VisitPage> {
               ? productsReplenished
               : false,
           stockoutFound: requiresDeliveryFlow ? stockoutFound : false,
-          notes: notes,
+          notes: supplierNotesController.text.trim(),
           finishedAtDevice: DateTime.now().toUtc().toIso8601String(),
           syncStatus: 'pending',
           updatedAt: DateTime.now().toUtc().toIso8601String(),
@@ -986,7 +780,7 @@ class _VisitPageState extends State<VisitPage> {
       );
       await widget.repository.addSyncLog(
         'pending',
-        'Fornecedor ${supplierLabel(supplier)} concluido offline para ${widget.item.navigationName}.',
+        'Fornecedor ${supplierLabel(supplier)} concluido offline para ${widget.item.clientName}.',
       );
       await _load();
       if (!mounted) return;
@@ -1007,12 +801,7 @@ class _VisitPageState extends State<VisitPage> {
     }
   }
 
-  Future<void> _capture(
-    String type, {
-    SupplierSnapshot? supplier,
-    CategorySnapshot? category,
-    ActivitySnapshot? activity,
-  }) async {
+  Future<void> _capture(String type, {SupplierSnapshot? supplier}) async {
     final currentVisit = visit;
     if (currentVisit == null) {
       setState(() => message = 'Inicie o atendimento antes de capturar fotos.');
@@ -1023,14 +812,6 @@ class _VisitPageState extends State<VisitPage> {
       setState(
         () => message =
             'Esta visita ja foi concluida localmente. Volte ao menu principal para sincronizar.',
-      );
-      return;
-    }
-
-    if (type != 'checkin' && !hasCheckin) {
-      setState(
-        () => message =
-            'Check-in obrigatorio: tire a foto de chegada no cliente antes de iniciar o atendimento.',
       );
       return;
     }
@@ -1072,14 +853,6 @@ class _VisitPageState extends State<VisitPage> {
       return;
     }
 
-    if (execution == null && (category != null || activity != null)) {
-      setState(
-        () => message =
-            'Selecione um fornecedor antes de registrar evidencia por categoria ou atividade.',
-      );
-      return;
-    }
-
     if (execution == null && type == 'checkout' && !allSuppliersCompleted) {
       setState(
         () => message =
@@ -1095,18 +868,11 @@ class _VisitPageState extends State<VisitPage> {
         type,
         supplierExecutionLocalId: execution?.localId,
         supplierId: supplier?.id,
-        categoryId: category?.id,
-        categoryName: category?.displayName,
-        activityId: activity?.id,
-        activityName: activity?.displayName,
       );
       await _load();
       setState(
-        () => message = category != null
-            ? 'Foto da categoria ${category.displayName} salva localmente.'
-            : activity != null
-            ? 'Foto da atividade ${activity.displayName} salva localmente.'
-            : execution == null
+        () => message =
+            execution == null
             ? '${photoLabel(type)} salva localmente com data, hora e GPS quando disponivel.'
             : '${photoLabel(type)} do fornecedor ${supplierLabel(supplier!)} salva localmente.',
       );
@@ -1122,7 +888,8 @@ class _VisitPageState extends State<VisitPage> {
     if (currentVisit == null) return;
     if (!requiredReady) {
       setState(
-        () => message = legacyFlowEnabled
+        () => message =
+            legacyFlowEnabled
             ? 'Obrigatorio capturar check-in, foto antes, foto depois e check-out antes de encerrar.'
             : 'Obrigatorio capturar check-in, concluir todos os fornecedores e registrar o check-out antes de encerrar.',
       );
@@ -1140,26 +907,8 @@ class _VisitPageState extends State<VisitPage> {
     setState(() => busy = true);
     try {
       await widget.repository.finishVisit(currentVisit, notesController.text);
-      var resultMessage =
-          'Atendimento encerrado e salvo no aparelho. Sincronize quando tiver internet.';
-
-      final session = await widget.repository.getSession();
-      if (session != null) {
-        try {
-          final result = await widget.repository.syncPending(
-            session.accessToken,
-          );
-          resultMessage = result.failed == 0
-              ? 'Atendimento encerrado e sincronizado com a retaguarda. Enviados: ${result.synced}.'
-              : 'Atendimento encerrado, mas ${result.failed} item(ns) ficaram pendentes. Abra a fila de sincronizacao para ver o erro.';
-        } catch (syncError) {
-          resultMessage =
-              'Atendimento encerrado e salvo localmente. Sync nao concluiu: ${normalizedError(syncError)}';
-        }
-      }
-
       if (!mounted) return;
-      Navigator.pop(context, resultMessage);
+      Navigator.pop(context);
     } catch (error) {
       setState(() => message = normalizedError(error));
     } finally {
@@ -1197,221 +946,159 @@ class _VisitPageState extends State<VisitPage> {
                     ok: hasCheckin,
                     onPressed: busy ? null : () => _capture('checkin'),
                   ),
-                  if (!hasCheckin)
-                    const InfoCard(
-                      title: 'Check-in obrigatorio',
-                      body:
-                          'O atendimento so e liberado depois da foto de check-in, que comprova a chegada do promotor no cliente.',
-                    )
-                  else ...[
+                  EvidenceButton(
+                    label: 'Check-out com foto',
+                    ok: hasCheckout,
+                    onPressed: busy
+                        ? null
+                        : allSuppliersCompleted
+                        ? () => _capture('checkout')
+                        : null,
+                  ),
+                  if (legacyFlowEnabled) ...[
                     EvidenceButton(
-                      label: 'Check-out com foto',
-                      ok: hasCheckout,
-                      onPressed: busy
-                          ? null
-                          : allSuppliersCompleted
-                          ? () => _capture('checkout')
-                          : null,
+                      label: 'Foto antes',
+                      ok: hasBefore,
+                      onPressed: busy ? null : () => _capture('before'),
                     ),
-                    if (legacyFlowEnabled) ...[
-                      EvidenceButton(
-                        label: 'Foto antes',
-                        ok: hasBefore,
-                        onPressed: busy ? null : () => _capture('before'),
-                      ),
-                      EvidenceButton(
-                        label: 'Foto depois',
-                        ok: hasAfter,
-                        onPressed: busy ? null : () => _capture('after'),
-                      ),
-                    ],
-                    if (!legacyFlowEnabled) ...[
-                      const SizedBox(height: 8),
-                      InfoCard(
-                        title: 'Execucao por fornecedor',
-                        body:
-                            'Conclua ${clientSuppliers.length} fornecedor(es) deste cliente. Se nao houve entrega, marque "Nao" em recebeu mercadoria para liberar a conclusao sem fotos do fornecedor.',
-                      ),
-                      const SizedBox(height: 12),
-                      ...clientSuppliers.map((supplier) {
-                        final supplierActivities = activitiesForSupplier(
-                          supplier,
-                          client,
-                        );
-                        final execution = findSupplierExecution(
-                          supplierExecutions,
-                          supplier.id,
-                        );
-                        final executionPhotos = execution == null
-                            ? <LocalPhoto>[]
-                            : photos
-                                  .where(
-                                    (photo) =>
-                                        photo.supplierExecutionLocalId ==
-                                        execution.localId,
-                                  )
-                                  .toList();
-                        final executionTypes = executionPhotos
-                            .map((photo) => photo.type)
-                            .toSet();
-                        final categoryEvidenceCount = executionPhotos
-                            .where((photo) => photo.categoryId != null)
-                            .length;
-                        return SupplierExecutionTile(
-                          supplier: supplier,
-                          activityCount: supplierActivities.length,
-                          categoryCount: supplier.categories.length,
-                          categoryEvidenceCount: categoryEvidenceCount,
-                          status: execution?.status ?? 'pending',
-                          hasBefore: executionTypes.contains('supplier_before'),
-                          hasAfter: executionTypes.contains('supplier_after'),
-                          deliveryReceivedAnswered:
-                              execution?.deliveryReceived != null,
-                          productsReplenishedAnswered:
-                              execution?.productsReplenished != null,
-                          stockoutFoundAnswered:
-                              execution?.stockoutFound != null,
-                          active: activeSupplierId == supplier.id,
-                          onTap: busy
-                              ? null
-                              : () => _openSupplierExecution(supplier),
-                        );
-                      }),
-                      const SizedBox(height: 12),
-                      if (activeSupplier != null &&
-                          activeSupplierExecution != null)
-                        SupplierExecutionEditor(
-                          supplier: activeSupplier!,
-                          activities: activitiesForSupplier(
-                            activeSupplier!,
-                            client,
-                          ),
-                          categories: activeSupplier!.categories,
-                          categoryEvidenceCounts: {
-                            for (final category in activeSupplier!.categories)
-                              category.id: photos
-                                  .where(
-                                    (photo) =>
-                                        photo.supplierExecutionLocalId ==
-                                            activeSupplierExecution!.localId &&
-                                        photo.categoryId == category.id,
-                                  )
-                                  .length,
-                          },
-                          activityEvidenceCounts: {
-                            for (final activity in activitiesForSupplier(
-                              activeSupplier!,
-                              client,
-                            ))
-                              activity.id: photos
-                                  .where(
-                                    (photo) =>
-                                        photo.supplierExecutionLocalId ==
-                                            activeSupplierExecution!.localId &&
-                                        photo.activityId == activity.id,
-                                  )
-                                  .length,
-                          },
-                          hasBefore: photos.any(
-                            (photo) =>
-                                photo.supplierExecutionLocalId ==
-                                    activeSupplierExecution!.localId &&
-                                photo.type == 'supplier_before',
-                          ),
-                          hasAfter: photos.any(
-                            (photo) =>
-                                photo.supplierExecutionLocalId ==
-                                    activeSupplierExecution!.localId &&
-                                photo.type == 'supplier_after',
-                          ),
-                          deliveryReceived: deliveryReceived,
-                          productsReplenished: productsReplenished,
-                          stockoutFound: stockoutFound,
-                          notesController: supplierNotesController,
-                          busy: busy,
-                          onCaptureBefore: () => _capture(
-                            'supplier_before',
-                            supplier: activeSupplier!,
-                          ),
-                          onCaptureAfter: () => _capture(
-                            'supplier_after',
-                            supplier: activeSupplier!,
-                          ),
-                          onCaptureCategory: (category) => _capture(
-                            'store_extra',
-                            supplier: activeSupplier!,
-                            category: category,
-                          ),
-                          onCaptureActivity: (activity) => _capture(
-                            'store_extra',
-                            supplier: activeSupplier!,
-                            activity: activity,
-                          ),
-                          onDeliveryChanged: (value) async {
-                            setState(() {
-                              deliveryReceived = value;
-                              if (value == false) {
-                                productsReplenished = false;
-                                stockoutFound = false;
-                              }
-                            });
-                            await _saveSupplierDraft(
-                              nextDeliveryReceived: value,
-                              nextProductsReplenished: value == false
-                                  ? false
-                                  : productsReplenished,
-                              nextStockoutFound: value == false
-                                  ? false
-                                  : stockoutFound,
-                            );
-                          },
-                          onProductsChanged: (value) async {
-                            setState(() => productsReplenished = value);
-                            await _saveSupplierDraft(
-                              nextProductsReplenished: value,
-                            );
-                          },
-                          onStockoutChanged: (value) async {
-                            setState(() => stockoutFound = value);
-                            await _saveSupplierDraft(nextStockoutFound: value);
-                          },
-                          onNotesChanged: (value) async {
-                            await _saveSupplierDraft(nextNotes: value);
-                          },
-                          onComplete: _completeSupplierExecution,
-                          onClose: () {
-                            setState(() {
-                              activeSupplierId = null;
-                              supplierNotesController.clear();
-                              deliveryReceived = null;
-                              productsReplenished = null;
-                              stockoutFound = null;
-                            });
-                          },
-                        )
-                      else
-                        const InfoCard(
-                          title: 'Selecione um fornecedor',
-                          body:
-                              'Toque em um fornecedor para responder entrega, registrar foto antes e foto depois quando houver mercadoria, e concluir esse atendimento.',
-                        ),
-                    ],
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: notesController,
-                      minLines: 3,
-                      maxLines: 5,
-                      decoration: const InputDecoration(
-                        labelText: 'Observacoes da execucao',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    PrimaryButton(
-                      label: 'Encerrar visita',
-                      onPressed: busy ? null : _finish,
+                    EvidenceButton(
+                      label: 'Foto depois',
+                      ok: hasAfter,
+                      onPressed: busy ? null : () => _capture('after'),
                     ),
                   ],
+                  if (!legacyFlowEnabled) ...[
+                    const SizedBox(height: 8),
+                    InfoCard(
+                      title: 'Execucao por fornecedor',
+                      body:
+                          'Conclua ${clientSuppliers.length} fornecedor(es) deste cliente. Se nao houve entrega, marque "Nao" em recebeu mercadoria para liberar a conclusao sem fotos do fornecedor.',
+                    ),
+                    const SizedBox(height: 12),
+                    ...clientSuppliers.map((supplier) {
+                      final execution = findSupplierExecution(
+                        supplierExecutions,
+                        supplier.id,
+                      );
+                      final executionPhotos = execution == null
+                          ? <LocalPhoto>[]
+                          : photos
+                              .where(
+                                (photo) =>
+                                    photo.supplierExecutionLocalId ==
+                                    execution.localId,
+                              )
+                              .toList();
+                      final executionTypes =
+                          executionPhotos.map((photo) => photo.type).toSet();
+                      return SupplierExecutionTile(
+                        supplier: supplier,
+                        status: execution?.status ?? 'pending',
+                        hasBefore: executionTypes.contains('supplier_before'),
+                        hasAfter: executionTypes.contains('supplier_after'),
+                        deliveryReceivedAnswered:
+                            execution?.deliveryReceived != null,
+                        productsReplenishedAnswered:
+                            execution?.productsReplenished != null,
+                        stockoutFoundAnswered:
+                            execution?.stockoutFound != null,
+                        active: activeSupplierId == supplier.id,
+                        onTap: busy ? null : () => _openSupplierExecution(supplier),
+                      );
+                    }),
+                    const SizedBox(height: 12),
+                    if (activeSupplier != null && activeSupplierExecution != null)
+                      SupplierExecutionEditor(
+                        supplier: activeSupplier!,
+                        hasBefore: photos.any(
+                          (photo) =>
+                              photo.supplierExecutionLocalId ==
+                                  activeSupplierExecution!.localId &&
+                              photo.type == 'supplier_before',
+                        ),
+                        hasAfter: photos.any(
+                          (photo) =>
+                              photo.supplierExecutionLocalId ==
+                                  activeSupplierExecution!.localId &&
+                              photo.type == 'supplier_after',
+                        ),
+                        deliveryReceived: deliveryReceived,
+                        productsReplenished: productsReplenished,
+                        stockoutFound: stockoutFound,
+                        notesController: supplierNotesController,
+                        busy: busy,
+                        onCaptureBefore: () => _capture(
+                          'supplier_before',
+                          supplier: activeSupplier!,
+                        ),
+                        onCaptureAfter: () => _capture(
+                          'supplier_after',
+                          supplier: activeSupplier!,
+                        ),
+                        onDeliveryChanged: (value) async {
+                          setState(() {
+                            deliveryReceived = value;
+                            if (value == false) {
+                              productsReplenished = false;
+                              stockoutFound = false;
+                            }
+                          });
+                          await _saveSupplierDraft(
+                            nextDeliveryReceived: value,
+                            nextProductsReplenished: value == false
+                                ? false
+                                : productsReplenished,
+                            nextStockoutFound: value == false
+                                ? false
+                                : stockoutFound,
+                          );
+                        },
+                        onProductsChanged: (value) async {
+                          setState(() => productsReplenished = value);
+                          await _saveSupplierDraft(
+                            nextProductsReplenished: value,
+                          );
+                        },
+                        onStockoutChanged: (value) async {
+                          setState(() => stockoutFound = value);
+                          await _saveSupplierDraft(nextStockoutFound: value);
+                        },
+                        onNotesChanged: (value) async {
+                          await _saveSupplierDraft(nextNotes: value);
+                        },
+                        onComplete: _completeSupplierExecution,
+                        onClose: () {
+                          setState(() {
+                            activeSupplierId = null;
+                            supplierNotesController.clear();
+                            deliveryReceived = null;
+                            productsReplenished = null;
+                            stockoutFound = null;
+                          });
+                        },
+                      )
+                    else
+                      const InfoCard(
+                        title: 'Selecione um fornecedor',
+                        body:
+                            'Toque em um fornecedor para responder entrega, registrar foto antes e foto depois quando houver mercadoria, e concluir esse atendimento.',
+                      ),
+                  ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    minLines: 3,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      labelText: 'Observacoes da execucao',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  PrimaryButton(
+                    label: 'Encerrar visita',
+                    onPressed: busy ? null : _finish,
+                  ),
                 ],
                 const SizedBox(height: 14),
                 MessageBox(message: message),
@@ -1425,8 +1112,7 @@ class _VisitPageState extends State<VisitPage> {
                 const SizedBox(height: 8),
                 if (photos.isEmpty) const Text('Nenhuma foto capturada ainda.'),
                 ...photos.map(
-                  (photo) =>
-                      PhotoTile(photo: photo, suppliers: clientSuppliers),
+                  (photo) => PhotoTile(photo: photo, suppliers: clientSuppliers),
                 ),
               ],
             ),
@@ -1585,7 +1271,6 @@ class AppRepository {
   Future<void> init() async {
     prefs = await SharedPreferences.getInstance();
     await db.open();
-    await db.normalizeLegacyOperationalData();
   }
 
   Future<Session?> getSession() async {
@@ -1605,8 +1290,6 @@ class AppRepository {
 
   Future<Session> login(String email, String password) =>
       api.login(email, password);
-  Future<Session> refreshSession(Session session) =>
-      api.refreshSession(session.refreshToken);
   Future<MobileSnapshot> downloadSnapshot(String accessToken) =>
       api.downloadSnapshot(accessToken);
   Future<void> saveSnapshot(MobileSnapshot snapshot) =>
@@ -1649,7 +1332,7 @@ class AppRepository {
     await db.enqueue('visit', visit.localId);
     await db.addSyncLog(
       'pending',
-      'Atendimento iniciado offline para ${item.navigationName}.',
+      'Atendimento iniciado offline para ${item.clientName}.',
     );
     return visit;
   }
@@ -1706,10 +1389,6 @@ class AppRepository {
     String type, {
     String? supplierExecutionLocalId,
     String? supplierId,
-    String? categoryId,
-    String? categoryName,
-    String? activityId,
-    String? activityName,
   }) async {
     final picker = ImagePicker();
     final result = await picker.pickImage(
@@ -1739,10 +1418,6 @@ class AppRepository {
       capturedAt: DateTime.now().toUtc().toIso8601String(),
       supplierExecutionLocalId: supplierExecutionLocalId,
       supplierId: supplierId,
-      categoryId: categoryId,
-      categoryName: categoryName,
-      activityId: activityId,
-      activityName: activityName,
       gpsLatitude: gps?.latitude,
       gpsLongitude: gps?.longitude,
       syncStatus: 'pending',
@@ -1754,7 +1429,7 @@ class AppRepository {
       gps == null
           ? 'Foto salva sem GPS disponivel.'
           : '${photoLabel(type)} salva com GPS.',
-    );
+      );
   }
 
   Future<void> finishVisit(LocalVisit visit, String notes) async {
@@ -1774,32 +1449,6 @@ class AppRepository {
     await db.addSyncLog(
       'pending',
       'Visita encerrada offline. Sincronize quando tiver internet.',
-    );
-  }
-
-  LocalVisit _normalizeVisitForSync(LocalVisit visit) {
-    final normalizedNotes = (visit.notes ?? '').trim();
-    final normalizedFinishedAt = visit.status == 'completed'
-        ? (visit.finishedAt ?? visit.updatedAt)
-        : visit.finishedAt;
-    return visit.copyWith(
-      finishedAt: normalizedFinishedAt,
-      notes: normalizedNotes,
-      updatedAt: visit.updatedAt,
-    );
-  }
-
-  LocalSupplierExecution _normalizeSupplierExecutionForSync(
-    LocalSupplierExecution execution,
-  ) {
-    final normalizedNotes = (execution.notes ?? '').trim();
-    final normalizedFinishedAt = execution.status == 'completed'
-        ? (execution.finishedAtDevice ?? execution.updatedAt)
-        : execution.finishedAtDevice;
-    return execution.copyWith(
-      notes: normalizedNotes,
-      finishedAtDevice: normalizedFinishedAt,
-      updatedAt: execution.updatedAt,
     );
   }
 
@@ -1852,8 +1501,7 @@ class AppRepository {
     }
 
     if (suppliers.isEmpty) {
-      if (!visitLevelTypes.contains('before') ||
-          !visitLevelTypes.contains('after')) {
+      if (!visitLevelTypes.contains('before') || !visitLevelTypes.contains('after')) {
         throw Exception(
           'Nao e permitido encerrar sem check-in, foto antes, foto depois e check-out.',
         );
@@ -1877,7 +1525,6 @@ class AppRepository {
         execution,
         executionPhotos,
         supplier,
-        activitiesForSupplier(supplier, client),
       );
     }
   }
@@ -1886,7 +1533,6 @@ class AppRepository {
     LocalSupplierExecution execution,
     List<LocalPhoto> executionPhotos,
     SupplierSnapshot supplier,
-    List<ActivitySnapshot> activities,
   ) {
     if (execution.deliveryReceived == null) {
       throw Exception(
@@ -1895,11 +1541,6 @@ class AppRepository {
     }
 
     if (!supplierRequiresDeliveryFlow(execution.deliveryReceived)) {
-      if ((execution.notes ?? '').trim().length < 5) {
-        throw Exception(
-          'Fornecedor ${supplierLabel(supplier)} sem entrega precisa de observacao explicando o motivo.',
-        );
-      }
       return;
     }
 
@@ -1911,62 +1552,16 @@ class AppRepository {
       );
     }
 
-    CategorySnapshot? missingCategory;
-    for (final category in supplier.categories) {
-      final hasCategoryEvidence = executionPhotos.any(
-        (photo) =>
-            photo.categoryId == category.id ||
-            photo.categoryName == category.displayName,
-      );
-      if (!hasCategoryEvidence) {
-        missingCategory = category;
-        break;
-      }
-    }
-    if (missingCategory != null) {
-      throw Exception(
-        'Categoria ${missingCategory.displayName} precisa de pelo menos uma foto de evidencia.',
-      );
-    }
-
-    ActivitySnapshot? missingActivity;
-    for (final activity in activities) {
-      final hasActivityEvidence = executionPhotos.any(
-        (photo) =>
-            photo.activityId == activity.id ||
-            photo.activityName == activity.displayName,
-      );
-      if (!hasActivityEvidence) {
-        missingActivity = activity;
-        break;
-      }
-    }
-    if (missingActivity != null) {
-      throw Exception(
-        'Atividade ${missingActivity.displayName} precisa de pelo menos uma foto de evidencia.',
-      );
-    }
-
-    if (execution.productsReplenished == null ||
-        execution.stockoutFound == null) {
+    if (execution.productsReplenished == null || execution.stockoutFound == null) {
       throw Exception(
         'Responda abastecimento e ruptura do fornecedor ${supplierLabel(supplier)}.',
-      );
-    }
-
-    if (execution.stockoutFound == true &&
-        (execution.notes ?? '').trim().length < 5) {
-      throw Exception(
-        'Fornecedor ${supplierLabel(supplier)} com ruptura precisa de observacao explicando o motivo.',
       );
     }
   }
 
   Future<void> _syncVisit(String accessToken, String localId) async {
-    final originalVisit = await db.getVisit(localId);
-    if (originalVisit == null) return;
-    final visit = _normalizeVisitForSync(originalVisit);
-    await db.upsertVisit(visit);
+    final visit = await db.getVisit(localId);
+    if (visit == null) return;
     await db.updateVisitSyncStatus(localId, 'syncing');
 
     if (visit.status != 'completed') {
@@ -1996,11 +1591,7 @@ class AppRepository {
             'Fornecedor ${supplierLabel(supplier)} ainda nao tem execucao salva localmente.',
           );
         }
-        await _syncSupplierExecutionRecord(
-          accessToken,
-          serverVisitId,
-          execution,
-        );
+        await _syncSupplierExecutionRecord(accessToken, serverVisitId, execution);
       }
     }
 
@@ -2017,14 +1608,9 @@ class AppRepository {
     await db.updateVisitServerId(localId, finalServerId, 'synced');
   }
 
-  Future<void> _syncSupplierExecution(
-    String accessToken,
-    String localId,
-  ) async {
-    final originalExecution = await db.getSupplierExecution(localId);
-    if (originalExecution == null) return;
-    final execution = _normalizeSupplierExecutionForSync(originalExecution);
-    await db.upsertSupplierExecution(execution);
+  Future<void> _syncSupplierExecution(String accessToken, String localId) async {
+    final execution = await db.getSupplierExecution(localId);
+    if (execution == null) return;
     if (execution.serverId != null && execution.syncStatus == 'synced') {
       return;
     }
@@ -2049,43 +1635,30 @@ class AppRepository {
     String serverVisitId,
     LocalSupplierExecution execution,
   ) async {
-    final normalizedExecution = _normalizeSupplierExecutionForSync(execution);
-    await db.upsertSupplierExecution(normalizedExecution);
-
-    if (normalizedExecution.serverId != null &&
-        normalizedExecution.syncStatus == 'synced') {
-      return normalizedExecution.serverId!;
+    if (execution.serverId != null && execution.syncStatus == 'synced') {
+      return execution.serverId!;
     }
 
-    final client = await db.getClientSnapshot(normalizedExecution.clientId);
+    final client = await db.getClientSnapshot(execution.clientId);
     final supplier = supplierById(
       suppliersFromPayload(client?.payload),
-      normalizedExecution.supplierId,
+      execution.supplierId,
     );
-    if (normalizedExecution.status == 'completed' && supplier != null) {
-      final executionPhotos =
-          (await db.listPhotos(normalizedExecution.visitLocalId))
+    if (execution.status == 'completed' && supplier != null) {
+      final executionPhotos = (await db.listPhotos(execution.visitLocalId))
           .where((photo) => photo.supplierExecutionLocalId == execution.localId)
           .toList();
-      _assertSupplierExecutionReady(
-        normalizedExecution,
-        executionPhotos,
-        supplier,
-        activitiesForSupplier(supplier, client),
-      );
+      _assertSupplierExecutionReady(execution, executionPhotos, supplier);
     }
 
-    await db.updateSupplierExecutionSyncStatus(
-      normalizedExecution.localId,
-      'syncing',
-    );
+    await db.updateSupplierExecutionSyncStatus(execution.localId, 'syncing');
     final serverId = await api.sendSupplierExecution(
       accessToken,
       serverVisitId,
-      normalizedExecution,
+      execution,
     );
     await db.updateSupplierExecutionServerId(
-      normalizedExecution.localId,
+      execution.localId,
       serverId,
       'synced',
     );
@@ -2216,16 +1789,6 @@ class ApiClient {
     return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<Session> refreshSession(String refreshToken) async {
-    final response = await _request(
-      '/auth/refresh',
-      method: 'POST',
-      body: {'refreshToken': refreshToken},
-      timeout: const Duration(seconds: 60),
-    );
-    return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
   Future<MobileSnapshot> downloadSnapshot(String accessToken) async {
     final response = await _request(
       '/mobile/snapshot',
@@ -2247,7 +1810,7 @@ class ApiClient {
       'finishedAt': visit.finishedAt,
       'gpsLatitude': visit.gpsLatitude,
       'gpsLongitude': visit.gpsLongitude,
-      'notes': visit.notes ?? '',
+      'notes': visit.notes,
     };
     final response = await _request(
       visit.serverId == null ? '/visits' : '/visits/${visit.serverId}',
@@ -2273,7 +1836,7 @@ class ApiClient {
       'deliveryReceived': execution.deliveryReceived,
       'productsReplenished': execution.productsReplenished,
       'stockoutFound': execution.stockoutFound,
-      'notes': execution.notes ?? '',
+      'notes': execution.notes,
       'startedAtDevice': execution.startedAtDevice,
       'finishedAtDevice': execution.finishedAtDevice,
     };
@@ -2296,7 +1859,8 @@ class ApiClient {
     LocalPhoto photo, {
     String? supplierExecutionId,
     String? supplierId,
-  }) async {
+  }
+  ) async {
     final bytes = await File(photo.uri).readAsBytes();
     final response = await _request(
       '/visits/$visitId/photos/base64',
@@ -2308,18 +1872,8 @@ class ApiClient {
         'capturedAt': photo.capturedAt,
         'gpsLatitude': photo.gpsLatitude,
         'gpsLongitude': photo.gpsLongitude,
-        ...?supplierExecutionId == null
-            ? null
-            : {'supplierExecutionId': supplierExecutionId},
-        ...?supplierId == null ? null : {'supplierId': supplierId},
-        ...?photo.categoryId == null ? null : {'categoryId': photo.categoryId},
-        ...?photo.categoryName == null
-            ? null
-            : {'categoryName': photo.categoryName},
-        ...?photo.activityId == null ? null : {'activityId': photo.activityId},
-        ...?photo.activityName == null
-            ? null
-            : {'activityName': photo.activityName},
+        'supplierExecutionId': ?supplierExecutionId,
+        'supplierId': ?supplierId,
         'contentType': 'image/jpeg',
         'base64Image': base64Encode(bytes),
       },
@@ -2367,7 +1921,7 @@ class LocalDatabase {
     final path = p.join(directory.path, 'promotorpro_flutter.db');
     _db = await openDatabase(
       path,
-      version: 6,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE clients (id TEXT PRIMARY KEY, code TEXT, name TEXT NOT NULL, address TEXT, city TEXT, state TEXT, latitude REAL, longitude REAL, payload_json TEXT NOT NULL)',
@@ -2385,7 +1939,7 @@ class LocalDatabase {
           'CREATE TABLE supplier_executions (local_id TEXT PRIMARY KEY, server_id TEXT, visit_local_id TEXT NOT NULL, client_id TEXT NOT NULL, supplier_id TEXT NOT NULL, status TEXT NOT NULL, delivery_received INTEGER, products_replenished INTEGER, stockout_found INTEGER, notes TEXT, started_at_device TEXT, finished_at_device TEXT, sync_status TEXT NOT NULL, updated_at TEXT NOT NULL)',
         );
         await db.execute(
-          'CREATE TABLE photos (local_id TEXT PRIMARY KEY, visit_local_id TEXT NOT NULL, server_id TEXT, type TEXT NOT NULL, uri TEXT NOT NULL, captured_at TEXT NOT NULL, supplier_execution_local_id TEXT, supplier_id TEXT, category_id TEXT, category_name TEXT, activity_id TEXT, activity_name TEXT, gps_latitude REAL, gps_longitude REAL, sync_status TEXT NOT NULL)',
+          'CREATE TABLE photos (local_id TEXT PRIMARY KEY, visit_local_id TEXT NOT NULL, server_id TEXT, type TEXT NOT NULL, uri TEXT NOT NULL, captured_at TEXT NOT NULL, supplier_execution_local_id TEXT, supplier_id TEXT, gps_latitude REAL, gps_longitude REAL, sync_status TEXT NOT NULL)',
         );
         await db.execute(
           'CREATE TABLE sync_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, entity_local_id TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
@@ -2416,69 +1970,12 @@ class LocalDatabase {
             await db.execute('ALTER TABLE photos ADD COLUMN supplier_id TEXT');
           } catch (_) {}
         }
-        if (oldVersion < 4) {
-          try {
-            await db.execute('ALTER TABLE photos ADD COLUMN category_id TEXT');
-          } catch (_) {}
-          try {
-            await db.execute(
-              'ALTER TABLE photos ADD COLUMN category_name TEXT',
-            );
-          } catch (_) {}
-        }
-        if (oldVersion < 5) {
-          try {
-            await db.execute('ALTER TABLE photos ADD COLUMN activity_id TEXT');
-          } catch (_) {}
-          try {
-            await db.execute(
-              'ALTER TABLE photos ADD COLUMN activity_name TEXT',
-            );
-          } catch (_) {}
-        }
-        if (oldVersion < 6) {
-          await db.execute(
-            "UPDATE visits SET notes = '' WHERE notes IS NULL",
-          );
-          await db.execute(
-            "UPDATE visits SET finished_at = COALESCE(updated_at, started_at) WHERE status = 'completed' AND finished_at IS NULL",
-          );
-          await db.execute(
-            "UPDATE supplier_executions SET notes = '' WHERE notes IS NULL",
-          );
-          await db.execute(
-            "UPDATE supplier_executions SET finished_at_device = COALESCE(updated_at, started_at_device) WHERE status = 'completed' AND finished_at_device IS NULL",
-          );
-          await db.execute(
-            "UPDATE sync_queue SET status = 'pending', updated_at = datetime('now') WHERE status = 'syncing'",
-          );
-        }
       },
     );
     return _db!;
   }
 
   String nowIso() => DateTime.now().toUtc().toIso8601String();
-
-  Future<void> normalizeLegacyOperationalData() async {
-    final db = await database;
-    await db.transaction((txn) async {
-      await txn.execute("UPDATE visits SET notes = '' WHERE notes IS NULL");
-      await txn.execute(
-        "UPDATE visits SET finished_at = COALESCE(updated_at, started_at) WHERE status = 'completed' AND finished_at IS NULL",
-      );
-      await txn.execute(
-        "UPDATE supplier_executions SET notes = '' WHERE notes IS NULL",
-      );
-      await txn.execute(
-        "UPDATE supplier_executions SET finished_at_device = COALESCE(updated_at, started_at_device) WHERE status = 'completed' AND finished_at_device IS NULL",
-      );
-      await txn.execute(
-        "UPDATE sync_queue SET status = 'pending', updated_at = ? WHERE status = 'syncing'",
-        [nowIso()],
-      );
-    });
-  }
 
   Future<void> saveSnapshot(MobileSnapshot snapshot) async {
     final db = await database;
@@ -2537,7 +2034,6 @@ class LocalDatabase {
         route_items.sequence,
         route_items.status,
         clients.name AS clientName,
-        clients.payload_json AS clientPayloadJson,
         clients.address AS clientAddress,
         clients.latitude AS clientLatitude,
         clients.longitude AS clientLongitude,
@@ -2838,8 +2334,6 @@ class LocalDatabase {
         clients.payload_json AS clientPayloadJson,
         clients.name AS clientName,
         photos.type AS photoType,
-        photos.category_name AS categoryName,
-        photos.activity_name AS activityName,
         COALESCE(
           supplier_executions.supplier_id,
           photo_execution.supplier_id,
@@ -2978,7 +2472,6 @@ class ClientSnapshot {
     required this.id,
     this.code,
     required this.name,
-    this.tradeName,
     this.address,
     this.city,
     this.state,
@@ -2990,7 +2483,6 @@ class ClientSnapshot {
   final String id;
   final String? code;
   final String name;
-  final String? tradeName;
   final String? address;
   final String? city;
   final String? state;
@@ -2998,22 +2490,10 @@ class ClientSnapshot {
   final double? longitude;
   final Map<String, dynamic> payload;
 
-  String get displayName {
-    final legalName = name.trim();
-    final fantasyName = tradeName?.trim();
-    if (fantasyName != null &&
-        fantasyName.isNotEmpty &&
-        fantasyName != legalName) {
-      return '$legalName | Fantasia: $fantasyName';
-    }
-    return legalName.isEmpty ? 'Cliente' : legalName;
-  }
-
   factory ClientSnapshot.fromJson(Map<String, dynamic> json) => ClientSnapshot(
     id: json['id'] as String,
     code: json['code']?.toString(),
     name: json['name'] as String,
-    tradeName: json['tradeName'] as String?,
     address: json['address'] as String?,
     city: json['city'] as String?,
     state: json['state'] as String?,
@@ -3029,7 +2509,6 @@ class ClientSnapshot {
       id: row['id'] as String,
       code: row['code']?.toString(),
       name: row['name'] as String,
-      tradeName: payload['tradeName'] as String?,
       address: row['address'] as String?,
       city: row['city'] as String?,
       state: row['state'] as String?,
@@ -3042,7 +2521,7 @@ class ClientSnapshot {
   Map<String, Object?> toDb() => {
     'id': id,
     'code': code,
-    'name': displayName,
+    'name': name,
     'address': address,
     'city': city,
     'state': state,
@@ -3050,82 +2529,6 @@ class ClientSnapshot {
     'longitude': longitude,
     'payload_json': jsonEncode(payload),
   };
-}
-
-class ActivitySnapshot {
-  ActivitySnapshot({
-    required this.id,
-    this.code,
-    required this.name,
-    this.description,
-    this.status,
-    required this.payload,
-  });
-
-  final String id;
-  final String? code;
-  final String name;
-  final String? description;
-  final String? status;
-  final Map<String, dynamic> payload;
-
-  String get displayName {
-    final normalizedName = name.trim().isEmpty ? 'Atividade' : name.trim();
-    if ((code?.trim().isNotEmpty ?? false)) {
-      return '${code!.trim()} - $normalizedName';
-    }
-    return normalizedName;
-  }
-
-  factory ActivitySnapshot.fromJson(Map<String, dynamic> json) =>
-      ActivitySnapshot(
-        id: json['id'] as String,
-        code: json['code']?.toString(),
-        name: (json['name'] as String?)?.trim().isNotEmpty == true
-            ? (json['name'] as String).trim()
-            : 'Atividade',
-        description: json['description'] as String?,
-        status: json['status']?.toString(),
-        payload: json,
-      );
-}
-
-class CategorySnapshot {
-  CategorySnapshot({
-    required this.id,
-    this.code,
-    required this.name,
-    this.description,
-    this.status,
-    required this.payload,
-  });
-
-  final String id;
-  final String? code;
-  final String name;
-  final String? description;
-  final String? status;
-  final Map<String, dynamic> payload;
-
-  String get displayName {
-    final normalizedName = name.trim().isEmpty ? 'Categoria' : name.trim();
-    if ((code?.trim().isNotEmpty ?? false)) {
-      return '${code!.trim()} - $normalizedName';
-    }
-    return normalizedName;
-  }
-
-  factory CategorySnapshot.fromJson(Map<String, dynamic> json) =>
-      CategorySnapshot(
-        id: json['id'] as String,
-        code: json['code']?.toString(),
-        name: (json['name'] as String?)?.trim().isNotEmpty == true
-            ? (json['name'] as String).trim()
-            : 'Categoria',
-        description: json['description'] as String?,
-        status: json['status']?.toString(),
-        payload: json,
-      );
 }
 
 class SupplierSnapshot {
@@ -3144,10 +2547,6 @@ class SupplierSnapshot {
   final String? tradeName;
   final String? document;
   final Map<String, dynamic> payload;
-  List<ActivitySnapshot> get activities =>
-      activitiesFromRaw(payload['activities']);
-  List<CategorySnapshot> get categories =>
-      categoriesFromRaw(payload['categories']);
 
   String get displayName {
     final preferred = (tradeName?.trim().isNotEmpty ?? false)
@@ -3159,17 +2558,16 @@ class SupplierSnapshot {
     return preferred;
   }
 
-  factory SupplierSnapshot.fromJson(Map<String, dynamic> json) =>
-      SupplierSnapshot(
-        id: json['id'] as String,
-        code: json['code']?.toString(),
-        name: (json['name'] as String?)?.trim().isNotEmpty == true
-            ? (json['name'] as String).trim()
-            : ((json['tradeName'] as String?) ?? 'Fornecedor').trim(),
-        tradeName: json['tradeName'] as String?,
-        document: json['document']?.toString(),
-        payload: json,
-      );
+  factory SupplierSnapshot.fromJson(Map<String, dynamic> json) => SupplierSnapshot(
+    id: json['id'] as String,
+    code: json['code']?.toString(),
+    name: (json['name'] as String?)?.trim().isNotEmpty == true
+        ? (json['name'] as String).trim()
+        : ((json['tradeName'] as String?) ?? 'Fornecedor').trim(),
+    tradeName: json['tradeName'] as String?,
+    document: json['document']?.toString(),
+    payload: json,
+  );
 }
 
 class RouteSnapshot {
@@ -3254,7 +2652,6 @@ class RouteItemView {
     required this.sequence,
     required this.status,
     required this.clientName,
-    this.clientTradeName,
     this.clientAddress,
     this.clientLatitude,
     this.clientLongitude,
@@ -3268,7 +2665,6 @@ class RouteItemView {
   final int sequence;
   final String status;
   final String clientName;
-  final String? clientTradeName;
   final String? clientAddress;
   final double? clientLatitude;
   final double? clientLongitude;
@@ -3278,37 +2674,20 @@ class RouteItemView {
   bool get isDone =>
       status.toUpperCase() == 'COMPLETED' || visitStatus == 'completed';
   bool get hasCoordinates => clientLatitude != null && clientLongitude != null;
-  String get navigationName {
-    final fantasyName = clientTradeName?.trim();
-    return fantasyName != null && fantasyName.isNotEmpty
-        ? fantasyName
-        : clientName;
-  }
 
-  factory RouteItemView.fromDb(Map<String, Object?> row) {
-    String? tradeName;
-    final payloadJson = row['clientPayloadJson'] as String?;
-    if (payloadJson != null && payloadJson.isNotEmpty) {
-      try {
-        final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
-        tradeName = payload['tradeName'] as String?;
-      } catch (_) {}
-    }
-    return RouteItemView(
-      id: row['id'] as String,
-      routeId: row['routeId'] as String,
-      clientId: row['clientId'] as String,
-      sequence: asInt(row['sequence']),
-      status: row['status'] as String,
-      clientName: row['clientName'] as String,
-      clientTradeName: tradeName,
-      clientAddress: row['clientAddress'] as String?,
-      clientLatitude: asDouble(row['clientLatitude']),
-      clientLongitude: asDouble(row['clientLongitude']),
-      routeName: row['routeName'] as String,
-      visitStatus: row['visitStatus'] as String?,
-    );
-  }
+  factory RouteItemView.fromDb(Map<String, Object?> row) => RouteItemView(
+    id: row['id'] as String,
+    routeId: row['routeId'] as String,
+    clientId: row['clientId'] as String,
+    sequence: asInt(row['sequence']),
+    status: row['status'] as String,
+    clientName: row['clientName'] as String,
+    clientAddress: row['clientAddress'] as String?,
+    clientLatitude: asDouble(row['clientLatitude']),
+    clientLongitude: asDouble(row['clientLongitude']),
+    routeName: row['routeName'] as String,
+    visitStatus: row['visitStatus'] as String?,
+  );
 }
 
 class LocalVisit {
@@ -3524,10 +2903,6 @@ class LocalPhoto {
     required this.capturedAt,
     this.supplierExecutionLocalId,
     this.supplierId,
-    this.categoryId,
-    this.categoryName,
-    this.activityId,
-    this.activityName,
     this.gpsLatitude,
     this.gpsLongitude,
     required this.syncStatus,
@@ -3541,10 +2916,6 @@ class LocalPhoto {
   final String capturedAt;
   final String? supplierExecutionLocalId;
   final String? supplierId;
-  final String? categoryId;
-  final String? categoryName;
-  final String? activityId;
-  final String? activityName;
   final double? gpsLatitude;
   final double? gpsLongitude;
   final String syncStatus;
@@ -3558,10 +2929,6 @@ class LocalPhoto {
     capturedAt: row['captured_at'] as String,
     supplierExecutionLocalId: row['supplier_execution_local_id'] as String?,
     supplierId: row['supplier_id'] as String?,
-    categoryId: row['category_id'] as String?,
-    categoryName: row['category_name'] as String?,
-    activityId: row['activity_id'] as String?,
-    activityName: row['activity_name'] as String?,
     gpsLatitude: asDouble(row['gps_latitude']),
     gpsLongitude: asDouble(row['gps_longitude']),
     syncStatus: row['sync_status'] as String,
@@ -3576,10 +2943,6 @@ class LocalPhoto {
     'captured_at': capturedAt,
     'supplier_execution_local_id': supplierExecutionLocalId,
     'supplier_id': supplierId,
-    'category_id': categoryId,
-    'category_name': categoryName,
-    'activity_id': activityId,
-    'activity_name': activityName,
     'gps_latitude': gpsLatitude,
     'gps_longitude': gpsLongitude,
     'sync_status': syncStatus,
@@ -3615,8 +2978,6 @@ class QueueDiagnostic {
     this.lastError,
     this.clientName,
     this.photoType,
-    this.categoryName,
-    this.activityName,
     this.supplierName,
   });
 
@@ -3626,8 +2987,6 @@ class QueueDiagnostic {
   final String? lastError;
   final String? clientName;
   final String? photoType;
-  final String? categoryName;
-  final String? activityName;
   final String? supplierName;
 
   factory QueueDiagnostic.fromDb(Map<String, Object?> row) {
@@ -3637,10 +2996,8 @@ class QueueDiagnostic {
     if (supplierId != null && payloadJson != null && payloadJson.isNotEmpty) {
       try {
         final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
-        supplierName = supplierById(
-          suppliersFromPayload(payload),
-          supplierId,
-        )?.displayName;
+        supplierName = supplierById(suppliersFromPayload(payload), supplierId)
+            ?.displayName;
       } catch (_) {}
     }
     return QueueDiagnostic(
@@ -3650,8 +3007,6 @@ class QueueDiagnostic {
       lastError: row['lastError'] as String?,
       clientName: row['clientName'] as String?,
       photoType: row['photoType'] as String?,
-      categoryName: row['categoryName'] as String?,
-      activityName: row['activityName'] as String?,
       supplierName: supplierName,
     );
   }
@@ -3802,40 +3157,6 @@ double? asDouble(Object? value) {
   return double.tryParse(value.toString());
 }
 
-List<ActivitySnapshot> activitiesFromRaw(Object? raw) {
-  if (raw is! List) {
-    return const <ActivitySnapshot>[];
-  }
-
-  return raw
-      .whereType<Map>()
-      .map(
-        (item) => ActivitySnapshot.fromJson(
-          item.map((key, value) => MapEntry(key.toString(), value)),
-        ),
-      )
-      .toList();
-}
-
-List<ActivitySnapshot> clientActivitiesFromPayload(
-  Map<String, dynamic>? payload,
-) => activitiesFromRaw(payload?['activities']);
-
-List<CategorySnapshot> categoriesFromRaw(Object? raw) {
-  if (raw is! List) {
-    return const <CategorySnapshot>[];
-  }
-
-  return raw
-      .whereType<Map>()
-      .map(
-        (item) => CategorySnapshot.fromJson(
-          item.map((key, value) => MapEntry(key.toString(), value)),
-        ),
-      )
-      .toList();
-}
-
 List<SupplierSnapshot> suppliersFromPayload(Map<String, dynamic>? payload) {
   final raw = payload?['suppliers'];
   if (raw is! List) {
@@ -3851,10 +3172,7 @@ List<SupplierSnapshot> suppliersFromPayload(Map<String, dynamic>? payload) {
       .toList();
 }
 
-SupplierSnapshot? supplierById(
-  List<SupplierSnapshot> suppliers,
-  String? supplierId,
-) {
+SupplierSnapshot? supplierById(List<SupplierSnapshot> suppliers, String? supplierId) {
   if (supplierId == null) return null;
   for (final supplier in suppliers) {
     if (supplier.id == supplierId) {
@@ -3879,24 +3197,7 @@ LocalSupplierExecution? findSupplierExecution(
 
 String supplierLabel(SupplierSnapshot supplier) => supplier.displayName;
 
-List<ActivitySnapshot> activitiesForSupplier(
-  SupplierSnapshot supplier,
-  ClientSnapshot? client,
-) {
-  if (supplier.activities.isNotEmpty) {
-    return supplier.activities;
-  }
-
-  return clientActivitiesFromPayload(client?.payload);
-}
-
-bool supplierRequiresDeliveryFlow(bool? deliveryReceived) =>
-    deliveryReceived != false;
-
-bool supplierExecutionRequiresJustification({
-  required bool? deliveryReceived,
-  required bool? stockoutFound,
-}) => deliveryReceived == false || stockoutFound == true;
+bool supplierRequiresDeliveryFlow(bool? deliveryReceived) => deliveryReceived != false;
 
 String answerLabel(bool? value) {
   if (value == null) return 'Nao informado';
@@ -3911,7 +3212,6 @@ String photoLabel(String type) {
     'checkout' => 'Check-out',
     'supplier_before' => 'Foto antes',
     'supplier_after' => 'Foto depois',
-    'store_extra' => 'Foto de categoria',
     'occurrence_extra' => 'Foto complementar',
     _ => 'Ocorrencia',
   };
@@ -3941,20 +3241,7 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final clampedTextScale = mediaQuery.textScaler.clamp(
-      minScaleFactor: 0.92,
-      maxScaleFactor: 1.18,
-    );
-
-    return Scaffold(
-      body: SafeArea(
-        child: MediaQuery(
-          data: mediaQuery.copyWith(textScaler: clampedTextScale),
-          child: child,
-        ),
-      ),
-    );
+    return Scaffold(body: SafeArea(child: child));
   }
 }
 
@@ -3974,86 +3261,56 @@ class AppTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 390;
-
-        return Container(
-          padding: EdgeInsets.fromLTRB(
-            compact ? 12 : 16,
-            12,
-            compact ? 12 : 16,
-            16,
-          ),
-          decoration: const BoxDecoration(color: brandNavy),
-          child: Row(
-            children: [
-              if (showBack)
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back),
-                  label: const Text('Voltar'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: brandNavy,
-                    backgroundColor: const Color(0xFFEFF6FF),
-                    minimumSize: Size(compact ? 92 : 118, 46),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: compact ? 10 : 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: const BoxDecoration(color: brandNavy),
+      child: Row(
+        children: [
+          if (showBack)
+            FilledButton.tonalIcon(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Voltar'),
+            )
+          else
+            Image.asset('assets/promotorpro-icon.png', width: 42, height: 42),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFD6E2FF),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                )
-              else
-                Image.asset(
-                  'assets/promotorpro-icon.png',
-                  width: compact ? 36 : 42,
-                  height: compact ? 36 : 42,
-                ),
-              SizedBox(width: compact ? 10 : 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: compact ? 20 : 24,
-                        height: 1.08,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle!,
-                        maxLines: compact ? 2 : 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: const Color(0xFFD6E2FF),
-                          fontSize: compact ? 12 : 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (onLogout != null)
-                IconButton(
-                  tooltip: 'Sair',
-                  onPressed: onLogout,
-                  icon: const Icon(Icons.logout, color: Colors.white),
-                ),
-            ],
+                ],
+              ],
+            ),
           ),
-        );
-      },
+          if (onLogout != null)
+            IconButton(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout, color: Colors.white),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -4066,17 +3323,11 @@ class BrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.of(context).size.width < 390;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Image.asset(
-          'assets/promotorpro-icon.png',
-          width: compact ? 62 : 78,
-          height: compact ? 62 : 78,
-        ),
-        SizedBox(height: compact ? 12 : 16),
+        Image.asset('assets/promotorpro-icon.png', width: 78, height: 78),
+        const SizedBox(height: 16),
         Text(
           'PROMOTORPRO',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
@@ -4088,11 +3339,10 @@ class BrandHeader extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           title,
-          style:
-              (compact
-                      ? Theme.of(context).textTheme.headlineMedium
-                      : Theme.of(context).textTheme.displaySmall)
-                  ?.copyWith(fontWeight: FontWeight.w900, color: brandNavy),
+          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: brandNavy,
+          ),
         ),
         Text(
           subtitle,
@@ -4119,7 +3369,6 @@ class PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
       height: 56,
       child: FilledButton(
         onPressed: onPressed,
@@ -4148,7 +3397,6 @@ class SecondaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
       height: 54,
       child: OutlinedButton(
         onPressed: onPressed,
@@ -4172,7 +3420,6 @@ class DangerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
       height: 54,
       child: OutlinedButton(
         onPressed: onPressed,
@@ -4203,73 +3450,56 @@ class OperatorIdentityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 360;
-
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: line),
-          ),
-          child: compact
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: identityChildren(compact: true),
-                )
-              : Row(children: identityChildren(compact: false)),
-        );
-      },
-    );
-  }
-
-  List<Widget> identityChildren({required bool compact}) {
-    final details = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          promoterName,
-          maxLines: compact ? 3 : 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: brandNavy,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          promoterEmail,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Color(0xFF64748B),
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          versionLabel,
-          style: const TextStyle(
-            color: brandBlue,
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ],
-    );
-
-    return [
-      const CircleAvatar(
-        radius: 24,
-        backgroundColor: brandNavy,
-        child: Icon(Icons.person, color: Colors.white),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
       ),
-      SizedBox(width: compact ? 0 : 14, height: compact ? 12 : 0),
-      compact ? details : Expanded(child: details),
-    ];
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 24,
+            backgroundColor: brandNavy,
+            child: Icon(Icons.person, color: Colors.white),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  promoterName,
+                  style: const TextStyle(
+                    color: brandNavy,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  promoterEmail,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  versionLabel,
+                  style: const TextStyle(
+                    color: brandBlue,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -4346,30 +3576,14 @@ class DashboardGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final count = width >= 760
-            ? 4
-            : width >= 430
-            ? 2
-            : 1;
-        final ratio = count == 1
-            ? 3.2
-            : width < 520
-            ? 1.65
-            : 1.45;
-
-        return GridView.count(
-          crossAxisCount: count,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: ratio,
-          children: cards.map((card) => MetricCard(data: card)).toList(),
-        );
-      },
+    return GridView.count(
+      crossAxisCount: MediaQuery.of(context).size.width > 650 ? 4 : 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 1.45,
+      children: cards.map((card) => MetricCard(data: card)).toList(),
     );
   }
 }
@@ -4421,78 +3635,14 @@ class MetricCard extends StatelessWidget {
   }
 }
 
-class ClientNameBlock extends StatelessWidget {
-  const ClientNameBlock({
-    super.key,
-    required this.item,
-    this.inverse = false,
-    this.fontSize = 16,
-    this.maxLines = 2,
-  });
-
-  final RouteItemView item;
-  final bool inverse;
-  final double fontSize;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    final legalName = item.clientName.trim();
-    final fantasyName = item.clientTradeName?.trim();
-    final hasFantasy =
-        fantasyName != null &&
-        fantasyName.isNotEmpty &&
-        fantasyName.toLowerCase() != legalName.toLowerCase();
-    final primaryColor = inverse ? Colors.white : brandNavy;
-    final secondaryColor = inverse
-        ? const Color(0xFFE2E8F0)
-        : const Color(0xFF64748B);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          hasFantasy
-              ? fantasyName
-              : (legalName.isEmpty ? 'Cliente' : legalName),
-          maxLines: maxLines,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: primaryColor,
-            fontSize: fontSize,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        if (hasFantasy) ...[
-          const SizedBox(height: 3),
-          Text(
-            'Razao social: $legalName',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: secondaryColor,
-              fontSize: fontSize * 0.72,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
 class RouteItemCard extends StatelessWidget {
   const RouteItemCard({super.key, required this.item, required this.onTap});
 
   final RouteItemView item;
-  final Future<void> Function() onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    void handleTap() {
-      unawaited(onTap());
-    }
-
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 0,
@@ -4500,493 +3650,27 @@ class RouteItemCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         side: const BorderSide(color: line),
       ),
-      child: InkWell(
-        onTap: handleTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    backgroundColor: brandNavy,
-                    child: Text(
-                      '${item.sequence}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClientNameBlock(item: item, fontSize: 16, maxLines: 3),
-                        const SizedBox(height: 6),
-                        Text(
-                          item.clientAddress ?? 'Endereco nao informado',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.routeName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        if (item.hasCoordinates) ...[
-                          const SizedBox(height: 4),
-                          const Text(
-                            'GPS do cliente disponivel',
-                            style: TextStyle(
-                              color: brandGreen,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.chevron_right),
-                ],
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: handleTap,
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text(
-                    'Abrir atendimento',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class RouteMapTab extends StatefulWidget {
-  const RouteMapTab({super.key, required this.items});
-
-  final List<RouteItemView> items;
-
-  @override
-  State<RouteMapTab> createState() => _RouteMapTabState();
-}
-
-class _RouteMapTabState extends State<RouteMapTab> {
-  RouteItemView? selectedItem;
-  GpsPoint? currentLocation;
-  bool locating = true;
-
-  List<RouteItemView> get mappedItems =>
-      widget.items.where((item) => item.hasCoordinates).toList();
-
-  @override
-  void initState() {
-    super.initState();
-    selectedItem = mappedItems.isEmpty ? null : mappedItems.first;
-    unawaited(_loadCurrentLocation());
-  }
-
-  @override
-  void didUpdateWidget(covariant RouteMapTab oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (mappedItems.isEmpty) {
-      selectedItem = null;
-      return;
-    }
-
-    final selectedStillExists = mappedItems.any(
-      (item) => item.id == selectedItem?.id,
-    );
-    if (!selectedStillExists) {
-      selectedItem = mappedItems.first;
-    }
-  }
-
-  Future<void> _loadCurrentLocation() async {
-    final gps = await getGpsOrNull();
-    if (!mounted) return;
-    setState(() {
-      currentLocation = gps;
-      locating = false;
-    });
-  }
-
-  LatLng _initialCenter() {
-    final points = <LatLng>[
-      for (final item in mappedItems)
-        LatLng(item.clientLatitude!, item.clientLongitude!),
-      if (currentLocation != null)
-        LatLng(currentLocation!.latitude, currentLocation!.longitude),
-    ];
-
-    if (points.isEmpty) {
-      return const LatLng(-15.6014, -56.0979);
-    }
-
-    final latitude =
-        points.map((point) => point.latitude).reduce((a, b) => a + b) /
-        points.length;
-    final longitude =
-        points.map((point) => point.longitude).reduce((a, b) => a + b) /
-        points.length;
-    return LatLng(latitude, longitude);
-  }
-
-  Future<void> _openNavigation(RouteItemView item) async {
-    final latitude = item.clientLatitude;
-    final longitude = item.clientLongitude;
-    if (latitude == null || longitude == null) return;
-
-    final googleMapsUri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=driving',
-    );
-    final geoUri = Uri.parse(
-      'geo:$latitude,$longitude?q=$latitude,$longitude(${Uri.encodeComponent(item.navigationName)})',
-    );
-
-    final opened = await launchUrl(
-      googleMapsUri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (opened) {
-      return;
-    }
-
-    final openedGeo = await launchUrl(
-      geoUri,
-      mode: LaunchMode.externalApplication,
-    );
-
-    if (!openedGeo && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Nao foi possivel abrir o mapa deste aparelho.'),
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (mappedItems.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          EmptyState(
-            title: 'Nenhum cliente com GPS',
-            body:
-                'Os clientes desta rota ainda nao possuem latitude e longitude cadastradas. Cadastre as coordenadas na retaguarda para aparecerem no mapa.',
-          ),
-        ],
-      );
-    }
-
-    final selected = selectedItem ?? mappedItems.first;
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-          child: InfoCard(
-            title: 'Mapa do roteiro',
-            body:
-                '${mappedItems.length} cliente(s) com GPS. Toque em um ponto para selecionar e abrir a rota.',
-          ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Stack(
-                children: [
-                  FlutterMap(
-                    options: MapOptions(
-                      initialCenter: _initialCenter(),
-                      initialZoom: mappedItems.length == 1 ? 15 : 12,
-                      minZoom: 4,
-                      maxZoom: 19,
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'br.com.promotorpro.mobile',
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          for (final item in mappedItems)
-                            Marker(
-                              point: LatLng(
-                                item.clientLatitude!,
-                                item.clientLongitude!,
-                              ),
-                              width: 58,
-                              height: 58,
-                              child: GestureDetector(
-                                onTap: () =>
-                                    setState(() => selectedItem = item),
-                                child: _ClientMapMarker(
-                                  sequence: item.sequence,
-                                  selected: selected.id == item.id,
-                                ),
-                              ),
-                            ),
-                          if (currentLocation != null)
-                            Marker(
-                              point: LatLng(
-                                currentLocation!.latitude,
-                                currentLocation!.longitude,
-                              ),
-                              width: 44,
-                              height: 44,
-                              child: const _CurrentLocationMarker(),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    right: 12,
-                    child: _MapOverlayCard(
-                      icon: locating ? Icons.gps_not_fixed : Icons.gps_fixed,
-                      title: locating
-                          ? 'Buscando sua posicao'
-                          : currentLocation == null
-                          ? 'Posicao do aparelho indisponivel'
-                          : 'Sua posicao foi carregada',
-                      body:
-                          'Clientes com marcador azul estao prontos para navegacao.',
-                    ),
-                  ),
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    bottom: 12,
-                    child: _SelectedClientPanel(
-                      item: selected,
-                      onNavigate: () => unawaited(_openNavigation(selected)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ClientMapMarker extends StatelessWidget {
-  const _ClientMapMarker({required this.sequence, required this.selected});
-
-  final int sequence;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedScale(
-      scale: selected ? 1.15 : 1,
-      duration: const Duration(milliseconds: 180),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: selected ? brandGreen : brandBlue,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 4),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.22),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Center(
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.all(16),
+        leading: CircleAvatar(
+          backgroundColor: brandNavy,
           child: Text(
-            '$sequence',
+            '${item.sequence}',
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _CurrentLocationMarker extends StatelessWidget {
-  const _CurrentLocationMarker();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: brandGreen.withValues(alpha: 0.2),
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Container(
-          width: 18,
-          height: 18,
-          decoration: BoxDecoration(
-            color: brandGreen,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
-          ),
+        title: Text(
+          item.clientName,
+          style: const TextStyle(fontWeight: FontWeight.w900, color: brandNavy),
         ),
-      ),
-    );
-  }
-}
-
-class _MapOverlayCard extends StatelessWidget {
-  const _MapOverlayCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  final IconData icon;
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: brandBlue),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: brandNavy,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  body,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SelectedClientPanel extends StatelessWidget {
-  const _SelectedClientPanel({required this.item, required this.onNavigate});
-
-  final RouteItemView item;
-  final VoidCallback onNavigate;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.16),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ClientNameBlock(item: item, fontSize: 16),
-          const SizedBox(height: 4),
-          Text(
-            item.clientAddress ?? 'Endereco nao informado',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF64748B),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${item.clientLatitude!.toStringAsFixed(6)}, ${item.clientLongitude!.toStringAsFixed(6)}',
-                  style: const TextStyle(
-                    color: Color(0xFF475569),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: onNavigate,
-                icon: const Icon(Icons.navigation),
-                label: const Text('Tracar rota'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: brandBlue,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ],
+        subtitle: Text(
+          '${item.clientAddress ?? 'Endereco nao informado'}\n${item.routeName}${item.hasCoordinates ? '\nGPS do cliente disponivel' : ''}',
+        ),
+        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }
@@ -5017,12 +3701,17 @@ class ClientHero extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ClientNameBlock(item: item, inverse: true, fontSize: 24, maxLines: 4),
+          Text(
+            item.clientName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 6),
           Text(
             item.clientAddress ?? 'Endereco nao informado',
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Color(0xFFE2E8F0),
               fontWeight: FontWeight.w600,
@@ -5096,9 +3785,6 @@ class SupplierExecutionTile extends StatelessWidget {
   const SupplierExecutionTile({
     super.key,
     required this.supplier,
-    required this.activityCount,
-    required this.categoryCount,
-    required this.categoryEvidenceCount,
     required this.status,
     required this.hasBefore,
     required this.hasAfter,
@@ -5110,9 +3796,6 @@ class SupplierExecutionTile extends StatelessWidget {
   });
 
   final SupplierSnapshot supplier;
-  final int activityCount;
-  final int categoryCount;
-  final int categoryEvidenceCount;
   final String status;
   final bool hasBefore;
   final bool hasAfter;
@@ -5146,13 +3829,10 @@ class SupplierExecutionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Text(
                       supplierLabel(supplier),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         color: brandNavy,
@@ -5161,10 +3841,8 @@ class SupplierExecutionTile extends StatelessWidget {
                     ),
                   ),
                   Chip(
-                    visualDensity: VisualDensity.compact,
                     label: Text(
                       statusLabel,
-                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     backgroundColor: status == 'completed'
@@ -5183,28 +3861,6 @@ class SupplierExecutionTile extends StatelessWidget {
                     style: const TextStyle(
                       color: Color(0xFF64748B),
                       fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              if (activityCount > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    '$activityCount atividade(s) previstas neste fornecedor',
-                    style: const TextStyle(
-                      color: Color(0xFF2563EB),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              if (categoryCount > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    '$categoryEvidenceCount de $categoryCount categoria(s) com foto',
-                    style: const TextStyle(
-                      color: Color(0xFF0F766E),
-                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -5227,11 +3883,6 @@ class SupplierExecutionTile extends StatelessWidget {
                     label: 'Ruptura',
                     done: stockoutFoundAnswered,
                   ),
-                  if (categoryCount > 0)
-                    _MiniStatusChip(
-                      label: 'Categorias',
-                      done: categoryEvidenceCount >= categoryCount,
-                    ),
                 ],
               ),
             ],
@@ -5246,10 +3897,6 @@ class SupplierExecutionEditor extends StatelessWidget {
   const SupplierExecutionEditor({
     super.key,
     required this.supplier,
-    required this.activities,
-    required this.categories,
-    required this.categoryEvidenceCounts,
-    required this.activityEvidenceCounts,
     required this.hasBefore,
     required this.hasAfter,
     required this.deliveryReceived,
@@ -5259,8 +3906,6 @@ class SupplierExecutionEditor extends StatelessWidget {
     required this.busy,
     required this.onCaptureBefore,
     required this.onCaptureAfter,
-    required this.onCaptureCategory,
-    required this.onCaptureActivity,
     required this.onDeliveryChanged,
     required this.onProductsChanged,
     required this.onStockoutChanged,
@@ -5270,10 +3915,6 @@ class SupplierExecutionEditor extends StatelessWidget {
   });
 
   final SupplierSnapshot supplier;
-  final List<ActivitySnapshot> activities;
-  final List<CategorySnapshot> categories;
-  final Map<String, int> categoryEvidenceCounts;
-  final Map<String, int> activityEvidenceCounts;
   final bool hasBefore;
   final bool hasAfter;
   final bool? deliveryReceived;
@@ -5283,8 +3924,6 @@ class SupplierExecutionEditor extends StatelessWidget {
   final bool busy;
   final VoidCallback onCaptureBefore;
   final VoidCallback onCaptureAfter;
-  final FutureOr<void> Function(CategorySnapshot category) onCaptureCategory;
-  final FutureOr<void> Function(ActivitySnapshot activity) onCaptureActivity;
   final FutureOr<void> Function(bool? value) onDeliveryChanged;
   final FutureOr<void> Function(bool? value) onProductsChanged;
   final FutureOr<void> Function(bool? value) onStockoutChanged;
@@ -5295,10 +3934,6 @@ class SupplierExecutionEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final requiresDeliveryFlow = supplierRequiresDeliveryFlow(deliveryReceived);
-    final requiresJustification = supplierExecutionRequiresJustification(
-      deliveryReceived: deliveryReceived,
-      stockoutFound: stockoutFound,
-    );
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -5341,19 +3976,6 @@ class SupplierExecutionEditor extends StatelessWidget {
               ),
             ],
           ),
-          if (activities.isNotEmpty || categories.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            SupplierActivitiesPanel(
-              activities: activities,
-              categories: categories,
-              categoryEvidenceCounts: categoryEvidenceCounts,
-              activityEvidenceCounts: activityEvidenceCounts,
-              busy: busy,
-              requireEvidencePhotos: requiresDeliveryFlow,
-              onCaptureCategory: onCaptureCategory,
-              onCaptureActivity: onCaptureActivity,
-            ),
-          ],
           const SizedBox(height: 14),
           BooleanAnswerField(
             label: 'Recebeu mercadoria hoje?',
@@ -5404,7 +4026,7 @@ class SupplierExecutionEditor extends StatelessWidget {
             const InfoCard(
               title: 'Sem entrega no fornecedor',
               body:
-                  'Quando nao houve mercadoria, nao exigimos foto antes/depois. Informe o motivo na observacao para auditoria da retaguarda.',
+                  'Quando nao houve mercadoria, nao exigimos foto antes/depois. Basta registrar a situacao e concluir este fornecedor.',
             ),
           ],
           const SizedBox(height: 12),
@@ -5418,21 +4040,10 @@ class SupplierExecutionEditor extends StatelessWidget {
                 unawaited(result);
               }
             },
-            decoration:
-                const InputDecoration(
-                  labelText: 'Observacoes do fornecedor',
-                  border: OutlineInputBorder(),
-                ).copyWith(
-                  labelText: requiresJustification
-                      ? 'Observacoes do fornecedor (obrigatorio)'
-                      : 'Observacoes do fornecedor',
-                  hintText: requiresJustification
-                      ? 'Explique por que nao teve entrega ou qual foi a ruptura encontrada.'
-                      : 'Informe algo relevante sobre este fornecedor, se necessario.',
-                  helperText: requiresJustification
-                      ? 'Obrigatorio para sem entrega ou ruptura.'
-                      : null,
-                ),
+            decoration: const InputDecoration(
+              labelText: 'Observacoes do fornecedor',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 14),
           PrimaryButton(
@@ -5450,329 +4061,6 @@ class SupplierExecutionEditor extends StatelessWidget {
       ),
     );
   }
-}
-
-class SupplierActivitiesPanel extends StatelessWidget {
-  const SupplierActivitiesPanel({
-    super.key,
-    required this.activities,
-    required this.categories,
-    required this.categoryEvidenceCounts,
-    required this.activityEvidenceCounts,
-    required this.busy,
-    required this.requireEvidencePhotos,
-    required this.onCaptureCategory,
-    required this.onCaptureActivity,
-  });
-
-  final List<ActivitySnapshot> activities;
-  final List<CategorySnapshot> categories;
-  final Map<String, int> categoryEvidenceCounts;
-  final Map<String, int> activityEvidenceCounts;
-  final bool busy;
-  final bool requireEvidencePhotos;
-  final FutureOr<void> Function(CategorySnapshot category) onCaptureCategory;
-  final FutureOr<void> Function(ActivitySnapshot activity) onCaptureActivity;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Categorias e atividades do fornecedor',
-            style: TextStyle(
-              color: brandNavy,
-              fontWeight: FontWeight.w900,
-              fontSize: 15,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Registre evidencias nas categorias e atividades antes da conclusao do fornecedor quando houver entrega.',
-            style: TextStyle(
-              color: Color(0xFF64748B),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (categories.isNotEmpty) ...[
-            const _ExecutionSectionTitle(label: 'Categorias vinculadas'),
-            ...categories.map(
-              (category) => CategoryEvidenceItem(
-                category: category,
-                count: categoryEvidenceCounts[category.id] ?? 0,
-                required: requireEvidencePhotos,
-                busy: busy,
-                onCapture: () {
-                  final result = onCaptureCategory(category);
-                  if (result is Future<void>) {
-                    unawaited(result);
-                  }
-                },
-              ),
-            ),
-            if (activities.isNotEmpty) const SizedBox(height: 6),
-          ],
-          if (activities.isNotEmpty)
-            const _ExecutionSectionTitle(label: 'Atividades para executar'),
-          ...activities.map(
-            (activity) => ActivityEvidenceItem(
-              activity: activity,
-              count: activityEvidenceCounts[activity.id] ?? 0,
-              required: requireEvidencePhotos,
-              busy: busy,
-              onCapture: () {
-                final result = onCaptureActivity(activity);
-                if (result is Future<void>) {
-                  unawaited(result);
-                }
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class CategoryEvidenceItem extends StatelessWidget {
-  const CategoryEvidenceItem({
-    super.key,
-    required this.category,
-    required this.count,
-    required this.required,
-    required this.busy,
-    required this.onCapture,
-  });
-
-  final CategorySnapshot category;
-  final int count;
-  final bool required;
-  final bool busy;
-  final VoidCallback onCapture;
-
-  @override
-  Widget build(BuildContext context) {
-    final done = count > 0;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: done ? const Color(0xFFECFDF5) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: done ? const Color(0xFFA7F3D0) : line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 2),
-                height: 24,
-                width: 24,
-                decoration: BoxDecoration(
-                  color: done ? brandGreen : const Color(0xFFDBEAFE),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  done ? Icons.check : Icons.photo_camera_outlined,
-                  color: done ? Colors.white : brandBlue,
-                  size: 15,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      category.displayName,
-                      style: const TextStyle(
-                        color: brandNavy,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if ((category.description?.trim().isNotEmpty ?? false))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          category.description!.trim(),
-                          style: const TextStyle(
-                            color: Color(0xFF64748B),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  done
-                      ? '$count foto(s) registrada(s)'
-                      : required
-                      ? 'Foto obrigatoria para concluir'
-                      : 'Foto opcional enquanto nao houver entrega',
-                  style: TextStyle(
-                    color: done
-                        ? const Color(0xFF047857)
-                        : const Color(0xFF64748B),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: busy ? null : onCapture,
-                icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                label: const Text('Foto da categoria'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ActivityEvidenceItem extends StatelessWidget {
-  const ActivityEvidenceItem({
-    super.key,
-    required this.activity,
-    required this.count,
-    required this.required,
-    required this.busy,
-    required this.onCapture,
-  });
-
-  final ActivitySnapshot activity;
-  final int count;
-  final bool required;
-  final bool busy;
-  final VoidCallback onCapture;
-
-  @override
-  Widget build(BuildContext context) {
-    final done = count > 0;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: done ? const Color(0xFFECFDF5) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: done ? const Color(0xFFA7F3D0) : line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 2),
-                height: 24,
-                width: 24,
-                decoration: BoxDecoration(
-                  color: done ? brandGreen : const Color(0xFFDBEAFE),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  done ? Icons.check : Icons.task_alt_outlined,
-                  color: done ? Colors.white : brandBlue,
-                  size: 15,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      activity.displayName,
-                      style: const TextStyle(
-                        color: brandNavy,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if ((activity.description?.trim().isNotEmpty ?? false))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          activity.description!.trim(),
-                          style: const TextStyle(
-                            color: Color(0xFF64748B),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  done
-                      ? '$count foto(s) registrada(s)'
-                      : required
-                      ? 'Foto obrigatoria para concluir'
-                      : 'Foto opcional enquanto nao houver entrega',
-                  style: TextStyle(
-                    color: done
-                        ? const Color(0xFF047857)
-                        : const Color(0xFF64748B),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: busy ? null : onCapture,
-                icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                label: const Text('Foto da atividade'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExecutionSectionTitle extends StatelessWidget {
-  const _ExecutionSectionTitle({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Text(
-      label,
-      style: const TextStyle(
-        color: Color(0xFF64748B),
-        fontSize: 12,
-        fontWeight: FontWeight.w900,
-      ),
-    ),
-  );
 }
 
 class BooleanAnswerField extends StatelessWidget {
@@ -5796,7 +4084,10 @@ class BooleanAnswerField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(color: brandNavy, fontWeight: FontWeight.w900),
+          style: const TextStyle(
+            color: brandNavy,
+            fontWeight: FontWeight.w900,
+          ),
         ),
         const SizedBox(height: 8),
         Row(
@@ -5935,21 +4226,6 @@ class PhotoTile extends StatelessWidget {
     final supplierText = supplier == null
         ? null
         : 'Fornecedor: ${supplierLabel(supplier)}';
-    final categoryText = (photo.categoryName?.trim().isNotEmpty ?? false)
-        ? 'Categoria: ${photo.categoryName!.trim()}'
-        : null;
-    final activityText = (photo.activityName?.trim().isNotEmpty ?? false)
-        ? 'Atividade: ${photo.activityName!.trim()}'
-        : null;
-    final title = [
-      if (photo.categoryName?.trim().isNotEmpty ?? false)
-        'Foto da categoria ${photo.categoryName!.trim()}'
-      else if (photo.activityName?.trim().isNotEmpty ?? false)
-        'Foto da atividade ${photo.activityName!.trim()}'
-      else
-        photoLabel(photo.type),
-      if (supplier != null) supplierLabel(supplier),
-    ].join(' - ');
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -5958,9 +4234,14 @@ class PhotoTile extends StatelessWidget {
       ),
       child: ListTile(
         leading: const Icon(Icons.photo_camera, color: brandBlue),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        title: Text(
+          supplier == null
+              ? photoLabel(photo.type)
+              : '${photoLabel(photo.type)} - ${supplierLabel(supplier)}',
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
         subtitle: Text(
-          '${supplierText == null ? '' : '$supplierText\n'}${categoryText == null ? '' : '$categoryText\n'}${activityText == null ? '' : '$activityText\n'}Capturada: ${formatDate(photo.capturedAt)}\nGPS: ${photo.gpsLatitude?.toStringAsFixed(6) ?? 'sem gps'}, ${photo.gpsLongitude?.toStringAsFixed(6) ?? 'sem gps'}',
+          '${supplierText == null ? '' : '$supplierText\n'}Capturada: ${formatDate(photo.capturedAt)}\nGPS: ${photo.gpsLatitude?.toStringAsFixed(6) ?? 'sem gps'}, ${photo.gpsLongitude?.toStringAsFixed(6) ?? 'sem gps'}',
         ),
       ),
     );
@@ -5976,20 +4257,14 @@ class DiagnosticCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final entityLabel = switch (item.kind) {
       'visit' => 'Visita',
-      'supplierExecution' =>
-        item.supplierName == null
-            ? 'Fornecedor'
-            : 'Fornecedor ${item.supplierName}',
-      'photo' =>
-        item.categoryName?.trim().isNotEmpty ?? false
-            ? 'Foto da categoria ${item.categoryName}'
-            : item.activityName?.trim().isNotEmpty ?? false
-            ? 'Foto da atividade ${item.activityName}'
-            : item.supplierName == null
-            ? item.photoType == null
-                  ? 'Foto'
-                  : 'Foto ${photoLabel(item.photoType!).toLowerCase()}'
-            : 'Foto ${photoLabel(item.photoType ?? 'occurrence_extra').toLowerCase()} de ${item.supplierName}',
+      'supplierExecution' => item.supplierName == null
+          ? 'Fornecedor'
+          : 'Fornecedor ${item.supplierName}',
+      'photo' => item.supplierName == null
+          ? item.photoType == null
+              ? 'Foto'
+              : 'Foto ${photoLabel(item.photoType!).toLowerCase()}'
+          : 'Foto ${photoLabel(item.photoType ?? 'occurrence_extra').toLowerCase()} de ${item.supplierName}',
       _ => item.kind,
     };
     return Card(

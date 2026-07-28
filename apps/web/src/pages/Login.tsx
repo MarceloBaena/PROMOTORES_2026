@@ -50,7 +50,7 @@ export function Login() {
                   Controle de equipe de campo, rotas e visitas em tempo real.
                 </h1>
                 <p className="mt-4 max-w-sm text-sm font-semibold leading-6 text-white/68">
-                  Painel interno para supervisao de campo, auditoria, roteirizacao e acompanhamento das evidencias de visita.
+                  Painel para supervisao de campo, auditoria, roteirizacao e acompanhamento das evidencias de visita.
                 </p>
                 <div className="mt-8 rounded-[1.5rem] border border-white/10 bg-white/[0.08] px-4 py-4 text-sm font-semibold leading-6 text-white/72">
                   Acesso restrito ao ambiente operacional da equipe de campo.
