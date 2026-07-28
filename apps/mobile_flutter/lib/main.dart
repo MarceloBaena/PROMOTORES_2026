@@ -781,6 +781,15 @@ class _RouteMapContentState extends State<RouteMapContent> {
     return null;
   }
 
+  double get routeProgress {
+    if (orderedRouteItems.isEmpty) {
+      return 0;
+    }
+
+    final doneCount = orderedRouteItems.where((item) => item.isDone).length;
+    return doneCount / orderedRouteItems.length;
+  }
+
   LatLng get initialCenter {
     if (itemsWithCoordinates.isEmpty) {
       return const LatLng(-15.6014, -56.0979);
@@ -846,6 +855,13 @@ class _RouteMapContentState extends State<RouteMapContent> {
       LatLng(item.clientLatitude!, item.clientLongitude!),
       zoom,
     );
+  }
+
+  void _focusOnCurrentOrNext() {
+    final target = nextPendingRouteItem ?? currentRouteItem;
+    if (target != null && target.hasCoordinates) {
+      _focusOnItem(target, zoom: 16);
+    }
   }
 
   String _distanceLabel(RouteItemView? from, RouteItemView? to) {
@@ -940,6 +956,23 @@ class _RouteMapContentState extends State<RouteMapContent> {
               Icons.near_me,
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        _MapNextStopCard(
+          currentItem: currentRouteItem,
+          nextItem: nextRouteItemAfterCurrent,
+          pendingCount: pendingCount,
+          doneCount: doneCount,
+          progress: routeProgress,
+          nextJumpLabel: currentToNextLabel,
+          onFocusCurrent: _focusOnCurrentOrNext,
+          onOpenCurrentVisit: currentRouteItem == null
+              ? null
+              : () => unawaited(_openVisit(currentRouteItem!)),
+          onOpenCurrentNavigation: currentRouteItem != null &&
+                  currentRouteItem!.hasCoordinates
+              ? () => _openExternalNavigation(currentRouteItem!)
+              : null,
         ),
         const SizedBox(height: 12),
         const _MapLegendCard(),
@@ -1153,9 +1186,20 @@ class _MapRouteItemCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFFFFF), Color(0xFFF8FBFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: line),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14172233),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1184,13 +1228,34 @@ class _MapRouteItemCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            item.clientName,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: (isCurrent ? const Color(0xFFF59E0B) : brandBlue)
+                      .withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isCurrent ? Icons.near_me : Icons.location_on_outlined,
+                  color: isCurrent ? const Color(0xFFF59E0B) : brandBlue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  item.clientName,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
           Text(
             item.clientAddress?.trim().isNotEmpty == true
                 ? item.clientAddress!
@@ -1331,28 +1396,267 @@ class _RouteMapListTile extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MiniActionChip(
+                    icon: Icons.assignment_turned_in_outlined,
+                    label: 'Atendimento',
+                    onTap: onOpenVisit,
+                  ),
+                  if (onOpenNavigation != null)
+                    _MiniActionChip(
+                      icon: Icons.navigation_outlined,
+                      label: 'Navegar',
+                      onTap: onOpenNavigation!,
+                    ),
+                ],
+              ),
             ],
           ),
         ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'visit') {
-              onOpenVisit();
-            } else if (value == 'navigate') {
-              onOpenNavigation?.call();
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem<String>(
-              value: 'visit',
-              child: Text('Abrir atendimento'),
+        trailing: Icon(
+          selected ? Icons.radio_button_checked : Icons.chevron_right,
+          color: selected ? brandBlue : const Color(0xFF94A3B8),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapNextStopCard extends StatelessWidget {
+  const _MapNextStopCard({
+    required this.currentItem,
+    required this.nextItem,
+    required this.pendingCount,
+    required this.doneCount,
+    required this.progress,
+    required this.nextJumpLabel,
+    required this.onFocusCurrent,
+    required this.onOpenCurrentVisit,
+    required this.onOpenCurrentNavigation,
+  });
+
+  final RouteItemView? currentItem;
+  final RouteItemView? nextItem;
+  final int pendingCount;
+  final int doneCount;
+  final double progress;
+  final String nextJumpLabel;
+  final VoidCallback onFocusCurrent;
+  final VoidCallback? onOpenCurrentVisit;
+  final VoidCallback? onOpenCurrentNavigation;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeItem = currentItem ?? nextItem;
+    final percentLabel = '${(progress * 100).round()}%';
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [brandNavy, Color(0xFF172554)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22172233),
+            blurRadius: 22,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: const Text(
+                  'Navegacao do dia',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                percentLabel,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            activeItem?.clientName ?? 'Nenhum cliente pendente',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
             ),
-            PopupMenuItem<String>(
-              value: 'navigate',
-              enabled: onOpenNavigation != null,
-              child: const Text('Abrir navegacao'),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            activeItem == null
+                ? 'A rota atual ja foi concluida.'
+                : currentItem != null
+                ? 'Cliente em destaque para atendimento agora.'
+                : 'Proxima parada sugerida para continuar a rota.',
+            style: const TextStyle(
+              color: Color(0xFFCBD5E1),
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          LinearProgressIndicator(
+            value: progress == 0 ? 0.02 : progress,
+            minHeight: 10,
+            borderRadius: BorderRadius.circular(999),
+            backgroundColor: Colors.white24,
+            valueColor: const AlwaysStoppedAnimation<Color>(brandGreen),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _MapInfoPill(label: 'Pendentes', value: '$pendingCount'),
+              _MapInfoPill(label: 'Concluidos', value: '$doneCount'),
+              _MapInfoPill(label: 'Proximo salto', value: nextJumpLabel),
+            ],
+          ),
+          if (activeItem != null) ...[
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                SizedBox(
+                  width: 170,
+                  child: PrimaryButton(
+                    label: currentItem != null ? 'Abrir atendimento' : 'Abrir proxima parada',
+                    onPressed: onOpenCurrentVisit,
+                  ),
+                ),
+                SizedBox(
+                  width: 150,
+                  child: SecondaryButton(
+                    label: 'Centralizar mapa',
+                    onPressed: onFocusCurrent,
+                  ),
+                ),
+                SizedBox(
+                  width: 130,
+                  child: SecondaryButton(
+                    label: 'Navegar',
+                    onPressed: onOpenCurrentNavigation,
+                  ),
+                ),
+              ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MapInfoPill extends StatelessWidget {
+  const _MapInfoPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFFCBD5E1),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniActionChip extends StatelessWidget {
+  const _MiniActionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: brandBlue, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: brandNavy,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
