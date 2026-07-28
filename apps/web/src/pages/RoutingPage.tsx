@@ -432,14 +432,13 @@ export function RoutingPage() {
             <div>
               <h2 className="panel-title">Nova rota</h2>
               <p className="panel-subtitle">
-                Selecione empresa, equipe e clientes sem precisar decorar
-                codigos internos.
+                Defina a equipe e monte a jornada do promotor com os clientes da rota.
               </p>
             </div>
           </div>
 
           <div className="space-y-3 p-4">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-line bg-field px-3 py-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
                   Empresa
@@ -615,32 +614,67 @@ export function RoutingPage() {
                     Marque os clientes que farao parte da jornada desta rota.
                   </div>
                 </div>
-                <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
-                  {filteredClients.length} disponivel(is)
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                    {filteredClients.length} disponivel(is)
+                  </span>
+                  {selectedClients.length > 0 ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText transition hover:bg-muted"
+                      onClick={() => setSelectedClientIds([])}
+                    >
+                      Limpar selecao
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
-              <span className="field-label">Clientes do roteiro</span>
-              <div className="mb-3 flex flex-wrap gap-2">
-                {selectedClients.length === 0 ? (
-                  <span className="text-sm font-semibold text-stone-500">
-                    Nenhum cliente selecionado.
+              <div className="mb-3 rounded-2xl border border-line bg-field/70 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                    Selecionados
                   </span>
-                ) : null}
-                {selectedClients.map((client, index) => (
-                  <button
-                    key={client.id}
-                    type="button"
-                    className="inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-field px-3 py-2 text-left text-xs font-black text-graphite"
-                    onClick={() => toggleClient(client.id)}
-                    title="Remover cliente"
-                  >
-                    <span className="truncate">
-                      {index + 1}. {clientHeadline(client)}
-                    </span>
-                    <X className="h-3 w-3" />
-                  </button>
-                ))}
+                  <span className="text-xs font-bold text-slateText">
+                    {selectedClients.length} cliente(s)
+                  </span>
+                </div>
+                {selectedClients.length === 0 ? (
+                  <div className="mt-2 text-sm font-semibold text-stone-500">
+                    Nenhum cliente selecionado.
+                  </div>
+                ) : (
+                  <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
+                    {selectedClients.map((client, index) => {
+                      const secondaryLine = clientSecondaryLine(client);
+
+                      return (
+                        <button
+                          key={client.id}
+                          type="button"
+                          className="flex w-full items-start gap-3 rounded-2xl border border-line bg-white px-3 py-3 text-left transition hover:bg-muted"
+                          onClick={() => toggleClient(client.id)}
+                          title="Remover cliente"
+                        >
+                          <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-blue-50 px-2 text-[11px] font-black text-brand">
+                            {index + 1}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-black text-ink">
+                              {clientHeadline(client)}
+                            </span>
+                            {secondaryLine ? (
+                              <span className="mt-1 block text-xs font-semibold leading-5 text-slateText">
+                                {secondaryLine}
+                              </span>
+                            ) : null}
+                          </span>
+                          <X className="mt-0.5 h-4 w-4 shrink-0 text-slateText" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
