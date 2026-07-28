@@ -21,7 +21,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.11 (build 14)';
+const appVersionLabel = 'APK Flutter v1.1.12 (build 15)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -414,8 +414,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _openClientNavigation(RouteItemView item) async {
-    await openExternalNavigationForRouteItem(item);
+  Future<void> _openClientMap(BuildContext context, RouteItemView item) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RouteMapPage(
+          repository: widget.repository,
+          promoterName: widget.session.user.name,
+          routeItems: widget.routeItems,
+          onVisitChanged: widget.onChanged,
+          initialItemId: item.id,
+        ),
+      ),
+    );
   }
 
   Future<void> _openVisit(BuildContext context, RouteItemView item) async {
@@ -537,7 +547,7 @@ class _HomePageState extends State<HomePage> {
                             key: const ValueKey('route-list-tab'),
                             pendingItems: pendingItems,
                             onOpenVisit: (item) => _openVisit(context, item),
-                            onOpenMap: _openClientNavigation,
+                            onOpenMap: (item) => _openClientMap(context, item),
                           ),
                   ),
                 ],
@@ -686,12 +696,14 @@ class RouteMapPage extends StatelessWidget {
     required this.promoterName,
     required this.routeItems,
     required this.onVisitChanged,
+    this.initialItemId,
   });
 
   final AppRepository repository;
   final String promoterName;
   final List<RouteItemView> routeItems;
   final Future<void> Function({String? nextMessage}) onVisitChanged;
+  final String? initialItemId;
 
   @override
   Widget build(BuildContext context) {
@@ -709,6 +721,7 @@ class RouteMapPage extends StatelessWidget {
               promoterName: promoterName,
               routeItems: routeItems,
               onVisitChanged: onVisitChanged,
+              initialItemId: initialItemId,
             ),
           ),
         ],
@@ -724,6 +737,7 @@ class RouteMapContent extends StatefulWidget {
     required this.promoterName,
     required this.routeItems,
     required this.onVisitChanged,
+    this.initialItemId,
     this.embedded = false,
     this.onOpenFullScreen,
   });
@@ -732,6 +746,7 @@ class RouteMapContent extends StatefulWidget {
   final String promoterName;
   final List<RouteItemView> routeItems;
   final Future<void> Function({String? nextMessage}) onVisitChanged;
+  final String? initialItemId;
   final bool embedded;
   final VoidCallback? onOpenFullScreen;
 
@@ -931,6 +946,15 @@ class _RouteMapContentState extends State<RouteMapContent> {
     if (widget.routeItems.isEmpty) {
       selectedItem = null;
       return;
+    }
+
+    if (widget.initialItemId != null) {
+      for (final item in widget.routeItems) {
+        if (item.id == widget.initialItemId) {
+          selectedItem = item;
+          return;
+        }
+      }
     }
 
     final pendingWithCoordinates = widget.routeItems.where(
@@ -1977,6 +2001,26 @@ class _VisitPageState extends State<VisitPage> {
     }
   }
 
+  Future<void> _openClientMap() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RouteMapPage(
+          repository: widget.repository,
+          promoterName: widget.promoterName,
+          routeItems: [widget.item],
+          onVisitChanged: ({String? nextMessage}) async {
+            await _load();
+          },
+          initialItemId: widget.item.id,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openClientNavigation() async {
+    await openExternalNavigationForRouteItem(widget.item);
+  }
+
   Future<void> _saveSupplierDraft({
     bool? nextDeliveryReceived,
     bool? nextProductsReplenished,
@@ -2310,6 +2354,14 @@ class _VisitPageState extends State<VisitPage> {
                   item: widget.item,
                   status: visit?.status ?? 'pendente',
                 ),
+                if (widget.item.hasCoordinates) ...[
+                  const SizedBox(height: 14),
+                  ClientLocationCard(
+                    item: widget.item,
+                    onOpenMap: () => unawaited(_openClientMap()),
+                    onOpenNavigation: () => unawaited(_openClientNavigation()),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 if (visit == null)
                   PrimaryButton(
@@ -5499,6 +5551,144 @@ class ClientHero extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
             backgroundColor: Colors.white,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ClientLocationCard extends StatelessWidget {
+  const ClientLocationCard({
+    super.key,
+    required this.item,
+    required this.onOpenMap,
+    required this.onOpenNavigation,
+  });
+
+  final RouteItemView item;
+  final VoidCallback onOpenMap;
+  final VoidCallback onOpenNavigation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Mapa do cliente',
+            style: TextStyle(
+              color: brandNavy,
+              fontWeight: FontWeight.w900,
+              fontSize: 20,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Veja o ponto do cliente no mapa antes de iniciar ou continuar o atendimento.',
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            height: 220,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: line),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: IgnorePointer(
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: LatLng(
+                    item.clientLatitude!,
+                    item.clientLongitude!,
+                  ),
+                  initialZoom: 15,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'promotorpro_mobile',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(
+                          item.clientLatitude!,
+                          item.clientLongitude!,
+                        ),
+                        width: 62,
+                        height: 62,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 4),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x33172233),
+                                blurRadius: 12,
+                                offset: Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${item.sequence}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'GPS do cliente: ${item.clientLatitude!.toStringAsFixed(6)}, ${item.clientLongitude!.toStringAsFixed(6)}',
+            style: const TextStyle(
+              color: brandBlue,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              SizedBox(
+                width: 180,
+                child: PrimaryButton(
+                  label: 'Abrir mapa completo',
+                  onPressed: onOpenMap,
+                ),
+              ),
+              SizedBox(
+                width: 180,
+                child: SecondaryButton(
+                  label: 'Abrir no GPS',
+                  onPressed: onOpenNavigation,
+                ),
+              ),
+            ],
           ),
         ],
       ),
