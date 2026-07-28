@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.13 (build 16)';
+const appVersionLabel = 'APK Flutter v1.1.14 (build 17)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -461,38 +461,21 @@ class _HomePageState extends State<HomePage> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async => widget.onRefresh(),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  DashboardGrid(
-                    cards: [
-                      MetricData(
-                        'Clientes liberados',
-                        widget.routeItems.length.toString(),
-                        Icons.storefront,
-                      ),
-                      MetricData(
-                        'Pendentes',
-                        pendingItems.length.toString(),
-                        Icons.route,
-                      ),
-                      MetricData(
-                        'Atendidos',
-                        completedItems.toString(),
-                        Icons.verified,
-                      ),
-                      MetricData(
-                        'Fila sync',
-                        '${widget.queueSummary.pending}',
-                        Icons.sync,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
                   OperatorIdentityCard(
                     promoterName: widget.session.user.name,
                     promoterEmail: widget.session.user.email,
                     versionLabel: appVersionLabel,
+                  ),
+                  const SizedBox(height: 14),
+                  CompactHomeStatusCard(
+                    totalClients: widget.routeItems.length,
+                    pendingClients: pendingItems.length,
+                    completedClients: completedItems,
+                    pendingSync: widget.queueSummary.pending,
+                    failedSync: widget.queueSummary.failed,
                   ),
                   const SizedBox(height: 14),
                   _HomeSectionSwitch(
@@ -662,7 +645,7 @@ class _HomeRouteListSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Clientes para atendimento',
+          'Clientes de hoje',
           style: Theme.of(
             context,
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
@@ -2361,6 +2344,15 @@ class _VisitPageState extends State<VisitPage> {
                   item: widget.item,
                   status: visit?.status ?? 'pendente',
                 ),
+                const SizedBox(height: 14),
+                VisitProgressCard(
+                  hasVisitStarted: visit != null,
+                  hasCheckin: hasCheckin,
+                  allSuppliersCompleted: allSuppliersCompleted,
+                  hasCheckout: hasCheckout,
+                  visitCompleted: visit?.status == 'completed',
+                  usesSupplierFlow: !legacyFlowEnabled,
+                ),
                 if (widget.item.hasCoordinates) ...[
                   const SizedBox(height: 14),
                   ClientLocationCard(
@@ -2405,9 +2397,9 @@ class _VisitPageState extends State<VisitPage> {
                   if (!legacyFlowEnabled) ...[
                     const SizedBox(height: 8),
                     InfoCard(
-                      title: 'Execucao por fornecedor',
+                      title: 'Fornecedores deste cliente',
                       body:
-                          'Conclua ${clientSuppliers.length} fornecedor(es) deste cliente. Se nao houve entrega, marque "Nao" em recebeu mercadoria para liberar a conclusao sem fotos do fornecedor.',
+                          'Passe pelos ${clientSuppliers.length} fornecedor(es). Se nao houve entrega, marque "Nao" e informe o motivo.',
                     ),
                     const SizedBox(height: 12),
                     ...clientSuppliers.map((supplier) {
@@ -2541,9 +2533,9 @@ class _VisitPageState extends State<VisitPage> {
                       )
                     else
                       const InfoCard(
-                        title: 'Selecione um fornecedor',
+                        title: 'Escolha um fornecedor',
                         body:
-                            'Toque em um fornecedor para responder entrega, registrar foto antes e foto depois quando houver mercadoria, e concluir esse atendimento.',
+                            'Toque no fornecedor para responder a entrega, tirar as fotos e concluir o atendimento dele.',
                       ),
                   ],
                   const SizedBox(height: 12),
@@ -2566,7 +2558,7 @@ class _VisitPageState extends State<VisitPage> {
                 MessageBox(message: message),
                 const SizedBox(height: 14),
                 Text(
-                  'Evidencias locais',
+                  'Fotos salvas no aparelho',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
                   ),
@@ -2712,10 +2704,10 @@ class _SyncPageState extends State<SyncPage> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                InfoCard(
-                  title: 'Fila local persistente',
-                  body:
-                      '${summary.pending} pendente(s)\n${summary.failed} falha(s)',
+                CompactSyncSummaryCard(
+                  pending: summary.pending,
+                  failed: summary.failed,
+                  logCount: logs.length,
                 ),
                 const SizedBox(height: 12),
                 PrimaryButton(
@@ -2729,7 +2721,7 @@ class _SyncPageState extends State<SyncPage> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Critica do sincronismo',
+                  'Itens com erro',
                   style: Theme.of(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
@@ -2737,14 +2729,14 @@ class _SyncPageState extends State<SyncPage> {
                 const SizedBox(height: 8),
                 if (diagnostics.isEmpty)
                   const InfoCard(
-                    title: 'Sem criticas',
+                    title: 'Tudo certo',
                     body: 'Nao ha itens presos na fila local neste momento.',
                   )
                 else
                   ...diagnostics.map((item) => DiagnosticCard(item: item)),
                 const SizedBox(height: 14),
                 Text(
-                  'Logs locais',
+                  'Historico de sincronizacao',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
                   ),
@@ -5218,7 +5210,7 @@ class OperatorIdentityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
@@ -5227,11 +5219,11 @@ class OperatorIdentityCard extends StatelessWidget {
       child: Row(
         children: [
           const CircleAvatar(
-            radius: 24,
+            radius: 22,
             backgroundColor: brandNavy,
             child: Icon(Icons.person, color: Colors.white),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -5240,19 +5232,19 @@ class OperatorIdentityCard extends StatelessWidget {
                   promoterName,
                   style: const TextStyle(
                     color: brandNavy,
-                    fontSize: 18,
+                    fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   promoterEmail,
                   style: const TextStyle(
                     color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   versionLabel,
                   style: const TextStyle(
@@ -5265,6 +5257,161 @@ class OperatorIdentityCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class CompactHomeStatusCard extends StatelessWidget {
+  const CompactHomeStatusCard({
+    super.key,
+    required this.totalClients,
+    required this.pendingClients,
+    required this.completedClients,
+    required this.pendingSync,
+    required this.failedSync,
+  });
+
+  final int totalClients;
+  final int pendingClients;
+  final int completedClients;
+  final int pendingSync;
+  final int failedSync;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Resumo rapido',
+            style: TextStyle(
+              color: brandNavy,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _CountStatusChip(label: 'Clientes', value: '$totalClients'),
+              _CountStatusChip(label: 'Pendentes', value: '$pendingClients'),
+              _CountStatusChip(label: 'Atendidos', value: '$completedClients'),
+              _CountStatusChip(label: 'Sync pendente', value: '$pendingSync'),
+              if (failedSync > 0)
+                _CountStatusChip(
+                  label: 'Falhas',
+                  value: '$failedSync',
+                  danger: true,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class CompactSyncSummaryCard extends StatelessWidget {
+  const CompactSyncSummaryCard({
+    super.key,
+    required this.pending,
+    required this.failed,
+    required this.logCount,
+  });
+
+  final int pending;
+  final int failed;
+  final int logCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Fila de sincronizacao',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: brandNavy,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _CountStatusChip(label: 'Pendentes', value: '$pending'),
+              _CountStatusChip(
+                label: 'Falhas',
+                value: '$failed',
+                danger: failed > 0,
+              ),
+              _CountStatusChip(label: 'Historico', value: '$logCount'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CountStatusChip extends StatelessWidget {
+  const _CountStatusChip({
+    required this.label,
+    required this.value,
+    this.danger = false,
+  });
+
+  final String label;
+  final String value;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: danger ? const Color(0xFFFEF2F2) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: danger ? const Color(0xFFFECACA) : line,
+        ),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: brandNavy,
+            fontWeight: FontWeight.w700,
+          ),
+          children: [
+            TextSpan(text: '$label: '),
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                color: danger ? const Color(0xFFB91C1C) : brandBlue,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -5400,6 +5547,114 @@ class MetricCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class VisitProgressCard extends StatelessWidget {
+  const VisitProgressCard({
+    super.key,
+    required this.hasVisitStarted,
+    required this.hasCheckin,
+    required this.allSuppliersCompleted,
+    required this.hasCheckout,
+    required this.visitCompleted,
+    required this.usesSupplierFlow,
+  });
+
+  final bool hasVisitStarted;
+  final bool hasCheckin;
+  final bool allSuppliersCompleted;
+  final bool hasCheckout;
+  final bool visitCompleted;
+  final bool usesSupplierFlow;
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = <_VisitStepData>[
+      _VisitStepData(label: 'Iniciar', done: hasVisitStarted),
+      _VisitStepData(label: 'Check-in', done: hasCheckin),
+      if (usesSupplierFlow)
+        _VisitStepData(label: 'Fornecedores', done: allSuppliersCompleted),
+      _VisitStepData(label: 'Check-out', done: hasCheckout),
+      _VisitStepData(label: 'Encerrar', done: visitCompleted),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Passos do atendimento',
+            style: TextStyle(
+              color: brandNavy,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: steps
+                .map(
+                  (step) => Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: step.done
+                          ? const Color(0xFFECFDF5)
+                          : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: step.done
+                            ? const Color(0xFFA7F3D0)
+                            : line,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          step.done
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          size: 18,
+                          color: step.done
+                              ? brandGreen
+                              : const Color(0xFF94A3B8),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          step.label,
+                          style: const TextStyle(
+                            color: brandNavy,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VisitStepData {
+  const _VisitStepData({required this.label, required this.done});
+
+  final String label;
+  final bool done;
 }
 
 class RouteItemCard extends StatelessWidget {
@@ -5983,7 +6238,7 @@ class SupplierExecutionEditor extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Fornecedor em execucao',
+                      'Fornecedor aberto',
                       style: TextStyle(
                         color: Color(0xFF64748B),
                         fontWeight: FontWeight.w800,
@@ -6067,9 +6322,9 @@ class SupplierExecutionEditor extends StatelessWidget {
           ] else ...[
             const SizedBox(height: 10),
             const InfoCard(
-              title: 'Sem entrega no fornecedor',
+              title: 'Sem entrega',
               body:
-                  'Quando nao houve mercadoria, nao exigimos foto antes/depois. Basta registrar a situacao e concluir este fornecedor.',
+                  'Se nao houve mercadoria, informe o motivo nas observacoes e conclua o fornecedor.',
             ),
           ],
           const SizedBox(height: 12),
@@ -6141,7 +6396,7 @@ class SupplierGuidanceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Categorias e atividades do fornecedor',
+            'O que fazer neste fornecedor',
             style: TextStyle(
               color: brandNavy,
               fontSize: 18,
@@ -6150,7 +6405,7 @@ class SupplierGuidanceCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Use esta referencia para executar corretamente o atendimento no ponto de venda antes de concluir o fornecedor.',
+            'Tire as fotos das categorias e das atividades antes de concluir.',
             style: TextStyle(
               color: Color(0xFF64748B),
               fontWeight: FontWeight.w700,
