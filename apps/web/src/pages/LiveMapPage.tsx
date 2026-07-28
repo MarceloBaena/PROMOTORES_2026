@@ -438,16 +438,12 @@ export function LiveMapPage() {
     (total, item) => total + item.today.photoCount,
     0,
   );
-  const distanceToday = items.reduce(
-    (total, item) => total + item.today.distanceKm,
-    0,
-  );
 
   return (
     <section>
       <PageHeader
         title="Acompanhamento do dia"
-        subtitle="Painel operacional da jornada dos promotores, com roteiro processado, eventos do dia e ultimo ponto recebido."
+        subtitle="Leitura operacional da jornada dos promotores, com status do dia, linha do tempo e ultimo ponto recebido."
         action={
           <button
             type="button"
@@ -463,7 +459,7 @@ export function LiveMapPage() {
 
       {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Promotores conectados"
           value={onlineCount}
@@ -492,17 +488,6 @@ export function LiveMapPage() {
           icon={Camera}
           tone="brand"
         />
-        <MetricCard
-          label="Deslocamento"
-          value={formatDistance(distanceToday)}
-          foot={
-            lastRefresh
-              ? `Ultima leitura em ${formatDateTime(lastRefresh.toISOString())}`
-              : "Atualizacao automatica a cada 15 segundos."
-          }
-          icon={Navigation}
-          tone="warning"
-        />
       </div>
 
       <div className="mb-5 overflow-hidden rounded-lg border border-line bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
@@ -512,8 +497,7 @@ export function LiveMapPage() {
               Monitoramento da operacao
             </h2>
             <p className="mt-1 text-sm font-semibold text-slateText">
-              Visao diaria por promotor: sinal, roteiro, visitas, tarefas e
-              evidencias do turno.
+              Visao diaria por promotor com status, roteiro e eventos mais recentes.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -525,6 +509,11 @@ export function LiveMapPage() {
             </span>
             <span className="rounded-full bg-field px-3 py-2 text-xs font-black text-slateText ring-1 ring-line">
               Atualiza a cada {LIVE_STATUS_REFRESH_INTERVAL_MS / 1000}s
+            </span>
+            <span className="rounded-full bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 ring-1 ring-amber-200">
+              {lastRefresh
+                ? `Ultima leitura ${formatClock(lastRefresh.toISOString())}`
+                : "Aguardando leitura"}
             </span>
           </div>
         </div>
@@ -556,7 +545,7 @@ export function LiveMapPage() {
         )}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="surface-card">
           <div className="panel-header -mx-5 -mt-5 mb-5 rounded-t-[1.35rem]">
             <div>
@@ -648,14 +637,13 @@ export function LiveMapPage() {
           )}
         </div>
 
-        <div className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+        <div className="space-y-5 2xl:sticky 2xl:top-24 2xl:self-start">
           <div className="surface-card">
             <div className="panel-header -mx-5 -mt-5 mb-5 rounded-t-[1.35rem]">
               <div>
                 <h2 className="panel-title">Resumo da jornada</h2>
                 <p className="panel-subtitle">
-                  Leitura rapida do roteiro, cliente atual e sinais
-                  operacionais.
+                  Leitura curta do roteiro, cliente atual e ultimo sinal recebido.
                 </p>
               </div>
             </div>
@@ -886,7 +874,7 @@ function PromoterOperationCard({
 
   return (
     <article
-      className={`min-h-[18rem] bg-white p-4 transition ${selected ? "relative z-[1] ring-2 ring-brand" : "hover:bg-field/70"}`}
+      className={`min-h-[16rem] bg-white p-4 transition ${selected ? "relative z-[1] ring-2 ring-brand" : "hover:bg-field/70"}`}
     >
       <div
         role="button"
@@ -942,6 +930,9 @@ function PromoterOperationCard({
         </div>
 
         <div className="mt-4 space-y-2">
+          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+            Cliente ou roteiro atual
+          </div>
           <div className="truncate text-sm font-black uppercase text-brand">
             {latestPlace}
           </div>
@@ -1003,7 +994,7 @@ function PromoterOperationCard({
             percent={visitPercent}
           />
           <DualProgress
-            label="Tarefas"
+            label="Evidencias"
             done={tasksDone}
             total={tasksTotal}
             percent={taskPercent}
