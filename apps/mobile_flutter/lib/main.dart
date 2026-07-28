@@ -21,7 +21,7 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.0 (build 3)';
+const appVersionLabel = 'APK Flutter v1.1.11 (build 14)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -414,6 +414,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _openClientNavigation(RouteItemView item) async {
+    await openExternalNavigationForRouteItem(item);
+  }
+
   Future<void> _openVisit(BuildContext context, RouteItemView item) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -533,6 +537,7 @@ class _HomePageState extends State<HomePage> {
                             key: const ValueKey('route-list-tab'),
                             pendingItems: pendingItems,
                             onOpenVisit: (item) => _openVisit(context, item),
+                            onOpenMap: _openClientNavigation,
                           ),
                   ),
                 ],
@@ -633,10 +638,12 @@ class _HomeRouteListSection extends StatelessWidget {
     super.key,
     required this.pendingItems,
     required this.onOpenVisit,
+    required this.onOpenMap,
   });
 
   final List<RouteItemView> pendingItems;
   final Future<void> Function(RouteItemView item) onOpenVisit;
+  final Future<void> Function(RouteItemView item) onOpenMap;
 
   @override
   Widget build(BuildContext context) {
@@ -661,6 +668,10 @@ class _HomeRouteListSection extends StatelessWidget {
             (item) => RouteItemCard(
               item: item,
               onTap: () => unawaited(onOpenVisit(item)),
+              onOpenVisit: () => unawaited(onOpenVisit(item)),
+              onOpenMap: item.hasCoordinates
+                  ? () => unawaited(onOpenMap(item))
+                  : null,
             ),
           ),
       ],
@@ -2028,6 +2039,7 @@ class _VisitPageState extends State<VisitPage> {
         .toList();
     final executionTypes = executionPhotos.map((photo) => photo.type).toSet();
     final requiresDeliveryFlow = supplierRequiresDeliveryFlow(deliveryReceived);
+    final trimmedNotes = supplierNotesController.text.trim();
 
     if (requiresDeliveryFlow &&
         (!executionTypes.contains('supplier_before') ||
@@ -2035,6 +2047,14 @@ class _VisitPageState extends State<VisitPage> {
       setState(
         () => message =
             'Conclua o fornecedor ${supplierLabel(supplier)} com foto antes e foto depois.',
+      );
+      return;
+    }
+
+    if (!requiresDeliveryFlow && trimmedNotes.isEmpty) {
+      setState(
+        () => message =
+            'Quando nao houve entrega para ${supplierLabel(supplier)}, descreva o motivo nas observacoes antes de concluir.',
       );
       return;
     }
@@ -2048,6 +2068,42 @@ class _VisitPageState extends State<VisitPage> {
       return;
     }
 
+    if (requiresDeliveryFlow && stockoutFound == true && trimmedNotes.isEmpty) {
+      setState(
+        () => message =
+            'Quando houver ruptura no fornecedor ${supplierLabel(supplier)}, descreva o motivo nas observacoes antes de concluir.',
+      );
+      return;
+    }
+
+    final categories = categoriesFromSupplier(supplier);
+    for (final category in categories) {
+      final categoryDone = executionPhotos.any(
+        (photo) => photo.categoryId == category.id,
+      );
+      if (!categoryDone) {
+        setState(
+          () => message =
+              'Capture a foto da categoria ${category.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
+        );
+        return;
+      }
+    }
+
+    final activities = activitiesFromSupplier(supplier);
+    for (final activity in activities) {
+      final activityDone = executionPhotos.any(
+        (photo) => photo.activityId == activity.id,
+      );
+      if (!activityDone) {
+        setState(
+          () => message =
+              'Capture a evidencia da atividade ${activity.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
+        );
+        return;
+      }
+    }
+
     setState(() => busy = true);
     try {
       await widget.repository.saveSupplierExecution(
@@ -2058,7 +2114,7 @@ class _VisitPageState extends State<VisitPage> {
               ? productsReplenished
               : false,
           stockoutFound: requiresDeliveryFlow ? stockoutFound : false,
-          notes: supplierNotesController.text.trim(),
+          notes: trimmedNotes,
           finishedAtDevice: DateTime.now().toUtc().toIso8601String(),
           syncStatus: 'pending',
           updatedAt: DateTime.now().toUtc().toIso8601String(),
@@ -2087,7 +2143,12 @@ class _VisitPageState extends State<VisitPage> {
     }
   }
 
-  Future<void> _capture(String type, {SupplierSnapshot? supplier}) async {
+  Future<void> _capture(
+    String type, {
+    SupplierSnapshot? supplier,
+    SupplierCategorySnapshot? category,
+    SupplierActivitySnapshot? activity,
+  }) async {
     final currentVisit = visit;
     if (currentVisit == null) {
       setState(() => message = 'Inicie o atendimento antes de capturar fotos.');
@@ -2139,6 +2200,24 @@ class _VisitPageState extends State<VisitPage> {
       return;
     }
 
+    if (category != null &&
+        scopedPhotos.any((photo) => photo.categoryId == category.id)) {
+      setState(
+        () => message =
+            'A foto da categoria ${category.displayName} ja foi capturada para o fornecedor ${supplierLabel(supplier!)}.',
+      );
+      return;
+    }
+
+    if (activity != null &&
+        scopedPhotos.any((photo) => photo.activityId == activity.id)) {
+      setState(
+        () => message =
+            'A evidencia da atividade ${activity.displayName} ja foi capturada para o fornecedor ${supplierLabel(supplier!)}.',
+      );
+      return;
+    }
+
     if (execution == null && type == 'checkout' && !allSuppliersCompleted) {
       setState(
         () => message =
@@ -2154,11 +2233,19 @@ class _VisitPageState extends State<VisitPage> {
         type,
         supplierExecutionLocalId: execution?.localId,
         supplierId: supplier?.id,
+        categoryId: category?.id,
+        categoryName: category?.displayName,
+        activityId: activity?.id,
+        activityName: activity?.displayName,
       );
       await _load();
       setState(
         () => message = execution == null
             ? '${photoLabel(type)} salva localmente com data, hora e GPS quando disponivel.'
+            : category != null
+            ? 'Foto da categoria ${category.displayName} salva para o fornecedor ${supplierLabel(supplier!)}.'
+            : activity != null
+            ? 'Evidencia da atividade ${activity.displayName} salva para o fornecedor ${supplierLabel(supplier!)}.'
             : '${photoLabel(type)} do fornecedor ${supplierLabel(supplier!)} salva localmente.',
       );
     } catch (error) {
@@ -2319,6 +2406,24 @@ class _VisitPageState extends State<VisitPage> {
                         stockoutFound: stockoutFound,
                         notesController: supplierNotesController,
                         busy: busy,
+                        categoryPhotoIds: photos
+                            .where(
+                              (photo) =>
+                                  photo.supplierExecutionLocalId ==
+                                  activeSupplierExecution!.localId,
+                            )
+                            .map((photo) => photo.categoryId)
+                            .whereType<String>()
+                            .toSet(),
+                        activityPhotoIds: photos
+                            .where(
+                              (photo) =>
+                                  photo.supplierExecutionLocalId ==
+                                  activeSupplierExecution!.localId,
+                            )
+                            .map((photo) => photo.activityId)
+                            .whereType<String>()
+                            .toSet(),
                         onCaptureBefore: () => _capture(
                           'supplier_before',
                           supplier: activeSupplier!,
@@ -2326,6 +2431,16 @@ class _VisitPageState extends State<VisitPage> {
                         onCaptureAfter: () => _capture(
                           'supplier_after',
                           supplier: activeSupplier!,
+                        ),
+                        onCaptureCategory: (category) => _capture(
+                          'occurrence_extra',
+                          supplier: activeSupplier!,
+                          category: category,
+                        ),
+                        onCaptureActivity: (activity) => _capture(
+                          'occurrence_extra',
+                          supplier: activeSupplier!,
+                          activity: activity,
                         ),
                         onDeliveryChanged: (value) async {
                           setState(() {
@@ -2727,6 +2842,10 @@ class AppRepository {
     String type, {
     String? supplierExecutionLocalId,
     String? supplierId,
+    String? categoryId,
+    String? categoryName,
+    String? activityId,
+    String? activityName,
   }) async {
     final picker = ImagePicker();
     final result = await picker.pickImage(
@@ -2756,6 +2875,10 @@ class AppRepository {
       capturedAt: DateTime.now().toUtc().toIso8601String(),
       supplierExecutionLocalId: supplierExecutionLocalId,
       supplierId: supplierId,
+      categoryId: categoryId,
+      categoryName: categoryName,
+      activityId: activityId,
+      activityName: activityName,
       gpsLatitude: gps?.latitude,
       gpsLongitude: gps?.longitude,
       syncStatus: 'pending',
@@ -2766,6 +2889,10 @@ class AppRepository {
       gps == null ? 'failed' : 'pending',
       gps == null
           ? 'Foto salva sem GPS disponivel.'
+          : categoryName != null
+          ? 'Foto da categoria $categoryName salva com GPS.'
+          : activityName != null
+          ? 'Evidencia da atividade $activityName salva com GPS.'
           : '${photoLabel(type)} salva com GPS.',
     );
   }
@@ -2876,6 +3003,11 @@ class AppRepository {
     }
 
     if (!supplierRequiresDeliveryFlow(execution.deliveryReceived)) {
+      if ((execution.notes?.trim().isEmpty ?? true)) {
+        throw Exception(
+          'Informe nas observacoes o motivo da falta de entrega para ${supplierLabel(supplier)}.',
+        );
+      }
       return;
     }
 
@@ -2892,6 +3024,37 @@ class AppRepository {
       throw Exception(
         'Responda abastecimento e ruptura do fornecedor ${supplierLabel(supplier)}.',
       );
+    }
+
+    if (execution.stockoutFound == true &&
+        (execution.notes?.trim().isEmpty ?? true)) {
+      throw Exception(
+        'Descreva a ruptura em observacoes para o fornecedor ${supplierLabel(supplier)}.',
+      );
+    }
+
+    final categories = categoriesFromSupplier(supplier);
+    for (final category in categories) {
+      final categoryDone = executionPhotos.any(
+        (photo) => photo.categoryId == category.id,
+      );
+      if (!categoryDone) {
+        throw Exception(
+          'Capture a foto da categoria ${category.displayName} antes de concluir ${supplierLabel(supplier)}.',
+        );
+      }
+    }
+
+    final activities = activitiesFromSupplier(supplier);
+    for (final activity in activities) {
+      final activityDone = executionPhotos.any(
+        (photo) => photo.activityId == activity.id,
+      );
+      if (!activityDone) {
+        throw Exception(
+          'Capture a evidencia da atividade ${activity.displayName} antes de concluir ${supplierLabel(supplier)}.',
+        );
+      }
     }
   }
 
@@ -3143,7 +3306,7 @@ class ApiClient {
   }
 
   Future<String> sendVisit(String accessToken, LocalVisit visit) async {
-    final payload = {
+    final payload = compactPayload({
       'clientGeneratedId': visit.localId,
       'routeId': visit.routeId,
       'routeItemId': visit.routeItemId,
@@ -3154,7 +3317,7 @@ class ApiClient {
       'gpsLatitude': visit.gpsLatitude,
       'gpsLongitude': visit.gpsLongitude,
       'notes': visit.notes,
-    };
+    });
     final response = await _request(
       visit.serverId == null ? '/visits' : '/visits/${visit.serverId}',
       method: visit.serverId == null ? 'POST' : 'PUT',
@@ -3171,7 +3334,7 @@ class ApiClient {
     String visitId,
     LocalSupplierExecution execution,
   ) async {
-    final payload = {
+    final payload = compactPayload({
       'clientGeneratedId': execution.localId,
       'supplierId': execution.supplierId,
       'clientId': execution.clientId,
@@ -3182,7 +3345,7 @@ class ApiClient {
       'notes': execution.notes,
       'startedAtDevice': execution.startedAtDevice,
       'finishedAtDevice': execution.finishedAtDevice,
-    };
+    });
     final response = await _request(
       execution.serverId == null
           ? '/visits/$visitId/supplier-executions'
@@ -3208,7 +3371,7 @@ class ApiClient {
       '/visits/$visitId/photos/base64',
       method: 'POST',
       accessToken: accessToken,
-      body: {
+      body: compactPayload({
         'type': photo.type,
         'clientGeneratedId': photo.localId,
         'capturedAt': photo.capturedAt,
@@ -3216,9 +3379,13 @@ class ApiClient {
         'gpsLongitude': photo.gpsLongitude,
         'supplierExecutionId': ?supplierExecutionId,
         'supplierId': ?supplierId,
+        'categoryId': photo.categoryId,
+        'categoryName': photo.categoryName,
+        'activityId': photo.activityId,
+        'activityName': photo.activityName,
         'contentType': 'image/jpeg',
         'base64Image': base64Encode(bytes),
-      },
+      }),
       timeout: const Duration(seconds: 120),
     );
     final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -3263,7 +3430,7 @@ class LocalDatabase {
     final path = p.join(directory.path, 'promotorpro_flutter.db');
     _db = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE clients (id TEXT PRIMARY KEY, code TEXT, name TEXT NOT NULL, address TEXT, city TEXT, state TEXT, latitude REAL, longitude REAL, payload_json TEXT NOT NULL)',
@@ -3281,7 +3448,7 @@ class LocalDatabase {
           'CREATE TABLE supplier_executions (local_id TEXT PRIMARY KEY, server_id TEXT, visit_local_id TEXT NOT NULL, client_id TEXT NOT NULL, supplier_id TEXT NOT NULL, status TEXT NOT NULL, delivery_received INTEGER, products_replenished INTEGER, stockout_found INTEGER, notes TEXT, started_at_device TEXT, finished_at_device TEXT, sync_status TEXT NOT NULL, updated_at TEXT NOT NULL)',
         );
         await db.execute(
-          'CREATE TABLE photos (local_id TEXT PRIMARY KEY, visit_local_id TEXT NOT NULL, server_id TEXT, type TEXT NOT NULL, uri TEXT NOT NULL, captured_at TEXT NOT NULL, supplier_execution_local_id TEXT, supplier_id TEXT, gps_latitude REAL, gps_longitude REAL, sync_status TEXT NOT NULL)',
+          'CREATE TABLE photos (local_id TEXT PRIMARY KEY, visit_local_id TEXT NOT NULL, server_id TEXT, type TEXT NOT NULL, uri TEXT NOT NULL, captured_at TEXT NOT NULL, supplier_execution_local_id TEXT, supplier_id TEXT, category_id TEXT, category_name TEXT, activity_id TEXT, activity_name TEXT, gps_latitude REAL, gps_longitude REAL, sync_status TEXT NOT NULL)',
         );
         await db.execute(
           'CREATE TABLE sync_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, entity_local_id TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
@@ -3310,6 +3477,24 @@ class LocalDatabase {
           } catch (_) {}
           try {
             await db.execute('ALTER TABLE photos ADD COLUMN supplier_id TEXT');
+          } catch (_) {}
+        }
+        if (oldVersion < 4) {
+          try {
+            await db.execute('ALTER TABLE photos ADD COLUMN category_id TEXT');
+          } catch (_) {}
+          try {
+            await db.execute(
+              'ALTER TABLE photos ADD COLUMN category_name TEXT',
+            );
+          } catch (_) {}
+          try {
+            await db.execute('ALTER TABLE photos ADD COLUMN activity_id TEXT');
+          } catch (_) {}
+          try {
+            await db.execute(
+              'ALTER TABLE photos ADD COLUMN activity_name TEXT',
+            );
           } catch (_) {}
         }
       },
@@ -4304,6 +4489,10 @@ class LocalPhoto {
     required this.capturedAt,
     this.supplierExecutionLocalId,
     this.supplierId,
+    this.categoryId,
+    this.categoryName,
+    this.activityId,
+    this.activityName,
     this.gpsLatitude,
     this.gpsLongitude,
     required this.syncStatus,
@@ -4317,6 +4506,10 @@ class LocalPhoto {
   final String capturedAt;
   final String? supplierExecutionLocalId;
   final String? supplierId;
+  final String? categoryId;
+  final String? categoryName;
+  final String? activityId;
+  final String? activityName;
   final double? gpsLatitude;
   final double? gpsLongitude;
   final String syncStatus;
@@ -4330,6 +4523,10 @@ class LocalPhoto {
     capturedAt: row['captured_at'] as String,
     supplierExecutionLocalId: row['supplier_execution_local_id'] as String?,
     supplierId: row['supplier_id'] as String?,
+    categoryId: row['category_id'] as String?,
+    categoryName: row['category_name'] as String?,
+    activityId: row['activity_id'] as String?,
+    activityName: row['activity_name'] as String?,
     gpsLatitude: asDouble(row['gps_latitude']),
     gpsLongitude: asDouble(row['gps_longitude']),
     syncStatus: row['sync_status'] as String,
@@ -4344,6 +4541,10 @@ class LocalPhoto {
     'captured_at': capturedAt,
     'supplier_execution_local_id': supplierExecutionLocalId,
     'supplier_id': supplierId,
+    'category_id': categoryId,
+    'category_name': categoryName,
+    'activity_id': activityId,
+    'activity_name': activityName,
     'gps_latitude': gpsLatitude,
     'gps_longitude': gpsLongitude,
     'sync_status': syncStatus,
@@ -4501,6 +4702,22 @@ String normalizedError(Object error) {
   return text.isEmpty ? 'Erro desconhecido.' : text;
 }
 
+Map<String, dynamic> compactPayload(Map<String, dynamic> input) {
+  final output = <String, dynamic>{};
+  input.forEach((key, value) {
+    if (value == null) {
+      return;
+    }
+
+    if (value is String && value.trim().isEmpty) {
+      return;
+    }
+
+    output[key] = value;
+  });
+  return output;
+}
+
 Future<bool?> confirmAction(
   BuildContext context, {
   required String title,
@@ -4641,6 +4858,34 @@ String supplierLabel(SupplierSnapshot supplier) => supplier.displayName;
 
 bool supplierRequiresDeliveryFlow(bool? deliveryReceived) =>
     deliveryReceived != false;
+
+List<String> optionalTextLine(String? value) =>
+    value == null ? const <String>[] : <String>[value];
+
+Future<void> openExternalNavigationForRouteItem(RouteItemView item) async {
+  if (!item.hasCoordinates) {
+    return;
+  }
+
+  final latitude = item.clientLatitude!;
+  final longitude = item.clientLongitude!;
+  final encodedLabel = Uri.encodeComponent(item.clientName);
+  final googleUri = Uri.parse(
+    'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+  );
+  final geoUri = Uri.parse(
+    'geo:$latitude,$longitude?q=$latitude,$longitude($encodedLabel)',
+  );
+
+  if (await canLaunchUrl(googleUri)) {
+    await launchUrl(googleUri, mode: LaunchMode.externalApplication);
+    return;
+  }
+
+  if (await canLaunchUrl(geoUri)) {
+    await launchUrl(geoUri, mode: LaunchMode.externalApplication);
+  }
+}
 
 String answerLabel(bool? value) {
   if (value == null) return 'Nao informado';
@@ -5079,10 +5324,18 @@ class MetricCard extends StatelessWidget {
 }
 
 class RouteItemCard extends StatelessWidget {
-  const RouteItemCard({super.key, required this.item, required this.onTap});
+  const RouteItemCard({
+    super.key,
+    required this.item,
+    required this.onTap,
+    required this.onOpenVisit,
+    this.onOpenMap,
+  });
 
   final RouteItemView item;
   final VoidCallback onTap;
+  final VoidCallback onOpenVisit;
+  final VoidCallback? onOpenMap;
 
   @override
   Widget build(BuildContext context) {
@@ -5093,27 +5346,96 @@ class RouteItemCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         side: const BorderSide(color: line),
       ),
-      child: ListTile(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
         onTap: onTap,
-        contentPadding: const EdgeInsets.all(16),
-        leading: CircleAvatar(
-          backgroundColor: brandNavy,
-          child: Text(
-            '${item.sequence}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: brandNavy,
+                    child: Text(
+                      '${item.sequence}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.clientName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: brandNavy,
+                            fontSize: 18,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          item.clientAddress ?? 'Endereco nao informado',
+                          style: const TextStyle(
+                            color: Color(0xFF475569),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.routeName,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (item.hasCoordinates)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: Text(
+                              'GPS do cliente disponivel',
+                              style: TextStyle(
+                                color: brandBlue,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  SizedBox(
+                    width: 180,
+                    child: PrimaryButton(
+                      label: 'Abrir atendimento',
+                      onPressed: onOpenVisit,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 160,
+                    child: SecondaryButton(
+                      label: 'Ver no mapa',
+                      onPressed: onOpenMap,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        title: Text(
-          item.clientName,
-          style: const TextStyle(fontWeight: FontWeight.w900, color: brandNavy),
-        ),
-        subtitle: Text(
-          '${item.clientAddress ?? 'Endereco nao informado'}\n${item.routeName}${item.hasCoordinates ? '\nGPS do cliente disponivel' : ''}',
-        ),
-        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }
@@ -5368,8 +5690,12 @@ class SupplierExecutionEditor extends StatelessWidget {
     required this.stockoutFound,
     required this.notesController,
     required this.busy,
+    required this.categoryPhotoIds,
+    required this.activityPhotoIds,
     required this.onCaptureBefore,
     required this.onCaptureAfter,
+    required this.onCaptureCategory,
+    required this.onCaptureActivity,
     required this.onDeliveryChanged,
     required this.onProductsChanged,
     required this.onStockoutChanged,
@@ -5386,8 +5712,14 @@ class SupplierExecutionEditor extends StatelessWidget {
   final bool? stockoutFound;
   final TextEditingController notesController;
   final bool busy;
+  final Set<String> categoryPhotoIds;
+  final Set<String> activityPhotoIds;
   final VoidCallback onCaptureBefore;
   final VoidCallback onCaptureAfter;
+  final FutureOr<void> Function(SupplierCategorySnapshot category)
+  onCaptureCategory;
+  final FutureOr<void> Function(SupplierActivitySnapshot activity)
+  onCaptureActivity;
   final FutureOr<void> Function(bool? value) onDeliveryChanged;
   final FutureOr<void> Function(bool? value) onProductsChanged;
   final FutureOr<void> Function(bool? value) onStockoutChanged;
@@ -5447,6 +5779,11 @@ class SupplierExecutionEditor extends StatelessWidget {
             SupplierGuidanceCard(
               categories: categories,
               activities: activities,
+              categoryPhotoIds: categoryPhotoIds,
+              activityPhotoIds: activityPhotoIds,
+              busy: busy,
+              onCaptureCategory: onCaptureCategory,
+              onCaptureActivity: onCaptureActivity,
             ),
             const SizedBox(height: 14),
           ],
@@ -5541,10 +5878,22 @@ class SupplierGuidanceCard extends StatelessWidget {
     super.key,
     required this.categories,
     required this.activities,
+    required this.categoryPhotoIds,
+    required this.activityPhotoIds,
+    required this.busy,
+    required this.onCaptureCategory,
+    required this.onCaptureActivity,
   });
 
   final List<SupplierCategorySnapshot> categories;
   final List<SupplierActivitySnapshot> activities;
+  final Set<String> categoryPhotoIds;
+  final Set<String> activityPhotoIds;
+  final bool busy;
+  final FutureOr<void> Function(SupplierCategorySnapshot category)
+  onCaptureCategory;
+  final FutureOr<void> Function(SupplierActivitySnapshot activity)
+  onCaptureActivity;
 
   @override
   Widget build(BuildContext context) {
@@ -5591,42 +5940,62 @@ class SupplierGuidanceCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: line),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDBEAFE),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.photo_camera_outlined,
-                        color: brandBlue,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDBEAFE),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.photo_camera_outlined,
+                            color: brandBlue,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                category.displayName,
+                                style: const TextStyle(
+                                  color: brandNavy,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                categoryPhotoIds.contains(category.id)
+                                    ? 'Foto da categoria ja registrada.'
+                                    : 'Capture a foto desta categoria para comprovar a execucao.',
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            category.displayName,
-                            style: const TextStyle(
-                              color: brandNavy,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Foto de evidencia recomendada para comprovar execucao desta categoria.',
-                            style: TextStyle(
-                              color: Color(0xFF64748B),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                    const SizedBox(height: 12),
+                    EvidenceButton(
+                      label: 'Foto da categoria',
+                      ok: categoryPhotoIds.contains(category.id),
+                      onPressed: busy
+                          ? null
+                          : () {
+                              final result = onCaptureCategory(category);
+                              if (result is Future<void>) {
+                                unawaited(result);
+                              }
+                            },
                     ),
                   ],
                 ),
@@ -5641,24 +6010,52 @@ class SupplierGuidanceCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             ...activities.map(
-              (activity) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
+              (activity) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: line),
+                ),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 3),
-                      child: Icon(Icons.task_alt, size: 18, color: brandGreen),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        activity.displayName,
-                        style: const TextStyle(
-                          color: brandNavy,
-                          fontWeight: FontWeight.w700,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 3),
+                          child: Icon(
+                            Icons.task_alt,
+                            size: 18,
+                            color: brandGreen,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            activity.displayName,
+                            style: const TextStyle(
+                              color: brandNavy,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    EvidenceButton(
+                      label: 'Evidencia da atividade',
+                      ok: activityPhotoIds.contains(activity.id),
+                      onPressed: busy
+                          ? null
+                          : () {
+                              final result = onCaptureActivity(activity);
+                              if (result is Future<void>) {
+                                unawaited(result);
+                              }
+                            },
                     ),
                   ],
                 ),
@@ -5877,6 +6274,8 @@ int _localEvidenceBucketOrder(LocalPhoto photo) {
   };
   const supplierLevelOrder = <String, int>{
     'supplier_before': 10,
+    'category': 20,
+    'activity': 30,
     'supplier_after': 40,
   };
 
@@ -5885,6 +6284,14 @@ int _localEvidenceBucketOrder(LocalPhoto photo) {
       (photo.supplierId?.trim().isNotEmpty ?? false);
 
   if (hasSupplier) {
+    if ((photo.categoryId?.trim().isNotEmpty ?? false) ||
+        (photo.categoryName?.trim().isNotEmpty ?? false)) {
+      return supplierLevelOrder['category'] ?? 20;
+    }
+    if ((photo.activityId?.trim().isNotEmpty ?? false) ||
+        (photo.activityName?.trim().isNotEmpty ?? false)) {
+      return supplierLevelOrder['activity'] ?? 30;
+    }
     return supplierLevelOrder[photo.type] ?? 90;
   }
 
@@ -5984,6 +6391,26 @@ class PhotoTile extends StatelessWidget {
     final supplierText = supplier == null
         ? null
         : 'Fornecedor: ${supplierLabel(supplier)}';
+    final categoryText = photo.categoryName?.trim().isNotEmpty == true
+        ? 'Categoria: ${photo.categoryName!.trim()}'
+        : null;
+    final activityText = photo.activityName?.trim().isNotEmpty == true
+        ? 'Atividade: ${photo.activityName!.trim()}'
+        : null;
+    final title = categoryText != null
+        ? 'Foto da categoria'
+        : activityText != null
+        ? 'Evidencia da atividade'
+        : supplier == null
+        ? photoLabel(photo.type)
+        : '${photoLabel(photo.type)} - ${supplierLabel(supplier)}';
+    final detailLines = <String>[
+      ...optionalTextLine(supplierText),
+      ...optionalTextLine(categoryText),
+      ...optionalTextLine(activityText),
+      'Capturada: ${formatDate(photo.capturedAt)}',
+      'GPS: ${photo.gpsLatitude?.toStringAsFixed(6) ?? 'sem gps'}, ${photo.gpsLongitude?.toStringAsFixed(6) ?? 'sem gps'}',
+    ];
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -5992,15 +6419,8 @@ class PhotoTile extends StatelessWidget {
       ),
       child: ListTile(
         leading: const Icon(Icons.photo_camera, color: brandBlue),
-        title: Text(
-          supplier == null
-              ? photoLabel(photo.type)
-              : '${photoLabel(photo.type)} - ${supplierLabel(supplier)}',
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        subtitle: Text(
-          '${supplierText == null ? '' : '$supplierText\n'}Capturada: ${formatDate(photo.capturedAt)}\nGPS: ${photo.gpsLatitude?.toStringAsFixed(6) ?? 'sem gps'}, ${photo.gpsLongitude?.toStringAsFixed(6) ?? 'sem gps'}',
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        subtitle: Text(detailLines.join('\n')),
       ),
     );
   }
