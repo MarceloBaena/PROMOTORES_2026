@@ -401,6 +401,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _openMapFullScreen(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RouteMapPage(
+          repository: widget.repository,
+          promoterName: widget.session.user.name,
+          routeItems: widget.routeItems,
+          onVisitChanged: widget.onChanged,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openVisit(BuildContext context, RouteItemView item) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -510,6 +523,7 @@ class _HomePageState extends State<HomePage> {
                             routeItems: widget.routeItems,
                             onVisitChanged: widget.onChanged,
                             embedded: true,
+                            onOpenFullScreen: () => _openMapFullScreen(context),
                           )
                         : _HomeRouteListSection(
                             key: const ValueKey('route-list-tab'),
@@ -703,6 +717,7 @@ class RouteMapContent extends StatefulWidget {
     required this.routeItems,
     required this.onVisitChanged,
     this.embedded = false,
+    this.onOpenFullScreen,
   });
 
   final AppRepository repository;
@@ -710,6 +725,7 @@ class RouteMapContent extends StatefulWidget {
   final List<RouteItemView> routeItems;
   final Future<void> Function({String? nextMessage}) onVisitChanged;
   final bool embedded;
+  final VoidCallback? onOpenFullScreen;
 
   @override
   State<RouteMapContent> createState() => _RouteMapContentState();
@@ -885,7 +901,20 @@ class _RouteMapContentState extends State<RouteMapContent> {
   @override
   void initState() {
     super.initState();
+    _syncSelectedItem();
+  }
+
+  @override
+  void didUpdateWidget(covariant RouteMapContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.routeItems != widget.routeItems) {
+      _syncSelectedItem();
+    }
+  }
+
+  void _syncSelectedItem() {
     if (widget.routeItems.isEmpty) {
+      selectedItem = null;
       return;
     }
 
@@ -897,8 +926,8 @@ class _RouteMapContentState extends State<RouteMapContent> {
     final initial = pendingWithCoordinates.isNotEmpty
         ? pendingWithCoordinates.first
         : allWithCoordinates.isNotEmpty
-        ? allWithCoordinates.first
-        : widget.routeItems.first;
+            ? allWithCoordinates.first
+            : widget.routeItems.first;
 
     if (initial.hasCoordinates) {
       selectedItem = initial;
@@ -958,6 +987,13 @@ class _RouteMapContentState extends State<RouteMapContent> {
           ],
         ),
         const SizedBox(height: 12),
+        if (widget.embedded && widget.onOpenFullScreen != null) ...[
+          SecondaryButton(
+            label: 'Abrir mapa em tela cheia',
+            onPressed: widget.onOpenFullScreen,
+          ),
+          const SizedBox(height: 12),
+        ],
         _MapNextStopCard(
           currentItem: currentRouteItem,
           nextItem: nextRouteItemAfterCurrent,
@@ -3828,6 +3864,64 @@ class SupplierSnapshot {
   );
 }
 
+class SupplierCategorySnapshot {
+  SupplierCategorySnapshot({
+    required this.id,
+    this.code,
+    required this.name,
+    required this.payload,
+  });
+
+  final String id;
+  final String? code;
+  final String name;
+  final Map<String, dynamic> payload;
+
+  String get displayName {
+    if ((code?.trim().isNotEmpty ?? false)) {
+      return '${code!.trim()} - ${name.trim()}';
+    }
+    return name.trim();
+  }
+
+  factory SupplierCategorySnapshot.fromJson(Map<String, dynamic> json) =>
+      SupplierCategorySnapshot(
+        id: json['id'] as String,
+        code: json['code']?.toString(),
+        name: ((json['name'] as String?) ?? 'Categoria').trim(),
+        payload: json,
+      );
+}
+
+class SupplierActivitySnapshot {
+  SupplierActivitySnapshot({
+    required this.id,
+    this.code,
+    required this.name,
+    required this.payload,
+  });
+
+  final String id;
+  final String? code;
+  final String name;
+  final Map<String, dynamic> payload;
+
+  String get displayName {
+    if ((code?.trim().isNotEmpty ?? false)) {
+      return '${code!.trim()} - ${name.trim()}';
+    }
+    return name.trim();
+  }
+
+  factory SupplierActivitySnapshot.fromJson(Map<String, dynamic> json) =>
+      SupplierActivitySnapshot(
+        id: json['id'] as String,
+        code: json['code']?.toString(),
+        name: ((json['name'] as String?) ?? 'Atividade').trim(),
+        payload: json,
+      );
+}
+
 class RouteSnapshot {
   RouteSnapshot({
     required this.id,
@@ -4424,6 +4518,38 @@ List<SupplierSnapshot> suppliersFromPayload(Map<String, dynamic>? payload) {
       .whereType<Map>()
       .map(
         (item) => SupplierSnapshot.fromJson(
+          item.map((key, value) => MapEntry(key.toString(), value)),
+        ),
+      )
+      .toList();
+}
+
+List<SupplierCategorySnapshot> categoriesFromSupplier(SupplierSnapshot supplier) {
+  final raw = supplier.payload['categories'];
+  if (raw is! List) {
+    return const <SupplierCategorySnapshot>[];
+  }
+
+  return raw
+      .whereType<Map>()
+      .map(
+        (item) => SupplierCategorySnapshot.fromJson(
+          item.map((key, value) => MapEntry(key.toString(), value)),
+        ),
+      )
+      .toList();
+}
+
+List<SupplierActivitySnapshot> activitiesFromSupplier(SupplierSnapshot supplier) {
+  final raw = supplier.payload['activities'];
+  if (raw is! List) {
+    return const <SupplierActivitySnapshot>[];
+  }
+
+  return raw
+      .whereType<Map>()
+      .map(
+        (item) => SupplierActivitySnapshot.fromJson(
           item.map((key, value) => MapEntry(key.toString(), value)),
         ),
       )
@@ -5065,6 +5191,8 @@ class SupplierExecutionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final categories = categoriesFromSupplier(supplier);
+    final activities = activitiesFromSupplier(supplier);
     final statusLabel = switch (status) {
       'completed' => 'Concluido',
       'in_progress' => 'Em andamento',
@@ -5143,6 +5271,25 @@ class SupplierExecutionTile extends StatelessWidget {
                   ),
                 ],
               ),
+              if (categories.isNotEmpty || activities.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (categories.isNotEmpty)
+                      _MapStatusChip(
+                        label: '${categories.length} categoria(s)',
+                        color: brandBlue,
+                      ),
+                    if (activities.isNotEmpty)
+                      _MapStatusChip(
+                        label: '${activities.length} atividade(s)',
+                        color: brandGreen,
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -5191,6 +5338,8 @@ class SupplierExecutionEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final categories = categoriesFromSupplier(supplier);
+    final activities = activitiesFromSupplier(supplier);
     final requiresDeliveryFlow = supplierRequiresDeliveryFlow(deliveryReceived);
 
     return Container(
@@ -5235,6 +5384,13 @@ class SupplierExecutionEditor extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          if (categories.isNotEmpty || activities.isNotEmpty) ...[
+            SupplierGuidanceCard(
+              categories: categories,
+              activities: activities,
+            ),
+            const SizedBox(height: 14),
+          ],
           BooleanAnswerField(
             label: 'Recebeu mercadoria hoje?',
             value: deliveryReceived,
@@ -5315,6 +5471,151 @@ class SupplierExecutionEditor extends StatelessWidget {
                     }
                   },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class SupplierGuidanceCard extends StatelessWidget {
+  const SupplierGuidanceCard({
+    super.key,
+    required this.categories,
+    required this.activities,
+  });
+
+  final List<SupplierCategorySnapshot> categories;
+  final List<SupplierActivitySnapshot> activities;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Categorias e atividades do fornecedor',
+            style: TextStyle(
+              color: brandNavy,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Use esta referencia para executar corretamente o atendimento no ponto de venda antes de concluir o fornecedor.',
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w700,
+              height: 1.4,
+            ),
+          ),
+          if (categories.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'Categorias vinculadas',
+              style: TextStyle(
+                color: brandNavy,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ...categories.map(
+              (category) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: line),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDBEAFE),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.photo_camera_outlined,
+                        color: brandBlue,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            category.displayName,
+                            style: const TextStyle(
+                              color: brandNavy,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Foto de evidencia recomendada para comprovar execucao desta categoria.',
+                            style: TextStyle(
+                              color: Color(0xFF64748B),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (activities.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Atividades para executar',
+              style: TextStyle(
+                color: brandNavy,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ...activities.map(
+              (activity) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 3),
+                      child: Icon(
+                        Icons.task_alt,
+                        size: 18,
+                        color: brandGreen,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        activity.displayName,
+                        style: const TextStyle(
+                          color: brandNavy,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
