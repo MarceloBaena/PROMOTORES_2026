@@ -111,54 +111,21 @@ export function Dashboard() {
         tone: "text-blue-700 bg-blue-50"
       },
       {
-        label: "Sem atendimento",
-        value: fieldWork.noServiceOver48,
-        helper: `Apenas apos ${fieldWork.staleRuleHours}h sem conclusao`,
+        label: "Pendencias reais",
+        value: realAttentionCount,
+        helper: `Auditorias abertas + clientes sem atendimento apos ${fieldWork.staleRuleHours}h`,
         icon: AlertTriangle,
-        tone: fieldWork.noServiceOver48 > 0 ? "text-danger bg-red-50" : "text-slateText bg-slate-100"
-      },
-      {
-        label: "Execucao",
-        value: `${fieldWork.executionRate}%`,
-        helper: "Atendidos sobre liberados",
-        icon: RadioTower,
-        tone: "text-indigo-700 bg-indigo-50"
+        tone: realAttentionCount > 0 ? "text-danger bg-red-50" : "text-slateText bg-slate-100"
       }
     ],
-    [fieldWork]
-  );
-
-  const quickSummary = useMemo(
-    () => [
-      {
-        label: "Promotores ativos",
-        value: fieldWork.activePromoters,
-        helper: "Equipe pronta para jornada"
-      },
-      {
-        label: "Rotas publicadas",
-        value: routeDay.total,
-        helper: "Rotas validas no periodo"
-      },
-      {
-        label: "Clientes liberados",
-        value: fieldWork.releasedClientsToday,
-        helper: "Pontos previstos para hoje"
-      },
-      {
-        label: "Clientes atendidos",
-        value: fieldWork.attendedClientsToday,
-        helper: "Concluidos pelo aplicativo"
-      }
-    ],
-    [fieldWork.activePromoters, fieldWork.attendedClientsToday, fieldWork.releasedClientsToday, routeDay.total]
+    [fieldWork, realAttentionCount]
   );
 
   return (
     <section>
       <PageHeader
         title="Painel executivo de campo"
-        subtitle="Resumo simples da operacao: promotores, clientes liberados, atendimentos e excecoes reais."
+        subtitle="Visao do dia com foco no que foi liberado, no que ja foi atendido e no que realmente precisa de acompanhamento."
         action={
           <Link to="/mapa" className="primary-button">
             <MapPinned className="h-4 w-4" />
@@ -168,7 +135,7 @@ export function Dashboard() {
       />
       {error ? <div className="notice notice-error">{error}</div> : null}
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         {kpis.map((item) => {
           const Icon = item.icon;
           return (
@@ -202,16 +169,17 @@ export function Dashboard() {
                   </span>
                 </div>
                 <h2 className="mt-4 font-display text-2xl font-black leading-tight tracking-tight sm:text-3xl">
-                  Resumo da operacao em campo
+                  Operacao do dia sem excesso de leitura
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-white/68">
-                  Veja rapidamente o que foi liberado, o que ja foi concluido e quais pontos ainda exigem acompanhamento.
+                  A tela principal agora resume somente o que ajuda a decidir rapido: equipe ativa, clientes liberados, clientes atendidos e pendencias reais.
                 </p>
 
-                <div className="mt-5 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))]">
-                  {quickSummary.map((item) => (
-                    <CommandStat key={item.label} label={item.label} value={item.value} helper={item.helper} />
-                  ))}
+                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <CommandStat label="Promotores na jornada" value={fieldWork.activePromoters} helper="Equipe apta para atendimento" />
+                  <CommandStat label="Rotas do periodo" value={routeDay.total} helper="Rotas publicadas no intervalo atual" />
+                  <CommandStat label="Clientes liberados" value={fieldWork.releasedClientsToday} helper="Pontos disponibilizados para visita" />
+                  <CommandStat label="Clientes atendidos" value={fieldWork.attendedClientsToday} helper="Visitas concluidas no aplicativo" />
                 </div>
 
                 <div className="mt-4 rounded-lg border border-white/10 bg-white/10 p-4">
@@ -273,15 +241,15 @@ export function Dashboard() {
         <div className="panel overflow-hidden">
           <div className="panel-header">
             <div>
-              <h2 className="panel-title">Leitura rapida do dia</h2>
-              <p className="panel-subtitle">Sem repeticao: somente os numeros que ajudam na decisao imediata.</p>
+              <h2 className="panel-title">Indicadores complementares</h2>
+              <p className="panel-subtitle">Somente o apoio operacional que nao apareceu no bloco principal.</p>
             </div>
           </div>
           <div className="grid gap-3 p-5 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
-            <OperationalTile icon={Route} label="Rotas publicadas" value={summary?.routes ?? 0} description="Base historica de roteirizacoes ativas e concluidas" />
+            <OperationalTile icon={Route} label="Rotas na base" value={summary?.routes ?? 0} description="Historico geral de roteirizacoes cadastradas" />
             <OperationalTile icon={CheckCircle2} label="Check-ins hoje" value={summary?.checkinsToday ?? 0} description="Chegadas registradas pelo aplicativo" />
             <OperationalTile icon={Clock3} label="Dentro do prazo" value={fieldWork.openUnder48} description="Clientes ainda no tempo operacional" />
-            <OperationalTile icon={AlertTriangle} label="Canceladas hoje" value={routeDay.cancelled} description="Rotas canceladas no periodo" danger={routeDay.cancelled > 0} />
+            <OperationalTile icon={AlertTriangle} label="Auditorias abertas" value={summary?.auditFlags ?? 0} description="Ocorrencias aguardando validacao da supervisao" danger={(summary?.auditFlags ?? 0) > 0} />
           </div>
         </div>
 
