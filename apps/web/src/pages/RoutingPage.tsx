@@ -468,12 +468,22 @@ export function RoutingPage() {
             </div>
 
             <div className="rounded-[1.35rem] border border-line bg-white p-4">
-              <div className="mb-3">
-                <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
-                  Dados da rota
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
+                    Dados da rota
+                  </div>
+                  <div className="mt-1 text-xs font-semibold text-slateText">
+                    Janela operacional, equipe e publicacao do dia.
+                  </div>
                 </div>
-                <div className="mt-1 text-xs font-semibold text-slateText">
-                  Configure empresa, janela operacional e equipe responsavel.
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full border border-line bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                    Inicio e fim obrigatorios
+                  </span>
+                  <span className="rounded-full border border-line bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                    {selectedClientIds.length} cliente(s)
+                  </span>
                 </div>
               </div>
 
@@ -741,8 +751,7 @@ export function RoutingPage() {
             <div>
               <h2 className="panel-title">Rotas do painel</h2>
               <p className="panel-subtitle">
-                Resumo da equipe planejada, quantidade de clientes e publicacao
-                para o aplicativo.
+                Acompanhe o que esta publicado, concluido e quais clientes fazem parte de cada jornada.
               </p>
             </div>
             <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
@@ -761,8 +770,13 @@ export function RoutingPage() {
                     <div className="text-base font-black text-ink">
                       {route.name}
                     </div>
-                    <div className="mt-1 text-xs font-semibold text-slateText">
-                      {route.items.length} cliente(s) vinculados
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="rounded-full border border-line bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                        {route.items.length} cliente(s)
+                      </span>
+                      <span className="rounded-full border border-line bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                        {formatRouteDuration(route)}
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -776,7 +790,7 @@ export function RoutingPage() {
                       <Send className="h-4 w-4" />
                     </button>
                   </div>
-              </div>
+                </div>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                   <RouteInfo label="Periodo" value={formatRoutePeriod(route)} />
