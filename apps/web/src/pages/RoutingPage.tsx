@@ -612,7 +612,7 @@ export function RoutingPage() {
                 <div>
                   <span className="field-label">Clientes do roteiro</span>
                   <div className="mt-1 text-xs font-semibold text-slateText">
-                    Marque os clientes que farão parte da jornada desta rota.
+                    Marque os clientes que farao parte da jornada desta rota.
                   </div>
                 </div>
                 <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
@@ -768,7 +768,7 @@ export function RoutingPage() {
                   </div>
 
                   {route.items.length > 0 ? (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+                    <div className="mt-3 space-y-2">
                       {route.items.map((item) => {
                         const secondaryName = routeClientSecondaryName(
                           item.client,
@@ -777,18 +777,18 @@ export function RoutingPage() {
                         return (
                           <div
                             key={item.id}
-                            className="rounded-xl border border-line bg-white px-3 py-2"
+                            className="rounded-2xl border border-line bg-white px-3 py-3"
                           >
-                            <div className="flex items-start gap-2">
-                              <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-50 px-1.5 text-[10px] font-black text-brand">
+                            <div className="flex items-start gap-3">
+                              <span className="mt-0.5 inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-blue-50 px-2 text-[11px] font-black text-brand">
                                 {item.sequence}
                               </span>
-                              <div className="min-w-0">
-                                <div className="text-sm font-black leading-5 text-ink">
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-black leading-6 text-ink">
                                   {routeClientPrimaryName(item.client)}
                                 </div>
                                 {secondaryName ? (
-                                  <div className="mt-1 text-xs font-semibold text-slateText">
+                                  <div className="mt-1 text-xs font-semibold leading-5 text-slateText">
                                     Razao social: {secondaryName}
                                   </div>
                                 ) : null}
