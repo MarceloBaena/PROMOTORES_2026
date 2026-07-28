@@ -562,11 +562,23 @@ class RouteMapPage extends StatefulWidget {
 class _RouteMapPageState extends State<RouteMapPage> {
   RouteItemView? selectedItem;
 
+  List<RouteItemView> get orderedRouteItems =>
+      [...widget.routeItems]..sort((first, second) => first.sequence.compareTo(second.sequence));
+
   List<RouteItemView> get itemsWithCoordinates =>
-      widget.routeItems.where((item) => item.hasCoordinates).toList();
+      orderedRouteItems.where((item) => item.hasCoordinates).toList();
 
   List<RouteItemView> get itemsWithoutCoordinates =>
-      widget.routeItems.where((item) => !item.hasCoordinates).toList();
+      orderedRouteItems.where((item) => !item.hasCoordinates).toList();
+
+  RouteItemView? get currentRouteItem {
+    for (final item in orderedRouteItems) {
+      if (!item.isDone) {
+        return item;
+      }
+    }
+    return orderedRouteItems.isNotEmpty ? orderedRouteItems.first : null;
+  }
 
   LatLng get initialCenter {
     if (itemsWithCoordinates.isEmpty) {
@@ -613,7 +625,10 @@ class _RouteMapPageState extends State<RouteMapPage> {
   @override
   Widget build(BuildContext context) {
     final highlightedItem = selectedItem ??
+        currentRouteItem ??
         (itemsWithCoordinates.isNotEmpty ? itemsWithCoordinates.first : null);
+    final doneCount = orderedRouteItems.where((item) => item.isDone).length;
+    final pendingCount = orderedRouteItems.where((item) => !item.isDone).length;
 
     return AppShell(
       child: Column(
@@ -631,6 +646,31 @@ class _RouteMapPageState extends State<RouteMapPage> {
                   title: 'Mapa de apoio',
                   body:
                       'Veja os clientes com coordenadas salvas e use a navegacao externa para chegar ao ponto de venda.',
+                ),
+                const SizedBox(height: 12),
+                DashboardGrid(
+                  cards: [
+                    MetricData(
+                      'Rota total',
+                      orderedRouteItems.length.toString(),
+                      Icons.route,
+                    ),
+                    MetricData(
+                      'Cliente atual',
+                      currentRouteItem?.sequence.toString() ?? '-',
+                      Icons.navigation,
+                    ),
+                    MetricData(
+                      'Pendentes',
+                      pendingCount.toString(),
+                      Icons.pending_actions,
+                    ),
+                    MetricData(
+                      'Concluidos',
+                      doneCount.toString(),
+                      Icons.verified,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 if (itemsWithCoordinates.isEmpty)
@@ -659,9 +699,28 @@ class _RouteMapPageState extends State<RouteMapPage> {
                               'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                           userAgentPackageName: 'promotorpro_mobile',
                         ),
+                        if (itemsWithCoordinates.length > 1)
+                          PolylineLayer(
+                            polylines: [
+                              Polyline(
+                                points: itemsWithCoordinates
+                                    .map(
+                                      (item) => LatLng(
+                                        item.clientLatitude!,
+                                        item.clientLongitude!,
+                                      ),
+                                    )
+                                    .toList(),
+                                strokeWidth: 4,
+                                color: brandBlue.withValues(alpha: 0.7),
+                              ),
+                            ],
+                          ),
                         MarkerLayer(
                           markers: itemsWithCoordinates.map((item) {
                             final isSelected = selectedItem?.id == item.id;
+                            final isCurrent = currentRouteItem?.id == item.id;
+                            final isDone = item.isDone;
                             return Marker(
                               point: LatLng(
                                 item.clientLatitude!,
@@ -674,7 +733,13 @@ class _RouteMapPageState extends State<RouteMapPage> {
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 180),
                                   decoration: BoxDecoration(
-                                    color: isSelected ? brandGreen : brandBlue,
+                                    color: isCurrent
+                                        ? const Color(0xFFF59E0B)
+                                        : isDone
+                                        ? brandGreen
+                                        : isSelected
+                                        ? brandBlue
+                                        : const Color(0xFF334155),
                                     shape: BoxShape.circle,
                                     boxShadow: const [
                                       BoxShadow(
@@ -688,9 +753,15 @@ class _RouteMapPageState extends State<RouteMapPage> {
                                       width: 3,
                                     ),
                                   ),
-                                  child: const Icon(
-                                    Icons.storefront,
-                                    color: Colors.white,
+                                  child: Center(
+                                    child: Text(
+                                      '${item.sequence}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -701,9 +772,10 @@ class _RouteMapPageState extends State<RouteMapPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (highlightedItem != null)
+                if (highlightedItem != null)
                     _MapRouteItemCard(
                       item: highlightedItem,
+                      isCurrent: currentRouteItem?.id == highlightedItem.id,
                       onOpenVisit: () => widget.onOpenVisit(highlightedItem),
                       onOpenNavigation: highlightedItem.hasCoordinates
                           ? () => _openExternalNavigation(highlightedItem)
@@ -718,9 +790,10 @@ class _RouteMapPageState extends State<RouteMapPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                ...widget.routeItems.map(
+                ...orderedRouteItems.map(
                   (item) => _RouteMapListTile(
                     item: item,
+                    isCurrent: currentRouteItem?.id == item.id,
                     selected: selectedItem?.id == item.id,
                     onTap: item.hasCoordinates
                         ? () => setState(() => selectedItem = item)
@@ -751,11 +824,13 @@ class _RouteMapPageState extends State<RouteMapPage> {
 class _MapRouteItemCard extends StatelessWidget {
   const _MapRouteItemCard({
     required this.item,
+    required this.isCurrent,
     required this.onOpenVisit,
     required this.onOpenNavigation,
   });
 
   final RouteItemView item;
+  final bool isCurrent;
   final VoidCallback onOpenVisit;
   final VoidCallback? onOpenNavigation;
 
@@ -771,6 +846,25 @@ class _MapRouteItemCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MapStatusChip(
+                label: isCurrent ? 'Cliente atual' : (item.isDone ? 'Concluido' : 'Pendente'),
+                color: isCurrent
+                    ? const Color(0xFFF59E0B)
+                    : item.isDone
+                    ? brandGreen
+                    : brandBlue,
+              ),
+              _MapStatusChip(
+                label: 'Ordem ${item.sequence}',
+                color: brandNavy,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Text(
             item.clientName,
             style: Theme.of(
@@ -833,6 +927,7 @@ class _MapRouteItemCard extends StatelessWidget {
 class _RouteMapListTile extends StatelessWidget {
   const _RouteMapListTile({
     required this.item,
+    required this.isCurrent,
     required this.selected,
     required this.onTap,
     required this.onOpenVisit,
@@ -840,6 +935,7 @@ class _RouteMapListTile extends StatelessWidget {
   });
 
   final RouteItemView item;
+  final bool isCurrent;
   final bool selected;
   final VoidCallback? onTap;
   final VoidCallback onOpenVisit;
@@ -858,10 +954,19 @@ class _RouteMapListTile extends StatelessWidget {
         onTap: onTap,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: CircleAvatar(
-          backgroundColor: item.hasCoordinates ? brandBlue : const Color(0xFF94A3B8),
-          child: Icon(
-            item.hasCoordinates ? Icons.location_on : Icons.location_off,
-            color: Colors.white,
+          backgroundColor: isCurrent
+              ? const Color(0xFFF59E0B)
+              : item.isDone
+              ? brandGreen
+              : item.hasCoordinates
+              ? brandBlue
+              : const Color(0xFF94A3B8),
+          child: Text(
+            '${item.sequence}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
         title: Text(
@@ -880,11 +985,21 @@ class _RouteMapListTile extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                item.hasCoordinates
+                isCurrent
+                    ? 'Cliente atual da rota'
+                    : item.isDone
+                    ? 'Atendimento concluido'
+                    : item.hasCoordinates
                     ? 'GPS disponivel'
                     : 'Cliente sem coordenadas cadastradas',
                 style: TextStyle(
-                  color: item.hasCoordinates ? brandGreen : const Color(0xFFB45309),
+                  color: isCurrent
+                      ? const Color(0xFFF59E0B)
+                      : item.isDone
+                      ? brandGreen
+                      : item.hasCoordinates
+                      ? brandBlue
+                      : const Color(0xFFB45309),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -910,6 +1025,33 @@ class _RouteMapListTile extends StatelessWidget {
               child: const Text('Abrir navegacao'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MapStatusChip extends StatelessWidget {
+  const _MapStatusChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
