@@ -429,8 +429,12 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final pendingItems = widget.routeItems.where((item) => !item.isDone).toList();
-    final completedItems = widget.routeItems.where((item) => item.isDone).length;
+    final pendingItems = widget.routeItems
+        .where((item) => !item.isDone)
+        .toList();
+    final completedItems = widget.routeItems
+        .where((item) => item.isDone)
+        .length;
     return AppShell(
       child: Column(
         children: [
@@ -542,10 +546,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _HomeSectionSwitch extends StatelessWidget {
-  const _HomeSectionSwitch({
-    required this.showMap,
-    required this.onChange,
-  });
+  const _HomeSectionSwitch({required this.showMap, required this.onChange});
 
   final bool showMap;
   final ValueChanged<bool> onChange;
@@ -610,11 +611,7 @@ class _HomeSectionButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 18,
-                color: selected ? Colors.white : brandNavy,
-              ),
+              Icon(icon, size: 18, color: selected ? Colors.white : brandNavy),
               const SizedBox(width: 8),
               Text(
                 label,
@@ -648,9 +645,9 @@ class _HomeRouteListSection extends StatelessWidget {
       children: [
         Text(
           'Clientes para atendimento',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 10),
         if (pendingItems.isEmpty)
@@ -738,7 +735,8 @@ class _RouteMapContentState extends State<RouteMapContent> {
   final Distance _distance = const Distance();
 
   List<RouteItemView> get orderedRouteItems =>
-      [...widget.routeItems]..sort((first, second) => first.sequence.compareTo(second.sequence));
+      [...widget.routeItems]
+        ..sort((first, second) => first.sequence.compareTo(second.sequence));
 
   List<RouteItemView> get itemsWithCoordinates =>
       orderedRouteItems.where((item) => item.hasCoordinates).toList();
@@ -821,7 +819,8 @@ class _RouteMapContentState extends State<RouteMapContent> {
     final averageLat =
         latitudes.reduce((first, second) => first + second) / latitudes.length;
     final averageLng =
-        longitudes.reduce((first, second) => first + second) / longitudes.length;
+        longitudes.reduce((first, second) => first + second) /
+        longitudes.length;
     return LatLng(averageLat, averageLng);
   }
 
@@ -836,7 +835,9 @@ class _RouteMapContentState extends State<RouteMapContent> {
     final googleUri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
     );
-    final geoUri = Uri.parse('geo:$latitude,$longitude?q=$latitude,$longitude($encodedLabel)');
+    final geoUri = Uri.parse(
+      'geo:$latitude,$longitude?q=$latitude,$longitude($encodedLabel)',
+    );
 
     if (await canLaunchUrl(googleUri)) {
       await launchUrl(googleUri, mode: LaunchMode.externalApplication);
@@ -881,7 +882,10 @@ class _RouteMapContentState extends State<RouteMapContent> {
   }
 
   String _distanceLabel(RouteItemView? from, RouteItemView? to) {
-    if (from == null || to == null || !from.hasCoordinates || !to.hasCoordinates) {
+    if (from == null ||
+        to == null ||
+        !from.hasCoordinates ||
+        !to.hasCoordinates) {
       return 'Sem distancia estimada';
     }
 
@@ -921,13 +925,15 @@ class _RouteMapContentState extends State<RouteMapContent> {
     final pendingWithCoordinates = widget.routeItems.where(
       (item) => !item.isDone && item.hasCoordinates,
     );
-    final allWithCoordinates = widget.routeItems.where((item) => item.hasCoordinates);
+    final allWithCoordinates = widget.routeItems.where(
+      (item) => item.hasCoordinates,
+    );
 
     final initial = pendingWithCoordinates.isNotEmpty
         ? pendingWithCoordinates.first
         : allWithCoordinates.isNotEmpty
-            ? allWithCoordinates.first
-            : widget.routeItems.first;
+        ? allWithCoordinates.first
+        : widget.routeItems.first;
 
     if (initial.hasCoordinates) {
       selectedItem = initial;
@@ -936,7 +942,8 @@ class _RouteMapContentState extends State<RouteMapContent> {
 
   @override
   Widget build(BuildContext context) {
-    final highlightedItem = selectedItem ??
+    final highlightedItem =
+        selectedItem ??
         currentRouteItem ??
         (itemsWithCoordinates.isNotEmpty ? itemsWithCoordinates.first : null);
     final doneCount = orderedRouteItems.where((item) => item.isDone).length;
@@ -974,16 +981,8 @@ class _RouteMapContentState extends State<RouteMapContent> {
               pendingCount.toString(),
               Icons.pending_actions,
             ),
-            MetricData(
-              'Concluidos',
-              doneCount.toString(),
-              Icons.verified,
-            ),
-            MetricData(
-              'Proximo salto',
-              currentToNextLabel,
-              Icons.near_me,
-            ),
+            MetricData('Concluidos', doneCount.toString(), Icons.verified),
+            MetricData('Proximo salto', currentToNextLabel, Icons.near_me),
           ],
         ),
         const SizedBox(height: 12),
@@ -1005,8 +1004,8 @@ class _RouteMapContentState extends State<RouteMapContent> {
           onOpenCurrentVisit: currentRouteItem == null
               ? null
               : () => unawaited(_openVisit(currentRouteItem!)),
-          onOpenCurrentNavigation: currentRouteItem != null &&
-                  currentRouteItem!.hasCoordinates
+          onOpenCurrentNavigation:
+              currentRouteItem != null && currentRouteItem!.hasCoordinates
               ? () => _openExternalNavigation(currentRouteItem!)
               : null,
         ),
@@ -1017,7 +1016,9 @@ class _RouteMapContentState extends State<RouteMapContent> {
           children: [
             Expanded(
               child: SecondaryButton(
-                label: showOnlyPending ? 'Mostrar todos' : 'Mostrar so pendentes',
+                label: showOnlyPending
+                    ? 'Mostrar todos'
+                    : 'Mostrar so pendentes',
                 onPressed: () {
                   setState(() {
                     showOnlyPending = !showOnlyPending;
@@ -1034,7 +1035,8 @@ class _RouteMapContentState extends State<RouteMapContent> {
             Expanded(
               child: PrimaryButton(
                 label: 'Ir para proximo',
-                onPressed: nextPendingRouteItem != null &&
+                onPressed:
+                    nextPendingRouteItem != null &&
                         nextPendingRouteItem!.hasCoordinates
                     ? () => _focusOnItem(nextPendingRouteItem!)
                     : null,
@@ -1132,10 +1134,7 @@ class _RouteMapContentState extends State<RouteMapContent> {
                                 offset: Offset(0, 6),
                               ),
                             ],
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 3,
-                            ),
+                            border: Border.all(color: Colors.white, width: 3),
                           ),
                           child: Center(
                             child: Text(
@@ -1172,9 +1171,9 @@ class _RouteMapContentState extends State<RouteMapContent> {
         const SizedBox(height: 16),
         Text(
           'Clientes do roteiro',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 10),
         ...visibleRouteItems.map(
@@ -1245,22 +1244,18 @@ class _MapRouteItemCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _MapStatusChip(
-                label: isCurrent ? 'Cliente atual' : (item.isDone ? 'Concluido' : 'Pendente'),
+                label: isCurrent
+                    ? 'Cliente atual'
+                    : (item.isDone ? 'Concluido' : 'Pendente'),
                 color: isCurrent
                     ? const Color(0xFFF59E0B)
                     : item.isDone
                     ? brandGreen
                     : brandBlue,
               ),
-              _MapStatusChip(
-                label: 'Ordem ${item.sequence}',
-                color: brandNavy,
-              ),
+              _MapStatusChip(label: 'Ordem ${item.sequence}', color: brandNavy),
               if (distanceFromCurrent != null)
-                _MapStatusChip(
-                  label: distanceFromCurrent!,
-                  color: brandBlue,
-                ),
+                _MapStatusChip(label: distanceFromCurrent!, color: brandBlue),
             ],
           ),
           const SizedBox(height: 12),
@@ -1283,10 +1278,9 @@ class _MapRouteItemCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.clientName,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w900),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
             ],
@@ -1513,7 +1507,10 @@ class _MapNextStopCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(999),
@@ -1588,7 +1585,9 @@ class _MapNextStopCard extends StatelessWidget {
                 SizedBox(
                   width: 170,
                   child: PrimaryButton(
-                    label: currentItem != null ? 'Abrir atendimento' : 'Abrir proxima parada',
+                    label: currentItem != null
+                        ? 'Abrir atendimento'
+                        : 'Abrir proxima parada',
                     onPressed: onOpenCurrentVisit,
                   ),
                 ),
@@ -1752,14 +1751,8 @@ class _MapLegendCard extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: const [
-              _MapLegendItem(
-                color: Color(0xFFF59E0B),
-                label: 'Cliente atual',
-              ),
-              _MapLegendItem(
-                color: Color(0xFF10B981),
-                label: 'Concluido',
-              ),
+              _MapLegendItem(color: Color(0xFFF59E0B), label: 'Cliente atual'),
+              _MapLegendItem(color: Color(0xFF10B981), label: 'Concluido'),
               _MapLegendItem(
                 color: Color(0xFF2563EB),
                 label: 'Pendente com GPS',
@@ -1835,7 +1828,8 @@ class _VisitPageState extends State<VisitPage> {
   bool busy = false;
   String message = 'Pronto para iniciar atendimento.';
 
-  List<SupplierSnapshot> get clientSuppliers => suppliersFromPayload(client?.payload);
+  List<SupplierSnapshot> get clientSuppliers =>
+      suppliersFromPayload(client?.payload);
   List<LocalPhoto> get visitLevelPhotos =>
       photos.where((photo) => photo.supplierExecutionLocalId == null).toList();
   Set<String> get visitPhotoTypes =>
@@ -1852,15 +1846,12 @@ class _VisitPageState extends State<VisitPage> {
       findSupplierExecution(supplierExecutions, activeSupplierId);
   SupplierSnapshot? get activeSupplier =>
       supplierById(clientSuppliers, activeSupplierId);
-  List<SupplierSnapshot> get incompleteSuppliers => clientSuppliers
-      .where((supplier) {
-        final execution = findSupplierExecution(
-          supplierExecutions,
-          supplier.id,
-        );
-        return execution == null || execution.status != 'completed';
-      })
-      .toList();
+  List<SupplierSnapshot> get incompleteSuppliers => clientSuppliers.where((
+    supplier,
+  ) {
+    final execution = findSupplierExecution(supplierExecutions, supplier.id);
+    return execution == null || execution.status != 'completed';
+  }).toList();
   bool get allSuppliersCompleted =>
       legacyFlowEnabled || incompleteSuppliers.isEmpty;
 
@@ -1929,8 +1920,7 @@ class _VisitPageState extends State<VisitPage> {
       final created = await widget.repository.startVisit(widget.item);
       await _load();
       setState(
-        () => message =
-            legacyFlowEnabled
+        () => message = legacyFlowEnabled
             ? 'Atendimento iniciado offline. Agora capture check-in, antes, depois e check-out.'
             : 'Atendimento iniciado offline. Capture check-in, passe por todos os fornecedores e finalize com o check-out.',
       );
@@ -1990,11 +1980,13 @@ class _VisitPageState extends State<VisitPage> {
 
     final execution =
         activeSupplierExecution ??
-        await widget.repository.ensureSupplierExecution(currentVisit, supplier.id);
+        await widget.repository.ensureSupplierExecution(
+          currentVisit,
+          supplier.id,
+        );
 
     final effectiveDelivery = nextDeliveryReceived ?? deliveryReceived;
-    final normalizedProducts =
-        effectiveDelivery == false
+    final normalizedProducts = effectiveDelivery == false
         ? false
         : nextProductsReplenished ?? productsReplenished;
     final normalizedStockout = effectiveDelivery == false
@@ -2165,8 +2157,7 @@ class _VisitPageState extends State<VisitPage> {
       );
       await _load();
       setState(
-        () => message =
-            execution == null
+        () => message = execution == null
             ? '${photoLabel(type)} salva localmente com data, hora e GPS quando disponivel.'
             : '${photoLabel(type)} do fornecedor ${supplierLabel(supplier!)} salva localmente.',
       );
@@ -2182,8 +2173,7 @@ class _VisitPageState extends State<VisitPage> {
     if (currentVisit == null) return;
     if (!requiredReady) {
       setState(
-        () => message =
-            legacyFlowEnabled
+        () => message = legacyFlowEnabled
             ? 'Obrigatorio capturar check-in, foto antes, foto depois e check-out antes de encerrar.'
             : 'Obrigatorio capturar check-in, concluir todos os fornecedores e registrar o check-out antes de encerrar.',
       );
@@ -2212,6 +2202,11 @@ class _VisitPageState extends State<VisitPage> {
 
   @override
   Widget build(BuildContext context) {
+    final evidenceSections = buildLocalEvidenceSections(
+      photos,
+      clientSuppliers,
+    );
+
     return AppShell(
       child: Column(
         children: [
@@ -2277,14 +2272,15 @@ class _VisitPageState extends State<VisitPage> {
                       final executionPhotos = execution == null
                           ? <LocalPhoto>[]
                           : photos
-                              .where(
-                                (photo) =>
-                                    photo.supplierExecutionLocalId ==
-                                    execution.localId,
-                              )
-                              .toList();
-                      final executionTypes =
-                          executionPhotos.map((photo) => photo.type).toSet();
+                                .where(
+                                  (photo) =>
+                                      photo.supplierExecutionLocalId ==
+                                      execution.localId,
+                                )
+                                .toList();
+                      final executionTypes = executionPhotos
+                          .map((photo) => photo.type)
+                          .toSet();
                       return SupplierExecutionTile(
                         supplier: supplier,
                         status: execution?.status ?? 'pending',
@@ -2294,14 +2290,16 @@ class _VisitPageState extends State<VisitPage> {
                             execution?.deliveryReceived != null,
                         productsReplenishedAnswered:
                             execution?.productsReplenished != null,
-                        stockoutFoundAnswered:
-                            execution?.stockoutFound != null,
+                        stockoutFoundAnswered: execution?.stockoutFound != null,
                         active: activeSupplierId == supplier.id,
-                        onTap: busy ? null : () => _openSupplierExecution(supplier),
+                        onTap: busy
+                            ? null
+                            : () => _openSupplierExecution(supplier),
                       );
                     }),
                     const SizedBox(height: 12),
-                    if (activeSupplier != null && activeSupplierExecution != null)
+                    if (activeSupplier != null &&
+                        activeSupplierExecution != null)
                       SupplierExecutionEditor(
                         supplier: activeSupplier!,
                         hasBefore: photos.any(
@@ -2405,8 +2403,54 @@ class _VisitPageState extends State<VisitPage> {
                 ),
                 const SizedBox(height: 8),
                 if (photos.isEmpty) const Text('Nenhuma foto capturada ainda.'),
-                ...photos.map(
-                  (photo) => PhotoTile(photo: photo, suppliers: clientSuppliers),
+                ...evidenceSections.map(
+                  (section) => Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: line),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                section.title,
+                                style: const TextStyle(
+                                  color: brandNavy,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              if (section.subtitle?.trim().isNotEmpty ==
+                                  true) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  section.subtitle!,
+                                  style: const TextStyle(
+                                    color: Color(0xFF64748B),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...section.photos.map(
+                          (photo) => PhotoTile(
+                            photo: photo,
+                            suppliers: clientSuppliers,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -2723,7 +2767,7 @@ class AppRepository {
       gps == null
           ? 'Foto salva sem GPS disponivel.'
           : '${photoLabel(type)} salva com GPS.',
-      );
+    );
   }
 
   Future<void> finishVisit(LocalVisit visit, String notes) async {
@@ -2795,7 +2839,8 @@ class AppRepository {
     }
 
     if (suppliers.isEmpty) {
-      if (!visitLevelTypes.contains('before') || !visitLevelTypes.contains('after')) {
+      if (!visitLevelTypes.contains('before') ||
+          !visitLevelTypes.contains('after')) {
         throw Exception(
           'Nao e permitido encerrar sem check-in, foto antes, foto depois e check-out.',
         );
@@ -2815,11 +2860,7 @@ class AppRepository {
       final executionPhotos = photos
           .where((photo) => photo.supplierExecutionLocalId == execution.localId)
           .toList();
-      _assertSupplierExecutionReady(
-        execution,
-        executionPhotos,
-        supplier,
-      );
+      _assertSupplierExecutionReady(execution, executionPhotos, supplier);
     }
   }
 
@@ -2846,7 +2887,8 @@ class AppRepository {
       );
     }
 
-    if (execution.productsReplenished == null || execution.stockoutFound == null) {
+    if (execution.productsReplenished == null ||
+        execution.stockoutFound == null) {
       throw Exception(
         'Responda abastecimento e ruptura do fornecedor ${supplierLabel(supplier)}.',
       );
@@ -2885,7 +2927,11 @@ class AppRepository {
             'Fornecedor ${supplierLabel(supplier)} ainda nao tem execucao salva localmente.',
           );
         }
-        await _syncSupplierExecutionRecord(accessToken, serverVisitId, execution);
+        await _syncSupplierExecutionRecord(
+          accessToken,
+          serverVisitId,
+          execution,
+        );
       }
     }
 
@@ -2902,7 +2948,10 @@ class AppRepository {
     await db.updateVisitServerId(localId, finalServerId, 'synced');
   }
 
-  Future<void> _syncSupplierExecution(String accessToken, String localId) async {
+  Future<void> _syncSupplierExecution(
+    String accessToken,
+    String localId,
+  ) async {
     final execution = await db.getSupplierExecution(localId);
     if (execution == null) return;
     if (execution.serverId != null && execution.syncStatus == 'synced') {
@@ -3153,8 +3202,7 @@ class ApiClient {
     LocalPhoto photo, {
     String? supplierExecutionId,
     String? supplierId,
-  }
-  ) async {
+  }) async {
     final bytes = await File(photo.uri).readAsBytes();
     final response = await _request(
       '/visits/$visitId/photos/base64',
@@ -3852,16 +3900,17 @@ class SupplierSnapshot {
     return preferred;
   }
 
-  factory SupplierSnapshot.fromJson(Map<String, dynamic> json) => SupplierSnapshot(
-    id: json['id'] as String,
-    code: json['code']?.toString(),
-    name: (json['name'] as String?)?.trim().isNotEmpty == true
-        ? (json['name'] as String).trim()
-        : ((json['tradeName'] as String?) ?? 'Fornecedor').trim(),
-    tradeName: json['tradeName'] as String?,
-    document: json['document']?.toString(),
-    payload: json,
-  );
+  factory SupplierSnapshot.fromJson(Map<String, dynamic> json) =>
+      SupplierSnapshot(
+        id: json['id'] as String,
+        code: json['code']?.toString(),
+        name: (json['name'] as String?)?.trim().isNotEmpty == true
+            ? (json['name'] as String).trim()
+            : ((json['tradeName'] as String?) ?? 'Fornecedor').trim(),
+        tradeName: json['tradeName'] as String?,
+        document: json['document']?.toString(),
+        payload: json,
+      );
 }
 
 class SupplierCategorySnapshot {
@@ -4348,8 +4397,10 @@ class QueueDiagnostic {
     if (supplierId != null && payloadJson != null && payloadJson.isNotEmpty) {
       try {
         final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
-        supplierName = supplierById(suppliersFromPayload(payload), supplierId)
-            ?.displayName;
+        supplierName = supplierById(
+          suppliersFromPayload(payload),
+          supplierId,
+        )?.displayName;
       } catch (_) {}
     }
     return QueueDiagnostic(
@@ -4524,7 +4575,9 @@ List<SupplierSnapshot> suppliersFromPayload(Map<String, dynamic>? payload) {
       .toList();
 }
 
-List<SupplierCategorySnapshot> categoriesFromSupplier(SupplierSnapshot supplier) {
+List<SupplierCategorySnapshot> categoriesFromSupplier(
+  SupplierSnapshot supplier,
+) {
   final raw = supplier.payload['categories'];
   if (raw is! List) {
     return const <SupplierCategorySnapshot>[];
@@ -4540,7 +4593,9 @@ List<SupplierCategorySnapshot> categoriesFromSupplier(SupplierSnapshot supplier)
       .toList();
 }
 
-List<SupplierActivitySnapshot> activitiesFromSupplier(SupplierSnapshot supplier) {
+List<SupplierActivitySnapshot> activitiesFromSupplier(
+  SupplierSnapshot supplier,
+) {
   final raw = supplier.payload['activities'];
   if (raw is! List) {
     return const <SupplierActivitySnapshot>[];
@@ -4556,7 +4611,10 @@ List<SupplierActivitySnapshot> activitiesFromSupplier(SupplierSnapshot supplier)
       .toList();
 }
 
-SupplierSnapshot? supplierById(List<SupplierSnapshot> suppliers, String? supplierId) {
+SupplierSnapshot? supplierById(
+  List<SupplierSnapshot> suppliers,
+  String? supplierId,
+) {
   if (supplierId == null) return null;
   for (final supplier in suppliers) {
     if (supplier.id == supplierId) {
@@ -4581,7 +4639,8 @@ LocalSupplierExecution? findSupplierExecution(
 
 String supplierLabel(SupplierSnapshot supplier) => supplier.displayName;
 
-bool supplierRequiresDeliveryFlow(bool? deliveryReceived) => deliveryReceived != false;
+bool supplierRequiresDeliveryFlow(bool? deliveryReceived) =>
+    deliveryReceived != false;
 
 String answerLabel(bool? value) {
   if (value == null) return 'Nao informado';
@@ -5520,10 +5579,7 @@ class SupplierGuidanceCard extends StatelessWidget {
             const SizedBox(height: 16),
             const Text(
               'Categorias vinculadas',
-              style: TextStyle(
-                color: brandNavy,
-                fontWeight: FontWeight.w900,
-              ),
+              style: TextStyle(color: brandNavy, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 10),
             ...categories.map(
@@ -5581,10 +5637,7 @@ class SupplierGuidanceCard extends StatelessWidget {
             const SizedBox(height: 6),
             const Text(
               'Atividades para executar',
-              style: TextStyle(
-                color: brandNavy,
-                fontWeight: FontWeight.w900,
-              ),
+              style: TextStyle(color: brandNavy, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 10),
             ...activities.map(
@@ -5595,11 +5648,7 @@ class SupplierGuidanceCard extends StatelessWidget {
                   children: [
                     const Padding(
                       padding: EdgeInsets.only(top: 3),
-                      child: Icon(
-                        Icons.task_alt,
-                        size: 18,
-                        color: brandGreen,
-                      ),
+                      child: Icon(Icons.task_alt, size: 18, color: brandGreen),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -5643,10 +5692,7 @@ class BooleanAnswerField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: brandNavy,
-            fontWeight: FontWeight.w900,
-          ),
+          style: const TextStyle(color: brandNavy, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
         Row(
@@ -5773,6 +5819,159 @@ class _MiniStatusChip extends StatelessWidget {
   }
 }
 
+class LocalEvidenceSection {
+  const LocalEvidenceSection({
+    required this.title,
+    required this.photos,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+  final List<LocalPhoto> photos;
+}
+
+int _localEvidenceTimestamp(LocalPhoto photo) {
+  final parsed = DateTime.tryParse(photo.capturedAt);
+  return parsed?.millisecondsSinceEpoch ?? 0;
+}
+
+String _localEvidenceSupplierLabel(
+  LocalPhoto photo,
+  List<SupplierSnapshot> suppliers,
+) {
+  final supplier = supplierById(suppliers, photo.supplierId);
+  return supplier == null ? '' : supplierLabel(supplier).trim();
+}
+
+int _localEvidenceVisitGroupOrder(LocalPhoto photo) {
+  final hasSupplier =
+      (photo.supplierExecutionLocalId?.trim().isNotEmpty ?? false) ||
+      (photo.supplierId?.trim().isNotEmpty ?? false);
+
+  if (!hasSupplier && photo.type == 'checkin') {
+    return 0;
+  }
+
+  if (!hasSupplier && (photo.type == 'before' || photo.type == 'after')) {
+    return 1;
+  }
+
+  if (hasSupplier) {
+    return 2;
+  }
+
+  if (!hasSupplier && photo.type == 'checkout') {
+    return 3;
+  }
+
+  return 4;
+}
+
+int _localEvidenceBucketOrder(LocalPhoto photo) {
+  const visitLevelOrder = <String, int>{
+    'checkin': 0,
+    'before': 1,
+    'after': 2,
+    'checkout': 98,
+  };
+  const supplierLevelOrder = <String, int>{
+    'supplier_before': 10,
+    'supplier_after': 40,
+  };
+
+  final hasSupplier =
+      (photo.supplierExecutionLocalId?.trim().isNotEmpty ?? false) ||
+      (photo.supplierId?.trim().isNotEmpty ?? false);
+
+  if (hasSupplier) {
+    return supplierLevelOrder[photo.type] ?? 90;
+  }
+
+  return visitLevelOrder[photo.type] ?? 80;
+}
+
+List<LocalPhoto> sortLocalVisitEvidence(
+  List<LocalPhoto> photos,
+  List<SupplierSnapshot> suppliers,
+) {
+  final ordered = [...photos];
+  ordered.sort((left, right) {
+    final groupDiff =
+        _localEvidenceVisitGroupOrder(left) -
+        _localEvidenceVisitGroupOrder(right);
+    if (groupDiff != 0) {
+      return groupDiff;
+    }
+
+    final supplierDiff = _localEvidenceSupplierLabel(
+      left,
+      suppliers,
+    ).compareTo(_localEvidenceSupplierLabel(right, suppliers));
+    if (supplierDiff != 0) {
+      return supplierDiff;
+    }
+
+    final bucketDiff =
+        _localEvidenceBucketOrder(left) - _localEvidenceBucketOrder(right);
+    if (bucketDiff != 0) {
+      return bucketDiff;
+    }
+
+    return _localEvidenceTimestamp(left) - _localEvidenceTimestamp(right);
+  });
+  return ordered;
+}
+
+List<LocalEvidenceSection> buildLocalEvidenceSections(
+  List<LocalPhoto> photos,
+  List<SupplierSnapshot> suppliers,
+) {
+  final ordered = sortLocalVisitEvidence(photos, suppliers);
+  final general = <LocalPhoto>[];
+  final supplierBuckets = <String, List<LocalPhoto>>{};
+  final supplierNames = <String, String>{};
+
+  for (final photo in ordered) {
+    final supplierLabelValue = _localEvidenceSupplierLabel(photo, suppliers);
+    if (supplierLabelValue.isEmpty) {
+      general.add(photo);
+      continue;
+    }
+
+    final supplierKey =
+        photo.supplierExecutionLocalId?.trim().isNotEmpty == true
+        ? photo.supplierExecutionLocalId!.trim()
+        : supplierLabelValue;
+    supplierNames[supplierKey] = supplierLabelValue;
+    supplierBuckets.putIfAbsent(supplierKey, () => <LocalPhoto>[]).add(photo);
+  }
+
+  final sections = <LocalEvidenceSection>[];
+
+  if (general.isNotEmpty) {
+    sections.add(
+      LocalEvidenceSection(
+        title: 'Etapas gerais da visita',
+        subtitle: 'Check-in, evidencias gerais e check-out do atendimento.',
+        photos: general,
+      ),
+    );
+  }
+
+  for (final entry in supplierBuckets.entries) {
+    sections.add(
+      LocalEvidenceSection(
+        title: 'Fornecedor: ${supplierNames[entry.key] ?? entry.key}',
+        subtitle: 'Fotos organizadas na ordem operacional deste fornecedor.',
+        photos: entry.value,
+      ),
+    );
+  }
+
+  return sections;
+}
+
 class PhotoTile extends StatelessWidget {
   const PhotoTile({super.key, required this.photo, required this.suppliers});
 
@@ -5816,14 +6015,16 @@ class DiagnosticCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final entityLabel = switch (item.kind) {
       'visit' => 'Visita',
-      'supplierExecution' => item.supplierName == null
-          ? 'Fornecedor'
-          : 'Fornecedor ${item.supplierName}',
-      'photo' => item.supplierName == null
-          ? item.photoType == null
-              ? 'Foto'
-              : 'Foto ${photoLabel(item.photoType!).toLowerCase()}'
-          : 'Foto ${photoLabel(item.photoType ?? 'occurrence_extra').toLowerCase()} de ${item.supplierName}',
+      'supplierExecution' =>
+        item.supplierName == null
+            ? 'Fornecedor'
+            : 'Fornecedor ${item.supplierName}',
+      'photo' =>
+        item.supplierName == null
+            ? item.photoType == null
+                  ? 'Foto'
+                  : 'Foto ${photoLabel(item.photoType!).toLowerCase()}'
+            : 'Foto ${photoLabel(item.photoType ?? 'occurrence_extra').toLowerCase()} de ${item.supplierName}',
       _ => item.kind,
     };
     return Card(

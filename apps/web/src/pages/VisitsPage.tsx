@@ -265,6 +265,73 @@ function photoSupplierLabel(photo: VisitPhoto) {
   );
 }
 
+function photoCategoryLabel(photo: VisitPhoto) {
+  return photo.metadata?.categoryName?.trim() || null;
+}
+
+function photoActivityLabel(photo: VisitPhoto) {
+  return photo.metadata?.activityName?.trim() || null;
+}
+
+function visitEvidenceSectionLabel(photo: VisitPhoto) {
+  const supplier = photoSupplierLabel(photo);
+  if (!supplier) {
+    return "Etapas gerais da visita";
+  }
+
+  const category = photoCategoryLabel(photo);
+  const activity = photoActivityLabel(photo);
+  if (category && activity) {
+    return `${supplier} • ${category} • ${activity}`;
+  }
+  if (category) {
+    return `${supplier} • ${category}`;
+  }
+  if (activity) {
+    return `${supplier} • ${activity}`;
+  }
+
+  return supplier;
+}
+
+function buildVisitEvidenceSections(visit: Visit) {
+  const ordered = sortVisitEvidence(visit.photos);
+  const sections: Array<{
+    key: string;
+    title: string;
+    subtitle: string;
+    photos: VisitPhoto[];
+  }> = [];
+
+  for (const photo of ordered) {
+    const supplier = photoSupplierLabel(photo);
+    const key = supplier
+      ? `supplier:${visitEvidenceSectionLabel(photo)}`
+      : "visit:general";
+    const title = supplier
+      ? `Fornecedor: ${visitEvidenceSectionLabel(photo)}`
+      : "Etapas gerais da visita";
+    const subtitle = supplier
+      ? "Fotos organizadas por fornecedor, categoria e atividade."
+      : "Check-in, evidencias gerais e check-out do atendimento.";
+
+    const existing = sections.find((section) => section.key === key);
+    if (existing) {
+      existing.photos.push(photo);
+      continue;
+    }
+
+    sections.push({
+      key,
+      title,
+      subtitle,
+      photos: [photo],
+    });
+  }
+
+  return sections;
+}
+
 function clientNameBlock(client: Visit["client"]) {
   const tradeName = client.tradeName?.trim();
   return (
@@ -387,6 +454,10 @@ export function VisitsPage() {
   );
   const selectedVisitPhotos = useMemo(
     () => (selectedVisit ? sortVisitEvidence(selectedVisit.photos) : []),
+    [selectedVisit],
+  );
+  const selectedVisitPhotoSections = useMemo(
+    () => (selectedVisit ? buildVisitEvidenceSections(selectedVisit) : []),
     [selectedVisit],
   );
 
@@ -800,70 +871,92 @@ export function VisitsPage() {
                   </span>
                 </div>
 
-                <div className="space-y-3">
-                  {selectedVisitPhotos.map((photo) => {
-                    const evidence = photoEvidence(photo, selectedVisit);
-
-                    return (
-                      <div
-                        key={photo.id}
-                        className="overflow-hidden rounded-2xl border border-line bg-white"
-                      >
-                        <button
-                          type="button"
-                          className="group relative block w-full overflow-hidden text-left"
-                          onClick={() => setSelectedPhotoId(photo.id)}
-                          aria-label={`Ampliar evidencia ${photoTitle(photo)}`}
-                        >
-                          <img
-                            className="h-44 w-full object-cover transition duration-200 group-hover:scale-[1.03]"
-                            src={photoUrl(photo.url)}
-                            alt={photoTitle(photo)}
-                          />
-                          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-navy/85 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-white shadow-lg">
-                            <Maximize2 className="h-3.5 w-3.5" />
-                            Ampliar
-                          </span>
-                        </button>
-                        <div className="space-y-2 p-3 text-sm">
-                          <div className="font-black text-ink">
-                            {photoTitle(photo)}
-                          </div>
-                          {photoSupplierLabel(photo) ? (
-                            <div className="text-xs font-bold text-slateText">
-                              Fornecedor: {photoSupplierLabel(photo)}
-                            </div>
-                          ) : null}
-                          {photo.metadata?.categoryName?.trim() ? (
-                            <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-brand">
-                              Categoria: {photo.metadata.categoryName.trim()}
-                            </div>
-                          ) : null}
-                          {photo.metadata?.activityName?.trim() ? (
-                            <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">
-                              Atividade: {photo.metadata.activityName.trim()}
-                            </div>
-                          ) : null}
-                          <div className="grid gap-2 rounded-xl bg-muted/50 p-3 text-xs font-semibold text-stone-600">
-                            <div>
-                              <span className="font-black text-ink">Data:</span>{" "}
-                              {formatOnlyDate(evidence.capturedAt)}
-                            </div>
-                            <div>
-                              <span className="font-black text-ink">Hora:</span>{" "}
-                              {formatOnlyTime(evidence.capturedAt)}
-                            </div>
-                            <div>
-                              <span className="font-black text-ink">
-                                {evidence.gpsLabel}:
-                              </span>{" "}
-                              {evidence.gpsValue}
-                            </div>
-                          </div>
+                <div className="space-y-4">
+                  {selectedVisitPhotoSections.map((section) => (
+                    <div
+                      key={section.key}
+                      className="rounded-[1.35rem] border border-line bg-field/40 p-3"
+                    >
+                      <div className="mb-3 rounded-2xl border border-line bg-white px-4 py-3">
+                        <div className="text-sm font-black text-ink">
+                          {section.title}
+                        </div>
+                        <div className="mt-1 text-xs font-semibold text-stone-500">
+                          {section.subtitle}
                         </div>
                       </div>
-                    );
-                  })}
+
+                      <div className="space-y-3">
+                        {section.photos.map((photo) => {
+                          const evidence = photoEvidence(photo, selectedVisit);
+
+                          return (
+                            <div
+                              key={photo.id}
+                              className="overflow-hidden rounded-2xl border border-line bg-white"
+                            >
+                              <button
+                                type="button"
+                                className="group relative block w-full overflow-hidden text-left"
+                                onClick={() => setSelectedPhotoId(photo.id)}
+                                aria-label={`Ampliar evidencia ${photoTitle(photo)}`}
+                              >
+                                <img
+                                  className="h-44 w-full object-cover transition duration-200 group-hover:scale-[1.03]"
+                                  src={photoUrl(photo.url)}
+                                  alt={photoTitle(photo)}
+                                />
+                                <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-navy/85 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-white shadow-lg">
+                                  <Maximize2 className="h-3.5 w-3.5" />
+                                  Ampliar
+                                </span>
+                              </button>
+                              <div className="space-y-2 p-3 text-sm">
+                                <div className="font-black text-ink">
+                                  {photoTitle(photo)}
+                                </div>
+                                {photoSupplierLabel(photo) ? (
+                                  <div className="text-xs font-bold text-slateText">
+                                    Fornecedor: {photoSupplierLabel(photo)}
+                                  </div>
+                                ) : null}
+                                {photo.metadata?.categoryName?.trim() ? (
+                                  <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-brand">
+                                    Categoria: {photo.metadata.categoryName.trim()}
+                                  </div>
+                                ) : null}
+                                {photo.metadata?.activityName?.trim() ? (
+                                  <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                                    Atividade: {photo.metadata.activityName.trim()}
+                                  </div>
+                                ) : null}
+                                <div className="grid gap-2 rounded-xl bg-muted/50 p-3 text-xs font-semibold text-stone-600">
+                                  <div>
+                                    <span className="font-black text-ink">
+                                      Data:
+                                    </span>{" "}
+                                    {formatOnlyDate(evidence.capturedAt)}
+                                  </div>
+                                  <div>
+                                    <span className="font-black text-ink">
+                                      Hora:
+                                    </span>{" "}
+                                    {formatOnlyTime(evidence.capturedAt)}
+                                  </div>
+                                  <div>
+                                    <span className="font-black text-ink">
+                                      {evidence.gpsLabel}:
+                                    </span>{" "}
+                                    {evidence.gpsValue}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                   {selectedVisit.photos.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-line bg-muted/40 p-4 text-sm font-semibold text-stone-500">
                       Nenhuma foto chegou para esta visita ainda.
