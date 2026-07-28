@@ -21,7 +21,8 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
-const appVersionLabel = 'APK Flutter v1.1.12 (build 15)';
+const maxEvidencePhotosPerCategoryOrActivity = 5;
+const appVersionLabel = 'APK Flutter v1.1.13 (build 16)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -2244,20 +2245,26 @@ class _VisitPageState extends State<VisitPage> {
       return;
     }
 
+    final categoryPhotoCount = category == null
+        ? 0
+        : scopedPhotos.where((photo) => photo.categoryId == category.id).length;
     if (category != null &&
-        scopedPhotos.any((photo) => photo.categoryId == category.id)) {
+        categoryPhotoCount >= maxEvidencePhotosPerCategoryOrActivity) {
       setState(
         () => message =
-            'A foto da categoria ${category.displayName} ja foi capturada para o fornecedor ${supplierLabel(supplier!)}.',
+            'A categoria ${category.displayName} ja atingiu o limite de $maxEvidencePhotosPerCategoryOrActivity fotos para o fornecedor ${supplierLabel(supplier!)}.',
       );
       return;
     }
 
+    final activityPhotoCount = activity == null
+        ? 0
+        : scopedPhotos.where((photo) => photo.activityId == activity.id).length;
     if (activity != null &&
-        scopedPhotos.any((photo) => photo.activityId == activity.id)) {
+        activityPhotoCount >= maxEvidencePhotosPerCategoryOrActivity) {
       setState(
         () => message =
-            'A evidencia da atividade ${activity.displayName} ja foi capturada para o fornecedor ${supplierLabel(supplier!)}.',
+            'A atividade ${activity.displayName} ja atingiu o limite de $maxEvidencePhotosPerCategoryOrActivity fotos para o fornecedor ${supplierLabel(supplier!)}.',
       );
       return;
     }
@@ -2287,9 +2294,9 @@ class _VisitPageState extends State<VisitPage> {
         () => message = execution == null
             ? '${photoLabel(type)} salva localmente com data, hora e GPS quando disponivel.'
             : category != null
-            ? 'Foto da categoria ${category.displayName} salva para o fornecedor ${supplierLabel(supplier!)}.'
+            ? 'Foto da categoria ${category.displayName} salva para o fornecedor ${supplierLabel(supplier!)} (${categoryPhotoCount + 1}/$maxEvidencePhotosPerCategoryOrActivity).'
             : activity != null
-            ? 'Evidencia da atividade ${activity.displayName} salva para o fornecedor ${supplierLabel(supplier!)}.'
+            ? 'Evidencia da atividade ${activity.displayName} salva para o fornecedor ${supplierLabel(supplier!)} (${activityPhotoCount + 1}/$maxEvidencePhotosPerCategoryOrActivity).'
             : '${photoLabel(type)} do fornecedor ${supplierLabel(supplier!)} salva localmente.',
       );
     } catch (error) {
@@ -2458,24 +2465,20 @@ class _VisitPageState extends State<VisitPage> {
                         stockoutFound: stockoutFound,
                         notesController: supplierNotesController,
                         busy: busy,
-                        categoryPhotoIds: photos
-                            .where(
-                              (photo) =>
-                                  photo.supplierExecutionLocalId ==
-                                  activeSupplierExecution!.localId,
-                            )
-                            .map((photo) => photo.categoryId)
-                            .whereType<String>()
-                            .toSet(),
-                        activityPhotoIds: photos
-                            .where(
-                              (photo) =>
-                                  photo.supplierExecutionLocalId ==
-                                  activeSupplierExecution!.localId,
-                            )
-                            .map((photo) => photo.activityId)
-                            .whereType<String>()
-                            .toSet(),
+                        categoryPhotoCounts: countPhotosByCategoryId(
+                          photos.where(
+                            (photo) =>
+                                photo.supplierExecutionLocalId ==
+                                activeSupplierExecution!.localId,
+                          ),
+                        ),
+                        activityPhotoCounts: countPhotosByActivityId(
+                          photos.where(
+                            (photo) =>
+                                photo.supplierExecutionLocalId ==
+                                activeSupplierExecution!.localId,
+                          ),
+                        ),
                         onCaptureBefore: () => _capture(
                           'supplier_before',
                           supplier: activeSupplier!,
@@ -4770,6 +4773,30 @@ Map<String, dynamic> compactPayload(Map<String, dynamic> input) {
   return output;
 }
 
+Map<String, int> countPhotosByCategoryId(Iterable<LocalPhoto> photos) {
+  final counts = <String, int>{};
+  for (final photo in photos) {
+    final categoryId = photo.categoryId?.trim();
+    if (categoryId == null || categoryId.isEmpty) {
+      continue;
+    }
+    counts[categoryId] = (counts[categoryId] ?? 0) + 1;
+  }
+  return counts;
+}
+
+Map<String, int> countPhotosByActivityId(Iterable<LocalPhoto> photos) {
+  final counts = <String, int>{};
+  for (final photo in photos) {
+    final activityId = photo.activityId?.trim();
+    if (activityId == null || activityId.isEmpty) {
+      continue;
+    }
+    counts[activityId] = (counts[activityId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 Future<bool?> confirmAction(
   BuildContext context, {
   required String title,
@@ -5702,11 +5729,13 @@ class EvidenceButton extends StatelessWidget {
     required this.label,
     required this.ok,
     required this.onPressed,
+    this.counter,
   });
 
   final String label;
   final bool ok;
   final VoidCallback? onPressed;
+  final String? counter;
 
   @override
   Widget build(BuildContext context) {
@@ -5720,9 +5749,23 @@ class EvidenceButton extends StatelessWidget {
         ),
         label: Align(
           alignment: Alignment.centerLeft,
-          child: Text(
-            ok ? '$label capturada' : label,
-            style: const TextStyle(fontWeight: FontWeight.w900),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  ok ? '$label capturada' : label,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              if (counter != null)
+                Text(
+                  counter!,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+            ],
           ),
         ),
         style: OutlinedButton.styleFrom(
@@ -5880,8 +5923,8 @@ class SupplierExecutionEditor extends StatelessWidget {
     required this.stockoutFound,
     required this.notesController,
     required this.busy,
-    required this.categoryPhotoIds,
-    required this.activityPhotoIds,
+    required this.categoryPhotoCounts,
+    required this.activityPhotoCounts,
     required this.onCaptureBefore,
     required this.onCaptureAfter,
     required this.onCaptureCategory,
@@ -5902,8 +5945,8 @@ class SupplierExecutionEditor extends StatelessWidget {
   final bool? stockoutFound;
   final TextEditingController notesController;
   final bool busy;
-  final Set<String> categoryPhotoIds;
-  final Set<String> activityPhotoIds;
+  final Map<String, int> categoryPhotoCounts;
+  final Map<String, int> activityPhotoCounts;
   final VoidCallback onCaptureBefore;
   final VoidCallback onCaptureAfter;
   final FutureOr<void> Function(SupplierCategorySnapshot category)
@@ -5969,8 +6012,8 @@ class SupplierExecutionEditor extends StatelessWidget {
             SupplierGuidanceCard(
               categories: categories,
               activities: activities,
-              categoryPhotoIds: categoryPhotoIds,
-              activityPhotoIds: activityPhotoIds,
+              categoryPhotoCounts: categoryPhotoCounts,
+              activityPhotoCounts: activityPhotoCounts,
               busy: busy,
               onCaptureCategory: onCaptureCategory,
               onCaptureActivity: onCaptureActivity,
@@ -6068,8 +6111,8 @@ class SupplierGuidanceCard extends StatelessWidget {
     super.key,
     required this.categories,
     required this.activities,
-    required this.categoryPhotoIds,
-    required this.activityPhotoIds,
+    required this.categoryPhotoCounts,
+    required this.activityPhotoCounts,
     required this.busy,
     required this.onCaptureCategory,
     required this.onCaptureActivity,
@@ -6077,8 +6120,8 @@ class SupplierGuidanceCard extends StatelessWidget {
 
   final List<SupplierCategorySnapshot> categories;
   final List<SupplierActivitySnapshot> activities;
-  final Set<String> categoryPhotoIds;
-  final Set<String> activityPhotoIds;
+  final Map<String, int> categoryPhotoCounts;
+  final Map<String, int> activityPhotoCounts;
   final bool busy;
   final FutureOr<void> Function(SupplierCategorySnapshot category)
   onCaptureCategory;
@@ -6161,8 +6204,8 @@ class SupplierGuidanceCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                categoryPhotoIds.contains(category.id)
-                                    ? 'Foto da categoria ja registrada.'
+                                (categoryPhotoCounts[category.id] ?? 0) > 0
+                                    ? 'Fotos registradas: ${categoryPhotoCounts[category.id] ?? 0}/$maxEvidencePhotosPerCategoryOrActivity.'
                                     : 'Capture a foto desta categoria para comprovar a execucao.',
                                 style: const TextStyle(
                                   color: Color(0xFF64748B),
@@ -6177,8 +6220,12 @@ class SupplierGuidanceCard extends StatelessWidget {
                     const SizedBox(height: 12),
                     EvidenceButton(
                       label: 'Foto da categoria',
-                      ok: categoryPhotoIds.contains(category.id),
+                      ok: (categoryPhotoCounts[category.id] ?? 0) > 0,
+                      counter:
+                          '${categoryPhotoCounts[category.id] ?? 0}/$maxEvidencePhotosPerCategoryOrActivity',
                       onPressed: busy
+                          || (categoryPhotoCounts[category.id] ?? 0) >=
+                              maxEvidencePhotosPerCategoryOrActivity
                           ? null
                           : () {
                               final result = onCaptureCategory(category);
@@ -6237,8 +6284,12 @@ class SupplierGuidanceCard extends StatelessWidget {
                     const SizedBox(height: 10),
                     EvidenceButton(
                       label: 'Evidencia da atividade',
-                      ok: activityPhotoIds.contains(activity.id),
+                      ok: (activityPhotoCounts[activity.id] ?? 0) > 0,
+                      counter:
+                          '${activityPhotoCounts[activity.id] ?? 0}/$maxEvidencePhotosPerCategoryOrActivity',
                       onPressed: busy
+                          || (activityPhotoCounts[activity.id] ?? 0) >=
+                              maxEvidencePhotosPerCategoryOrActivity
                           ? null
                           : () {
                               final result = onCaptureActivity(activity);
