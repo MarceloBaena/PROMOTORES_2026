@@ -560,13 +560,22 @@ class RouteMapPage extends StatefulWidget {
 }
 
 class _RouteMapPageState extends State<RouteMapPage> {
+  final MapController mapController = MapController();
   RouteItemView? selectedItem;
+  bool showOnlyPending = false;
 
   List<RouteItemView> get orderedRouteItems =>
       [...widget.routeItems]..sort((first, second) => first.sequence.compareTo(second.sequence));
 
   List<RouteItemView> get itemsWithCoordinates =>
       orderedRouteItems.where((item) => item.hasCoordinates).toList();
+
+  List<RouteItemView> get visibleRouteItems => showOnlyPending
+      ? orderedRouteItems.where((item) => !item.isDone).toList()
+      : orderedRouteItems;
+
+  List<RouteItemView> get visibleItemsWithCoordinates =>
+      visibleRouteItems.where((item) => item.hasCoordinates).toList();
 
   List<RouteItemView> get itemsWithoutCoordinates =>
       orderedRouteItems.where((item) => !item.hasCoordinates).toList();
@@ -578,6 +587,23 @@ class _RouteMapPageState extends State<RouteMapPage> {
       }
     }
     return orderedRouteItems.isNotEmpty ? orderedRouteItems.first : null;
+  }
+
+  RouteItemView? get nextPendingRouteItem {
+    if (selectedItem == null) {
+      return currentRouteItem;
+    }
+
+    var afterSelected = false;
+    for (final item in orderedRouteItems) {
+      if (afterSelected && !item.isDone) {
+        return item;
+      }
+      if (item.id == selectedItem!.id) {
+        afterSelected = true;
+      }
+    }
+    return currentRouteItem;
   }
 
   LatLng get initialCenter {
@@ -619,6 +645,41 @@ class _RouteMapPageState extends State<RouteMapPage> {
 
     if (await canLaunchUrl(geoUri)) {
       await launchUrl(geoUri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _focusOnItem(RouteItemView item, {double zoom = 15}) {
+    if (!item.hasCoordinates) {
+      return;
+    }
+
+    setState(() => selectedItem = item);
+    mapController.move(
+      LatLng(item.clientLatitude!, item.clientLongitude!),
+      zoom,
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.routeItems.isEmpty) {
+      return;
+    }
+
+    final pendingWithCoordinates = widget.routeItems.where(
+      (item) => !item.isDone && item.hasCoordinates,
+    );
+    final allWithCoordinates = widget.routeItems.where((item) => item.hasCoordinates);
+
+    final initial = pendingWithCoordinates.isNotEmpty
+        ? pendingWithCoordinates.first
+        : allWithCoordinates.isNotEmpty
+        ? allWithCoordinates.first
+        : widget.routeItems.first;
+
+    if (initial.hasCoordinates) {
+      selectedItem = initial;
     }
   }
 
@@ -673,7 +734,39 @@ class _RouteMapPageState extends State<RouteMapPage> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (itemsWithCoordinates.isEmpty)
+                Row(
+                  children: [
+                    Expanded(
+                      child: SecondaryButton(
+                        label: showOnlyPending
+                            ? 'Mostrar todos'
+                            : 'Mostrar so pendentes',
+                        onPressed: () {
+                          setState(() {
+                            showOnlyPending = !showOnlyPending;
+                            if (showOnlyPending &&
+                                selectedItem != null &&
+                                selectedItem!.isDone) {
+                              selectedItem = nextPendingRouteItem;
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: PrimaryButton(
+                        label: 'Ir para proximo',
+                        onPressed: nextPendingRouteItem != null &&
+                                nextPendingRouteItem!.hasCoordinates
+                            ? () => _focusOnItem(nextPendingRouteItem!)
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (visibleItemsWithCoordinates.isEmpty)
                   const EmptyState(
                     title: 'Nenhum cliente com coordenadas',
                     body:
@@ -689,8 +782,14 @@ class _RouteMapPageState extends State<RouteMapPage> {
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: FlutterMap(
+                      mapController: mapController,
                       options: MapOptions(
-                        initialCenter: initialCenter,
+                        initialCenter: highlightedItem?.hasCoordinates == true
+                            ? LatLng(
+                                highlightedItem!.clientLatitude!,
+                                highlightedItem.clientLongitude!,
+                              )
+                            : initialCenter,
                         initialZoom: 12,
                       ),
                       children: [
@@ -699,11 +798,11 @@ class _RouteMapPageState extends State<RouteMapPage> {
                               'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                           userAgentPackageName: 'promotorpro_mobile',
                         ),
-                        if (itemsWithCoordinates.length > 1)
+                        if (visibleItemsWithCoordinates.length > 1)
                           PolylineLayer(
                             polylines: [
                               Polyline(
-                                points: itemsWithCoordinates
+                                points: visibleItemsWithCoordinates
                                     .map(
                                       (item) => LatLng(
                                         item.clientLatitude!,
@@ -717,7 +816,7 @@ class _RouteMapPageState extends State<RouteMapPage> {
                             ],
                           ),
                         MarkerLayer(
-                          markers: itemsWithCoordinates.map((item) {
+                          markers: visibleItemsWithCoordinates.map((item) {
                             final isSelected = selectedItem?.id == item.id;
                             final isCurrent = currentRouteItem?.id == item.id;
                             final isDone = item.isDone;
@@ -729,7 +828,7 @@ class _RouteMapPageState extends State<RouteMapPage> {
                               width: 52,
                               height: 52,
                               child: GestureDetector(
-                                onTap: () => setState(() => selectedItem = item),
+                                onTap: () => _focusOnItem(item, zoom: 16),
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 180),
                                   decoration: BoxDecoration(
@@ -790,13 +889,13 @@ class _RouteMapPageState extends State<RouteMapPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                ...orderedRouteItems.map(
+                ...visibleRouteItems.map(
                   (item) => _RouteMapListTile(
                     item: item,
                     isCurrent: currentRouteItem?.id == item.id,
                     selected: selectedItem?.id == item.id,
                     onTap: item.hasCoordinates
-                        ? () => setState(() => selectedItem = item)
+                        ? () => _focusOnItem(item)
                         : null,
                     onOpenVisit: () => widget.onOpenVisit(item),
                     onOpenNavigation: item.hasCoordinates
