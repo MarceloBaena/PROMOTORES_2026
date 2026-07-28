@@ -670,11 +670,11 @@ export function RoutingPage() {
                             {index + 1}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-black text-ink">
+                            <span className="block break-words text-sm font-black leading-6 text-ink">
                               {clientHeadline(client)}
                             </span>
                             {secondaryLine ? (
-                              <span className="mt-1 block text-xs font-semibold leading-5 text-slateText">
+                              <span className="mt-1 block break-words text-xs font-semibold leading-5 text-slateText">
                                 {secondaryLine}
                               </span>
                             ) : null}
@@ -816,8 +816,9 @@ export function RoutingPage() {
                   </div>
 
                   {route.items.length > 0 ? (
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 grid gap-2 lg:grid-cols-2">
                       {route.items.map((item) => {
+                        const primaryName = routeClientPrimaryName(item.client);
                         const secondaryName = routeClientSecondaryName(
                           item.client,
                         );
@@ -825,21 +826,33 @@ export function RoutingPage() {
                         return (
                           <div
                             key={item.id}
-                            className="rounded-2xl border border-line bg-white px-3 py-3"
+                            className="rounded-2xl border border-line bg-white px-3 py-3 shadow-sm shadow-slate-900/5"
                           >
                             <div className="flex items-start gap-3">
-                              <span className="mt-0.5 inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-blue-50 px-2 text-[11px] font-black text-brand">
+                              <span className="mt-0.5 inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-blue-50 px-2 text-[11px] font-black text-brand">
                                 {item.sequence}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <div className="text-sm font-black leading-6 text-ink break-words">
-                                  {routeClientPrimaryName(item.client)}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="break-words text-sm font-black leading-6 text-ink">
+                                    {primaryName}
+                                  </div>
+                                  <span className="rounded-full bg-field px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                                    Parada {item.sequence}
+                                  </span>
                                 </div>
                                 {secondaryName ? (
                                   <div className="mt-1 text-xs font-semibold leading-5 text-slateText break-words">
                                     Razao social: {secondaryName}
                                   </div>
-                                ) : null}
+                                ) : (
+                                  <div className="mt-1 text-xs font-semibold leading-5 text-slateText break-words">
+                                    Cliente exibido pela razao social cadastrada.
+                                  </div>
+                                )}
+                                <div className="mt-2 rounded-xl bg-field px-3 py-2 text-[11px] font-bold leading-5 text-slateText">
+                                  Ordem operacional da visita dentro desta rota.
+                                </div>
                               </div>
                             </div>
                           </div>
