@@ -47,7 +47,7 @@ export function Login() {
               <div className="mt-10 xl:mt-14">
                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-100/70">Sistema operacional</p>
                 <h1 className="mt-3 font-display text-3xl font-black leading-tight tracking-tight xl:text-4xl">
-                  Controle de promotores, rotas e visitas em tempo real.
+                  Controle de equipe de campo, rotas e visitas em tempo real.
                 </h1>
                 <p className="mt-4 max-w-sm text-sm font-semibold leading-6 text-white/68">
                   Painel interno para supervisao de campo, auditoria, roteirizacao e acompanhamento das evidencias de visita.
