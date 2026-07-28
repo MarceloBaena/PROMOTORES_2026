@@ -260,7 +260,7 @@ export function ReportsPage() {
     <section>
       <PageHeader
         title="Produtividade dos promotores"
-        subtitle="Acompanhe em tela quem produziu, quanto tempo ficou no cliente e quanto tempo gastou entre um atendimento e outro."
+        subtitle="Resumo em tela da execucao: visitas, tempo no cliente, deslocamento e pontos que exigem acao."
         action={
           <button type="button" className="primary-button" onClick={() => void downloadProductivity()} disabled={!report || loading}>
             <Download className="h-4 w-4" />
@@ -273,10 +273,10 @@ export function ReportsPage() {
 
       <div className="mb-5 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="surface-card">
-          <p className="brand-chip">Painel em tela</p>
-          <h2 className="mt-3 font-display text-xl font-black text-ink">Filtros da operacao</h2>
+          <p className="brand-chip">Consulta rapida</p>
+          <h2 className="mt-3 font-display text-xl font-black text-ink">Filtros</h2>
           <p className="mt-1 text-sm font-semibold leading-6 text-slateText">
-            Use o periodo e o promotor para enxergar a rotina sem precisar abrir planilha.
+            Escolha o periodo e, se quiser, um promotor especifico para focar a analise.
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -318,24 +318,24 @@ export function ReportsPage() {
           <div className="pointer-events-none absolute bottom-[-8rem] left-[28%] h-72 w-72 rounded-full bg-execution/25 blur-3xl" />
           <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div>
-              <p className="execution-chip border-white/10 bg-white/10 text-emerald-100">Visao executiva</p>
-              <h2 className="mt-4 max-w-3xl font-display text-3xl font-black leading-tight tracking-tight sm:text-5xl">
-                Produtividade clara para decidir rapido.
+              <p className="execution-chip border-white/10 bg-white/10 text-emerald-100">Resumo executivo</p>
+              <h2 className="mt-4 max-w-3xl font-display text-3xl font-black leading-tight tracking-tight sm:text-4xl">
+                Leitura rapida da produtividade da equipe.
               </h2>
               <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-white/68">
-                Veja o volume de visitas, a taxa de conclusao, o tempo dentro do cliente e o deslocamento da equipe no mesmo painel.
+                Veja em poucos blocos quem produziu mais, quanto tempo a equipe ficou no cliente e quanto tempo gastou entre atendimentos.
               </p>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <HeroStat label="Visitas" value={report?.totals.visits ?? 0} />
                 <HeroStat label="Concluidas" value={report?.totals.completedVisits ?? 0} />
-                <HeroStat label="Evidencias" value={`${evidenceRate}%`} />
+                <HeroStat label="Media no cliente" value={formatMinutes(report?.totals.averageServiceMinutes ?? 0)} />
               </div>
             </div>
 
             <div className="rounded-3xl border border-white/10 bg-white/10 p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/44">Destaque</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/44">Melhor desempenho</p>
                   <h3 className="mt-1 font-display text-xl font-black">{bestPromoter?.promoterName ?? "Sem dados"}</h3>
                 </div>
                 <Award className="h-7 w-7 text-execution" />
@@ -358,10 +358,10 @@ export function ReportsPage() {
         <ProductivityMetric icon={TrendingUp} label="Taxa de conclusao" value={`${completionRate}%`} helper={`${report?.totals.completedVisits ?? 0} de ${report?.totals.visits ?? 0} visitas`} />
         <ProductivityMetric icon={Timer} label="Media no cliente" value={formatMinutes(report?.totals.averageServiceMinutes ?? 0)} helper="Tempo medio de atendimento" />
         <ProductivityMetric icon={Route} label="Media deslocamento" value={formatMinutes(report?.totals.averageTravelMinutes ?? 0)} helper="Entre fim e inicio de visitas" />
-        <ProductivityMetric icon={ListChecks} label="Fornecedores executados" value={report?.totals.supplierExecutions ?? 0} helper="Industrias avaliadas nos clientes" />
         <ProductivityMetric icon={MapPinned} label="Fotos recebidas" value={report?.totals.photoCount ?? 0} helper={`${report?.totals.visitsWithEvidence ?? 0} visita(s) com evidencia`} />
         <ProductivityMetric icon={FileWarning} label="Sem entrega" value={report?.totals.noDeliveryCount ?? 0} helper="Fornecedores sem mercadoria no cliente" />
         <ProductivityMetric icon={AlertTriangle} label="Rupturas" value={report?.totals.stockoutCount ?? 0} helper={`${report?.totals.auditFlags ?? 0} alerta(s) de auditoria`} />
+        <ProductivityMetric icon={ListChecks} label="Fornecedores executados" value={report?.totals.supplierExecutions ?? 0} helper="Industrias avaliadas nos clientes" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[430px_minmax(0,1fr)]">

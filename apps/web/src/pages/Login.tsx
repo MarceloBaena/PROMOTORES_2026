@@ -1,20 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
-import { CheckCircle2, LockKeyhole, LogIn, MapPinned, ShieldCheck, Smartphone } from "lucide-react";
+import { CheckCircle2, LockKeyhole, LogIn } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
 import { useAuth } from "../context/AuthContext";
 import { APP_RELEASE_LABEL } from "../lib/app-version";
-
-const loginFeatures = [
-  { icon: MapPinned, label: "Roteiro publicado e monitorado" },
-  { icon: Smartphone, label: "Aplicativo de campo conectado ao fluxo real" },
-  { icon: ShieldCheck, label: "Auditoria com evidencias e situacao" }
-] as const;
-
-const trustHighlights = [
-  "Operacao offline e sincronizada",
-  "Supervisao em tempo real",
-  "Fluxo com evidencias por visita"
-] as const;
 
 export function Login() {
   const { login, apiMessage } = useAuth();
@@ -64,27 +52,8 @@ export function Login() {
                 <p className="mt-4 max-w-sm text-sm font-semibold leading-6 text-white/68">
                   Painel interno para supervisao de campo, auditoria, roteirizacao e acompanhamento das evidencias de visita.
                 </p>
-              </div>
-
-              <div className="mt-8 grid gap-3 xl:mt-10">
-                {loginFeatures.map(({ icon: Icon, label }) => (
-                  <div key={label} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                    <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/12">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-bold text-white/85">{label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-8 rounded-[1.5rem] border border-white/10 bg-white/[0.08] p-4 xl:mt-10">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/44">Visao do produto</div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {trustHighlights.map((item) => (
-                    <span key={item} className="rounded-full border border-white/10 bg-white/[0.08] px-3 py-1.5 text-xs font-bold text-white/84">
-                      {item}
-                    </span>
-                  ))}
+                <div className="mt-8 rounded-[1.5rem] border border-white/10 bg-white/[0.08] px-4 py-4 text-sm font-semibold leading-6 text-white/72">
+                  Acesso restrito ao ambiente operacional da equipe de campo.
                 </div>
               </div>
             </div>
@@ -97,22 +66,6 @@ export function Login() {
                 <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slateText">
                   {APP_RELEASE_LABEL}
                 </div>
-              </div>
-            </div>
-
-            <div className="mb-6 rounded-[1.4rem] border border-line bg-field/70 p-4 lg:hidden">
-              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slateText">
-                Visao rapida
-              </div>
-              <div className="mt-3 grid gap-2">
-                {loginFeatures.map(({ icon: Icon, label }) => (
-                  <div key={label} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-3 py-3">
-                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brandSoft text-brand">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <span className="min-w-0 text-sm font-bold leading-5 text-graphite">{label}</span>
-                  </div>
-                ))}
               </div>
             </div>
 
@@ -131,14 +84,6 @@ export function Login() {
                   <p className="mt-1 text-sm font-semibold text-stone-500">Use suas credenciais operacionais</p>
                 </div>
               </div>
-            </div>
-
-            <div className="mb-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {trustHighlights.map((item) => (
-                <div key={item} className="rounded-2xl border border-line bg-field/80 px-3 py-3 text-center text-xs font-black leading-5 text-graphite">
-                  {item}
-                </div>
-              ))}
             </div>
 
             <label className="mb-5 block">
