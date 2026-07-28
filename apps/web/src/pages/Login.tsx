@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { CheckCircle2, LockKeyhole, LogIn, MapPinned, ShieldCheck, Smartphone } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
 import { useAuth } from "../context/AuthContext";
+import { APP_RELEASE_LABEL } from "../lib/app-version";
 
 const loginFeatures = [
   { icon: MapPinned, label: "Roteiro publicado e monitorado" },
@@ -51,6 +52,9 @@ export function Login() {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(37,99,235,0.35),transparent_18rem),radial-gradient(circle_at_88%_82%,rgba(16,185,129,0.24),transparent_20rem),linear-gradient(145deg,rgba(255,255,255,0.10),transparent_42%)]" />
             <div className="relative">
               <BrandMark />
+              <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/50">
+                {APP_RELEASE_LABEL}
+              </div>
 
               <div className="mt-14">
                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-100/70">Sistema operacional</p>
@@ -88,7 +92,12 @@ export function Login() {
 
           <form onSubmit={onSubmit} className="p-6 sm:p-9 lg:p-12">
             <div className="mb-7 flex lg:hidden">
-              <BrandMark dark />
+              <div>
+                <BrandMark dark />
+                <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slateText">
+                  {APP_RELEASE_LABEL}
+                </div>
+              </div>
             </div>
 
             <div className="mb-8">

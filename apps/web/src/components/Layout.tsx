@@ -20,6 +20,7 @@ import {
 import { NavLink, Outlet } from "react-router-dom";
 import { BrandMark } from "./BrandMark";
 import { useAuth } from "../context/AuthContext";
+import { APP_RELEASE_LABEL } from "../lib/app-version";
 import { roleLabel } from "../lib/labels";
 
 const navSections = [
@@ -65,6 +66,9 @@ export function Layout() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_0%,rgba(37,99,235,0.30),transparent_18rem),radial-gradient(circle_at_80%_18%,rgba(16,185,129,0.18),transparent_16rem),linear-gradient(180deg,rgba(255,255,255,0.08),transparent_42%)]" />
         <div className="relative border-b border-white/10 px-5 py-5">
           <BrandMark />
+          <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/45">
+            {APP_RELEASE_LABEL}
+          </div>
 
           <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.07] p-4 shadow-inner shadow-black/10">
             <div className="flex items-center justify-between gap-3">

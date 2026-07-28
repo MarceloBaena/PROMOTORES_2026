@@ -490,7 +490,7 @@ export function VisitsPage() {
 
       {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         <OperationalMetric
           label="Visitas no painel"
           value={filteredVisits.length}
@@ -513,10 +513,10 @@ export function VisitsPage() {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="table-wrap">
           <div className="border-b border-line bg-white p-4">
-            <div className="grid gap-3 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
+            <div className="grid gap-3 xl:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
               <label className="space-y-2">
                 <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
                   Promotor
@@ -535,7 +535,7 @@ export function VisitsPage() {
                 </select>
               </label>
 
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
                 <FilterStat
                   label="Em tela"
                   value={`${filteredVisits.length}`}
@@ -592,20 +592,20 @@ export function VisitsPage() {
                   }`}
                   onClick={() => setSelectedVisitId(visit.id)}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         {visit.client.code ? (
                           <span className="rounded-full bg-field px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
                             {visit.client.code}
                           </span>
                         ) : null}
-                        <span className="text-base font-black text-ink">
+                        <span className="break-words text-base font-black leading-6 text-ink">
                           {primaryName}
                         </span>
                       </div>
                       {secondaryName ? (
-                        <div className="mt-1 text-xs font-semibold text-slateText">
+                        <div className="mt-1 break-words text-xs font-semibold text-slateText">
                           Razao social: {secondaryName}
                         </div>
                       ) : null}
@@ -616,7 +616,7 @@ export function VisitsPage() {
                         {visitAddress(visit)}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2 self-start">
                       <StatusPill value={visit.status} />
                       <span className="icon-button h-10 w-10 text-moss">
                         <Eye className="h-4 w-4" />
@@ -624,7 +624,7 @@ export function VisitsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 2xl:grid-cols-4">
                     <MiniVisitInfo
                       label="Promotor"
                       value={promoterLabel(visit.promoter)}
@@ -654,7 +654,7 @@ export function VisitsPage() {
           </div>
         </div>
 
-        <aside className="panel overflow-hidden xl:sticky xl:top-20 xl:self-start">
+        <aside className="panel overflow-hidden 2xl:sticky 2xl:top-20 2xl:self-start">
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Detalhe da visita</h2>
@@ -681,7 +681,7 @@ export function VisitsPage() {
                     Cliente
                   </div>
                 </div>
-                <div className="mt-2 font-display text-2xl font-black">
+                <div className="mt-2 break-words font-display text-2xl font-black leading-tight">
                   {selectedVisit.client.tradeName?.trim() &&
                   selectedVisit.client.tradeName !== selectedVisit.client.name
                     ? selectedVisit.client.tradeName
@@ -708,27 +708,27 @@ export function VisitsPage() {
                 <div className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-slateText">
                   Leitura rapida
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <InfoCard
-                  icon={<UserRound className="h-4 w-4" />}
-                  label="Promotor"
-                  value={promoterLabel(selectedVisit.promoter)}
-                />
-                <InfoCard
-                  icon={<Clock className="h-4 w-4" />}
-                  label="Inicio"
-                  value={formatDate(selectedVisit.startedAt)}
-                />
-                <InfoCard
-                  icon={<Clock className="h-4 w-4" />}
-                  label="Fim"
-                  value={formatDate(selectedVisit.finishedAt)}
-                />
-                <InfoCard
-                  icon={<MapPin className="h-4 w-4" />}
-                  label="GPS da visita"
-                  value={visitGpsText(selectedVisit)}
-                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <InfoCard
+                    icon={<UserRound className="h-4 w-4" />}
+                    label="Promotor"
+                    value={promoterLabel(selectedVisit.promoter)}
+                  />
+                  <InfoCard
+                    icon={<Clock className="h-4 w-4" />}
+                    label="Inicio"
+                    value={formatDate(selectedVisit.startedAt)}
+                  />
+                  <InfoCard
+                    icon={<Clock className="h-4 w-4" />}
+                    label="Fim"
+                    value={formatDate(selectedVisit.finishedAt)}
+                  />
+                  <InfoCard
+                    icon={<MapPin className="h-4 w-4" />}
+                    label="GPS da visita"
+                    value={visitGpsText(selectedVisit)}
+                  />
                 </div>
               </div>
 
