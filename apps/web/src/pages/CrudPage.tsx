@@ -675,12 +675,9 @@ export function CrudPage({
               </span>
             </div>
             <h2 className="panel-title">{resolvedFormTitle}</h2>
-            <p className="panel-subtitle">
-              {formSubtitle ??
-                (title === "Clientes"
-                  ? "Cadastro completo para roteiro e atendimento em campo."
-                  : "Preencha os dados e confirme a gravacao do registro.")}
-            </p>
+            {(formSubtitle ?? "").trim() ? (
+              <p className="panel-subtitle">{formSubtitle}</p>
+            ) : null}
           </div>
           {editingId || isTopForm ? (
             <button
@@ -698,18 +695,20 @@ export function CrudPage({
           {sections.map((section) => (
             <div
               key={section.title}
-              className="rounded-lg border border-line bg-white p-4 shadow-sm shadow-slate-900/5"
+              className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-slate-900/5"
             >
-              <div className="mb-4">
-                <h3 className="text-sm font-black uppercase tracking-[0.12em] text-ink">
-                  {section.title}
-                </h3>
-                {section.description ? (
-                  <p className="mt-1 text-sm font-semibold leading-6 text-slateText">
-                    {section.description}
-                  </p>
-                ) : null}
-              </div>
+              {sections.length > 1 || section.title !== "Dados do cadastro" ? (
+                <div className="mb-4">
+                  <h3 className="text-sm font-black uppercase tracking-[0.12em] text-ink">
+                    {section.title}
+                  </h3>
+                  {section.description ? (
+                    <p className="mt-1 text-sm font-semibold leading-6 text-slateText">
+                      {section.description}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className={`grid gap-5 ${sectionGridClass(section)}`}>
                 {section.fields.map((fieldName) => {
                   const field = fieldMap.get(fieldName);
@@ -765,10 +764,6 @@ export function CrudPage({
           <h2 className="mt-3 text-xl font-black text-ink">
             {title === "Clientes" ? "Novo cliente" : resolvedFormTitle}
           </h2>
-          <p className="mt-1 text-sm font-semibold text-slateText">
-            Abra o formulario horizontal para incluir um registro sem tirar a
-            listagem da tela.
-          </p>
         </div>
         <span className="primary-button pointer-events-none justify-center sm:w-auto">
           <Plus className="h-4 w-4" />
@@ -785,12 +780,13 @@ export function CrudPage({
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
               <h2 className="text-sm font-black uppercase tracking-[0.12em] text-slateText">
-                Busca guiada
+                Busca
               </h2>
-              <p className="text-sm font-semibold text-slateText">
-                {searchHint ??
-                  "Use a busca para localizar rapidamente o registro antes de alterar ou excluir."}
-              </p>
+              {searchHint ? (
+                <p className="text-sm font-semibold text-slateText">
+                  {searchHint}
+                </p>
+              ) : null}
             </div>
             <span className="rounded-full border border-line bg-field px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-graphite">
               {filteredItems.length} registro(s)

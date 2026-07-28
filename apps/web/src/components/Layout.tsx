@@ -68,21 +68,19 @@ export function Layout() {
 
           <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.07] p-4 shadow-inner shadow-black/10">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/55">Hoje</span>
+              <div>
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/55">Hoje</span>
+                <div className="mt-2 font-display text-sm font-bold capitalize text-white">{today}</div>
+              </div>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-execution/15 px-2.5 py-1 text-[11px] font-bold text-emerald-100 ring-1 ring-execution/20">
                 <Wifi className="h-3.5 w-3.5" />
                 Conectado
               </span>
             </div>
-            <div className="mt-2 font-display text-sm font-bold capitalize text-white">{today}</div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-white/[0.08] p-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Operacao</div>
-                <div className="mt-1 text-sm font-black text-white">Campo</div>
-              </div>
-              <div className="rounded-2xl bg-white/[0.08] p-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Dados</div>
-                <div className="mt-1 text-sm font-black text-execution">Tempo real</div>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Painel unificado</div>
+              <div className="mt-1 text-sm font-bold leading-6 text-white/80">
+                Operacao, auditoria e acompanhamento da equipe em campo.
               </div>
             </div>
           </div>
@@ -99,8 +97,8 @@ export function Layout() {
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      className={({ isActive }) =>
-                        `relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-bold transition ${
+                    className={({ isActive }) =>
+                        `relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-bold transition ${
                           isActive
                             ? "bg-white text-navy shadow-lg shadow-black/10 before:absolute before:left-0 before:top-2.5 before:h-6 before:w-1 before:rounded-r before:bg-brand"
                             : "text-white/65 hover:bg-white/10 hover:text-white"
