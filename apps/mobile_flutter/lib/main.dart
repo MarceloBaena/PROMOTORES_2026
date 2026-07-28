@@ -563,6 +563,7 @@ class _RouteMapPageState extends State<RouteMapPage> {
   final MapController mapController = MapController();
   RouteItemView? selectedItem;
   bool showOnlyPending = false;
+  final Distance _distance = const Distance();
 
   List<RouteItemView> get orderedRouteItems =>
       [...widget.routeItems]..sort((first, second) => first.sequence.compareTo(second.sequence));
@@ -604,6 +605,24 @@ class _RouteMapPageState extends State<RouteMapPage> {
       }
     }
     return currentRouteItem;
+  }
+
+  RouteItemView? get nextRouteItemAfterCurrent {
+    final current = currentRouteItem;
+    if (current == null) {
+      return null;
+    }
+
+    var afterCurrent = false;
+    for (final item in orderedRouteItems) {
+      if (afterCurrent) {
+        return item;
+      }
+      if (item.id == current.id) {
+        afterCurrent = true;
+      }
+    }
+    return null;
   }
 
   LatLng get initialCenter {
@@ -660,6 +679,24 @@ class _RouteMapPageState extends State<RouteMapPage> {
     );
   }
 
+  String _distanceLabel(RouteItemView? from, RouteItemView? to) {
+    if (from == null || to == null || !from.hasCoordinates || !to.hasCoordinates) {
+      return 'Sem distancia estimada';
+    }
+
+    final meters = _distance.as(
+      LengthUnit.Meter,
+      LatLng(from.clientLatitude!, from.clientLongitude!),
+      LatLng(to.clientLatitude!, to.clientLongitude!),
+    );
+
+    if (meters < 1000) {
+      return '${meters.round()} m';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(1)} km';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -690,6 +727,10 @@ class _RouteMapPageState extends State<RouteMapPage> {
         (itemsWithCoordinates.isNotEmpty ? itemsWithCoordinates.first : null);
     final doneCount = orderedRouteItems.where((item) => item.isDone).length;
     final pendingCount = orderedRouteItems.where((item) => !item.isDone).length;
+    final currentToNextLabel = _distanceLabel(
+      currentRouteItem,
+      nextRouteItemAfterCurrent,
+    );
 
     return AppShell(
       child: Column(
@@ -731,8 +772,15 @@ class _RouteMapPageState extends State<RouteMapPage> {
                       doneCount.toString(),
                       Icons.verified,
                     ),
+                    MetricData(
+                      'Proximo salto',
+                      currentToNextLabel,
+                      Icons.near_me,
+                    ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                const _MapLegendCard(),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -764,6 +812,15 @@ class _RouteMapPageState extends State<RouteMapPage> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 10),
+                PrimaryButton(
+                  label: currentRouteItem == null
+                      ? 'Rota concluida'
+                      : 'Iniciar cliente atual',
+                  onPressed: currentRouteItem == null
+                      ? null
+                      : () => widget.onOpenVisit(currentRouteItem!),
                 ),
                 const SizedBox(height: 12),
                 if (visibleItemsWithCoordinates.isEmpty)
@@ -875,6 +932,9 @@ class _RouteMapPageState extends State<RouteMapPage> {
                     _MapRouteItemCard(
                       item: highlightedItem,
                       isCurrent: currentRouteItem?.id == highlightedItem.id,
+                      distanceFromCurrent: highlightedItem.id == currentRouteItem?.id
+                          ? null
+                          : _distanceLabel(currentRouteItem, highlightedItem),
                       onOpenVisit: () => widget.onOpenVisit(highlightedItem),
                       onOpenNavigation: highlightedItem.hasCoordinates
                           ? () => _openExternalNavigation(highlightedItem)
@@ -924,12 +984,14 @@ class _MapRouteItemCard extends StatelessWidget {
   const _MapRouteItemCard({
     required this.item,
     required this.isCurrent,
+    required this.distanceFromCurrent,
     required this.onOpenVisit,
     required this.onOpenNavigation,
   });
 
   final RouteItemView item;
   final bool isCurrent;
+  final String? distanceFromCurrent;
   final VoidCallback onOpenVisit;
   final VoidCallback? onOpenNavigation;
 
@@ -961,6 +1023,11 @@ class _MapRouteItemCard extends StatelessWidget {
                 label: 'Ordem ${item.sequence}',
                 color: brandNavy,
               ),
+              if (distanceFromCurrent != null)
+                _MapStatusChip(
+                  label: distanceFromCurrent!,
+                  color: brandBlue,
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -1102,6 +1169,15 @@ class _RouteMapListTile extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(height: 4),
+              Text(
+                'Rota ${item.routeName}',
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -1153,6 +1229,85 @@ class _MapStatusChip extends StatelessWidget {
           fontWeight: FontWeight.w900,
         ),
       ),
+    );
+  }
+}
+
+class _MapLegendCard extends StatelessWidget {
+  const _MapLegendCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Legenda operacional',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: const [
+              _MapLegendItem(
+                color: Color(0xFFF59E0B),
+                label: 'Cliente atual',
+              ),
+              _MapLegendItem(
+                color: Color(0xFF10B981),
+                label: 'Concluido',
+              ),
+              _MapLegendItem(
+                color: Color(0xFF2563EB),
+                label: 'Pendente com GPS',
+              ),
+              _MapLegendItem(
+                color: Color(0xFF94A3B8),
+                label: 'Sem coordenadas',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapLegendItem extends StatelessWidget {
+  const _MapLegendItem({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          height: 12,
+          width: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF475569),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }
