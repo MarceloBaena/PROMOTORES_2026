@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.21 (build 24)';
+const appVersionLabel = 'APK Flutter v1.1.22 (build 25)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -6116,25 +6116,33 @@ class SupplierExecutionEditor extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          if (categories.isNotEmpty || activities.isNotEmpty) ...[
-            SupplierGuidanceCard(
-              categories: categories,
-              activities: activities,
-              categoryPhotoCounts: categoryPhotoCounts,
-              activityPhotoCounts: activityPhotoCounts,
-              busy: busy,
-              onCaptureCategory: onCaptureCategory,
-              onCaptureActivity: onCaptureActivity,
-            ),
-            const SizedBox(height: 14),
-          ],
           BooleanAnswerField(
             label: 'Recebeu mercadoria hoje?',
             value: deliveryReceived,
             enabled: !busy,
             onChanged: onDeliveryChanged,
           ),
-          if (requiresDeliveryFlow) ...[
+          if (deliveryReceived == null) ...[
+            const SizedBox(height: 10),
+            const InfoCard(
+              title: 'Primeiro responda sobre a mercadoria',
+              body:
+                  'Depois do check-in, informe se houve entrega neste estabelecimento. Com essa resposta, o aplicativo libera o restante da execucao do fornecedor.',
+            ),
+          ] else if (requiresDeliveryFlow) ...[
+            if (categories.isNotEmpty || activities.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              SupplierGuidanceCard(
+                categories: categories,
+                activities: activities,
+                categoryPhotoCounts: categoryPhotoCounts,
+                activityPhotoCounts: activityPhotoCounts,
+                busy: busy,
+                onCaptureCategory: onCaptureCategory,
+                onCaptureActivity: onCaptureActivity,
+              ),
+              const SizedBox(height: 14),
+            ],
             const SizedBox(height: 10),
             Row(
               children: [
@@ -6177,7 +6185,7 @@ class SupplierExecutionEditor extends StatelessWidget {
             const InfoCard(
               title: 'Sem entrega no fornecedor',
               body:
-                  'Quando nao houve mercadoria, nao exigimos foto antes/depois. Basta registrar a situacao e concluir este fornecedor.',
+                  'Quando nao houve mercadoria, nao exigimos foto antes/depois nem categorias. Basta informar o motivo nas observacoes e concluir este fornecedor para seguir ao proximo.',
             ),
           ],
           const SizedBox(height: 12),
