@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.26 (build 29)';
+const appVersionLabel = 'APK Flutter v1.1.27 (build 30)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -1923,30 +1923,30 @@ class _VisitPageState extends State<VisitPage> {
 
   String get currentFlowLabel {
     if (visit == null) {
-      return 'Toque em "Iniciar atendimento" para liberar o fluxo do cliente.';
+      return 'Toque em iniciar para liberar o atendimento.';
     }
     if (!hasCheckin) {
-      return 'Passo atual: registrar o check-in com foto ao chegar no cliente.';
+      return 'Passo atual: fazer o check-in com foto.';
     }
     if (legacyFlowEnabled) {
       if (!hasBefore || !hasAfter) {
-        return 'Passo atual: registrar as fotos antes e depois da visita.';
+        return 'Passo atual: registrar as fotos da visita.';
       }
       if (!hasCheckout) {
-        return 'Passo atual: registrar o check-out para encerrar a visita.';
+        return 'Passo atual: fazer o check-out.';
       }
-      return 'Visita finalizada localmente. Agora basta sincronizar.';
+      return 'Visita finalizada. Agora sincronize.';
     }
     if (!allSuppliersCompleted) {
       if (activeSupplier != null) {
-        return 'Passo atual: concluir ${supplierLabel(activeSupplier!)} e seguir para o proximo fornecedor.';
+        return 'Passo atual: concluir ${supplierLabel(activeSupplier!)}.';
       }
-      return 'Passo atual: abrir o proximo fornecedor pendente e executar as evidencias.';
+      return 'Passo atual: abrir o proximo fornecedor pendente.';
     }
     if (!hasCheckout) {
-      return 'Todos os fornecedores foram concluidos. Agora registre o check-out.';
+      return 'Fornecedores concluidos. Agora faca o check-out.';
     }
-    return 'Visita finalizada localmente. Agora basta sincronizar.';
+    return 'Visita finalizada. Agora sincronize.';
   }
 
   @override
@@ -2015,8 +2015,8 @@ class _VisitPageState extends State<VisitPage> {
       await _load();
       setState(
         () => message = legacyFlowEnabled
-            ? 'Atendimento iniciado offline. Agora capture check-in, antes, depois e check-out.'
-            : 'Atendimento iniciado offline. Capture check-in, passe por todos os fornecedores e finalize com o check-out.',
+            ? 'Atendimento iniciado. Registre check-in, antes, depois e check-out.'
+            : 'Atendimento iniciado. Faca check-in, conclua os fornecedores e finalize no check-out.',
       );
       unawaited(widget.repository.sendHeartbeatFromVisit(created));
     } catch (error) {
@@ -2091,7 +2091,7 @@ class _VisitPageState extends State<VisitPage> {
         productsReplenished = execution.productsReplenished;
         stockoutFound = execution.stockoutFound;
         message =
-            'Fornecedor ${supplierLabel(supplier)} aberto. Informe entrega e registre as fotos obrigatorias.';
+            'Fornecedor ${supplierLabel(supplier)} aberto. Responda entrega e siga o fluxo.';
       });
       await _load();
     } catch (error) {
@@ -2541,13 +2541,13 @@ class _VisitPageState extends State<VisitPage> {
                       const InfoCard(
                         title: 'Check-in obrigatorio',
                         body:
-                            'Primeiro registre o check-in com foto. Depois disso, o app libera as perguntas do fornecedor e as evidencias da visita.',
+                            'Faca o check-in para liberar o fornecedor.',
                       )
                     else ...[
                       InfoCard(
                         title: 'Execucao por fornecedor',
                         body:
-                            'Conclua ${clientSuppliers.length} fornecedor(es) deste cliente. Se nao houve entrega, marque "Nao", descreva o motivo nas observacoes e conclua para seguir ao proximo fornecedor.',
+                            '${clientSuppliers.length} fornecedor(es) neste cliente. Sem entrega: marque "Nao", escreva o motivo e conclua.',
                       ),
                       const SizedBox(height: 12),
                       ...clientSuppliers.map((supplier) {
@@ -2684,14 +2684,14 @@ class _VisitPageState extends State<VisitPage> {
                         const InfoCard(
                           title: 'Selecione um fornecedor',
                           body:
-                              'Toque em um fornecedor para responder entrega, registrar evidencias e concluir esse atendimento.',
+                              'Toque em um fornecedor para iniciar a execucao.',
                         ),
                       const SizedBox(height: 12),
                       if (!allSuppliersCompleted)
                         InfoCard(
                           title: 'Finalize os fornecedores primeiro',
                           body:
-                              'Ainda existem ${incompleteSuppliers.length} fornecedor(es) pendentes. O check-out so sera liberado depois que todos forem concluidos.',
+                              '${incompleteSuppliers.length} fornecedor(es) pendentes. O check-out libera no final.',
                         )
                       else
                         EvidenceButton(
@@ -2715,7 +2715,7 @@ class _VisitPageState extends State<VisitPage> {
                   const InfoCard(
                     title: 'Finalizacao no check-out',
                     body:
-                        'O atendimento e encerrado automaticamente assim que o check-out com foto for registrado.',
+                        'O check-out com foto encerra a visita automaticamente.',
                   ),
                 ],
                 const SizedBox(height: 14),
@@ -6182,16 +6182,16 @@ class SupplierExecutionEditor extends StatelessWidget {
             const InfoCard(
               title: 'Primeiro responda sobre a mercadoria',
               body:
-                  'Depois do check-in, informe se houve entrega neste estabelecimento. Com essa resposta, o aplicativo libera o restante da execucao do fornecedor.',
+                  'Informe se houve entrega para liberar o restante do fluxo.',
             ),
           ] else if (requiresDeliveryFlow) ...[
             const SizedBox(height: 10),
-            const _FlowSectionHeader(
-              step: 'Passo 2',
-              title: 'Foto antes do fornecedor',
-              body:
-                  'Primeiro registre como o fornecedor estava antes de iniciar a execucao no ponto de venda.',
-            ),
+              const _FlowSectionHeader(
+                step: 'Passo 2',
+                title: 'Foto antes do fornecedor',
+                body:
+                  'Mostre como o fornecedor estava antes da execucao.',
+              ),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -6210,7 +6210,7 @@ class SupplierExecutionEditor extends StatelessWidget {
                 step: 'Passo 3',
                 title: 'Atividades do fornecedor',
                 body:
-                    'Execute e registre primeiro as atividades extras previstas para este fornecedor.',
+                    'Execute e registre as atividades deste fornecedor.',
               ),
               const SizedBox(height: 10),
               SupplierGuidanceCard(
@@ -6229,7 +6229,7 @@ class SupplierExecutionEditor extends StatelessWidget {
                 step: 'Passo 4',
                 title: 'Categorias do fornecedor',
                 body:
-                    'Depois das atividades, registre as categorias abastecidas neste fornecedor.',
+                    'Depois das atividades, registre as categorias.',
               ),
               const SizedBox(height: 10),
               SupplierGuidanceCard(
@@ -6243,12 +6243,12 @@ class SupplierExecutionEditor extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 14),
-            const _FlowSectionHeader(
-              step: 'Passo 5',
-              title: 'Foto depois do fornecedor',
-              body:
-                  'Ao terminar a execucao, capture a foto final para comprovar o resultado.',
-            ),
+              const _FlowSectionHeader(
+                step: 'Passo 5',
+                title: 'Foto depois do fornecedor',
+                body:
+                  'Ao terminar, capture a foto final do fornecedor.',
+              ),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -6262,12 +6262,12 @@ class SupplierExecutionEditor extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            const _FlowSectionHeader(
-              step: 'Passo 6',
-              title: 'Abastecimento e ruptura',
-              body:
-                  'Responda se os produtos foram abastecidos e se houve ruptura neste fornecedor.',
-            ),
+              const _FlowSectionHeader(
+                step: 'Passo 6',
+                title: 'Abastecimento e ruptura',
+                body:
+                  'Informe abastecimento e ruptura.',
+              ),
             const SizedBox(height: 10),
             BooleanAnswerField(
               label: 'Produtos foram abastecidos?',
@@ -6287,7 +6287,7 @@ class SupplierExecutionEditor extends StatelessWidget {
             const InfoCard(
               title: 'Sem entrega no fornecedor',
               body:
-                  'Quando nao houve mercadoria, nao exigimos foto antes/depois nem categorias. Basta informar o motivo nas observacoes e concluir este fornecedor para seguir ao proximo.',
+                  'Sem entrega: informe o motivo nas observacoes e conclua o fornecedor.',
             ),
           ],
           const SizedBox(height: 12),
@@ -6295,7 +6295,7 @@ class SupplierExecutionEditor extends StatelessWidget {
             step: 'Passo 7',
             title: 'Observacoes e conclusao',
             body:
-                'Registre qualquer motivo relevante antes de concluir o fornecedor.',
+                'Escreva o que for importante antes de concluir.',
           ),
           const SizedBox(height: 10),
           TextField(
