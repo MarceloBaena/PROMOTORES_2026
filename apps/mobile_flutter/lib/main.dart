@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.14 (build 17)';
+const appVersionLabel = 'APK Flutter v1.1.15 (build 18)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -415,20 +415,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _openClientMap(BuildContext context, RouteItemView item) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RouteMapPage(
-          repository: widget.repository,
-          promoterName: widget.session.user.name,
-          routeItems: widget.routeItems,
-          onVisitChanged: widget.onChanged,
-          initialItemId: item.id,
-        ),
-      ),
-    );
-  }
-
   Future<void> _openVisit(BuildContext context, RouteItemView item) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -531,7 +517,6 @@ class _HomePageState extends State<HomePage> {
                             key: const ValueKey('route-list-tab'),
                             pendingItems: pendingItems,
                             onOpenVisit: (item) => _openVisit(context, item),
-                            onOpenMap: (item) => _openClientMap(context, item),
                           ),
                   ),
                 ],
@@ -563,7 +548,7 @@ class _HomeSectionSwitch extends StatelessWidget {
         children: [
           Expanded(
             child: _HomeSectionButton(
-              label: 'Atendimento',
+              label: 'Clientes',
               icon: Icons.list_alt,
               selected: !showMap,
               onPressed: () => onChange(false),
@@ -632,12 +617,10 @@ class _HomeRouteListSection extends StatelessWidget {
     super.key,
     required this.pendingItems,
     required this.onOpenVisit,
-    required this.onOpenMap,
   });
 
   final List<RouteItemView> pendingItems;
   final Future<void> Function(RouteItemView item) onOpenVisit;
-  final Future<void> Function(RouteItemView item) onOpenMap;
 
   @override
   Widget build(BuildContext context) {
@@ -663,9 +646,6 @@ class _HomeRouteListSection extends StatelessWidget {
               item: item,
               onTap: () => unawaited(onOpenVisit(item)),
               onOpenVisit: () => unawaited(onOpenVisit(item)),
-              onOpenMap: item.hasCoordinates
-                  ? () => unawaited(onOpenMap(item))
-                  : null,
             ),
           ),
       ],
@@ -1985,26 +1965,6 @@ class _VisitPageState extends State<VisitPage> {
     }
   }
 
-  Future<void> _openClientMap() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RouteMapPage(
-          repository: widget.repository,
-          promoterName: widget.promoterName,
-          routeItems: [widget.item],
-          onVisitChanged: ({String? nextMessage}) async {
-            await _load();
-          },
-          initialItemId: widget.item.id,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openClientNavigation() async {
-    await openExternalNavigationForRouteItem(widget.item);
-  }
-
   Future<void> _saveSupplierDraft({
     bool? nextDeliveryReceived,
     bool? nextProductsReplenished,
@@ -2353,14 +2313,6 @@ class _VisitPageState extends State<VisitPage> {
                   visitCompleted: visit?.status == 'completed',
                   usesSupplierFlow: !legacyFlowEnabled,
                 ),
-                if (widget.item.hasCoordinates) ...[
-                  const SizedBox(height: 14),
-                  ClientLocationCard(
-                    item: widget.item,
-                    onOpenMap: () => unawaited(_openClientMap()),
-                    onOpenNavigation: () => unawaited(_openClientNavigation()),
-                  ),
-                ],
                 const SizedBox(height: 14),
                 if (visit == null)
                   PrimaryButton(
@@ -5663,13 +5615,11 @@ class RouteItemCard extends StatelessWidget {
     required this.item,
     required this.onTap,
     required this.onOpenVisit,
-    this.onOpenMap,
   });
 
   final RouteItemView item;
   final VoidCallback onTap;
   final VoidCallback onOpenVisit;
-  final VoidCallback? onOpenMap;
 
   @override
   Widget build(BuildContext context) {
@@ -5730,42 +5680,18 @@ class RouteItemCard extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        if (item.hasCoordinates)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 4),
-                            child: Text(
-                              'GPS do cliente disponivel',
-                              style: TextStyle(
-                                color: brandBlue,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 14),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  SizedBox(
-                    width: 180,
-                    child: PrimaryButton(
-                      label: 'Abrir atendimento',
-                      onPressed: onOpenVisit,
-                    ),
-                  ),
-                  SizedBox(
-                    width: 160,
-                    child: SecondaryButton(
-                      label: 'Ver no mapa',
-                      onPressed: onOpenMap,
-                    ),
-                  ),
-                ],
+              SizedBox(
+                width: double.infinity,
+                child: PrimaryButton(
+                  label: 'Abrir atendimento',
+                  onPressed: onOpenVisit,
+                ),
               ),
             ],
           ),
