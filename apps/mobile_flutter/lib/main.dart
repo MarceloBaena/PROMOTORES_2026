@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.25 (build 28)';
+const appVersionLabel = 'APK Flutter v1.1.26 (build 29)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -2186,12 +2186,10 @@ class _VisitPageState extends State<VisitPage> {
     final requiresDeliveryFlow = supplierRequiresDeliveryFlow(deliveryReceived);
     final trimmedNotes = supplierNotesController.text.trim();
 
-    if (requiresDeliveryFlow &&
-        (!executionTypes.contains('supplier_before') ||
-            !executionTypes.contains('supplier_after'))) {
+    if (requiresDeliveryFlow && !executionTypes.contains('supplier_before')) {
       setState(
         () => message =
-            'Conclua o fornecedor ${supplierLabel(supplier)} com foto antes e foto depois.',
+            'Capture primeiro a foto antes do fornecedor ${supplierLabel(supplier)}.',
       );
       return;
     }
@@ -2202,6 +2200,44 @@ class _VisitPageState extends State<VisitPage> {
             'Quando nao houve entrega para ${supplierLabel(supplier)}, descreva o motivo nas observacoes antes de concluir.',
       );
       return;
+    }
+
+    if (requiresDeliveryFlow) {
+      final activities = activitiesFromSupplier(supplier);
+      for (final activity in activities) {
+        final activityDone = executionPhotos.any(
+          (photo) => photo.activityId == activity.id,
+        );
+        if (!activityDone) {
+          setState(
+            () => message =
+              'Capture a evidencia da atividade ${activity.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
+          );
+          return;
+        }
+      }
+
+      final categories = categoriesFromSupplier(supplier);
+      for (final category in categories) {
+        final categoryDone = executionPhotos.any(
+          (photo) => photo.categoryId == category.id,
+        );
+        if (!categoryDone) {
+          setState(
+            () => message =
+                'Capture a foto da categoria ${category.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
+          );
+          return;
+        }
+      }
+
+      if (!executionTypes.contains('supplier_after')) {
+        setState(
+          () => message =
+              'Capture a foto depois do fornecedor ${supplierLabel(supplier)} antes de concluir.',
+        );
+        return;
+      }
     }
 
     if (requiresDeliveryFlow &&
@@ -2219,36 +2255,6 @@ class _VisitPageState extends State<VisitPage> {
             'Quando houver ruptura no fornecedor ${supplierLabel(supplier)}, descreva o motivo nas observacoes antes de concluir.',
       );
       return;
-    }
-
-    if (requiresDeliveryFlow) {
-      final categories = categoriesFromSupplier(supplier);
-      for (final category in categories) {
-        final categoryDone = executionPhotos.any(
-          (photo) => photo.categoryId == category.id,
-        );
-        if (!categoryDone) {
-          setState(
-            () => message =
-                'Capture a foto da categoria ${category.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
-          );
-          return;
-        }
-      }
-
-      final activities = activitiesFromSupplier(supplier);
-      for (final activity in activities) {
-        final activityDone = executionPhotos.any(
-          (photo) => photo.activityId == activity.id,
-        );
-        if (!activityDone) {
-          setState(
-            () => message =
-                'Capture a evidencia da atividade ${activity.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
-          );
-          return;
-        }
-      }
     }
 
     setState(() => busy = true);
@@ -6179,32 +6185,12 @@ class SupplierExecutionEditor extends StatelessWidget {
                   'Depois do check-in, informe se houve entrega neste estabelecimento. Com essa resposta, o aplicativo libera o restante da execucao do fornecedor.',
             ),
           ] else if (requiresDeliveryFlow) ...[
-            if (categories.isNotEmpty || activities.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              const _FlowSectionHeader(
-                step: 'Passo 2',
-                title: 'Categorias e atividades',
-                body:
-                    'Registre as evidencias pedidas em cada categoria e atividade antes de concluir o fornecedor.',
-              ),
-              const SizedBox(height: 10),
-              SupplierGuidanceCard(
-                categories: categories,
-                activities: activities,
-                categoryPhotoCounts: categoryPhotoCounts,
-                activityPhotoCounts: activityPhotoCounts,
-                busy: busy,
-                onCaptureCategory: onCaptureCategory,
-                onCaptureActivity: onCaptureActivity,
-              ),
-              const SizedBox(height: 14),
-            ],
             const SizedBox(height: 10),
             const _FlowSectionHeader(
-              step: 'Passo 3',
-              title: 'Fotos do fornecedor',
+              step: 'Passo 2',
+              title: 'Foto antes do fornecedor',
               body:
-                  'Capture as fotos antes e depois para comprovar a execucao no ponto de venda.',
+                  'Primeiro registre como o fornecedor estava antes de iniciar a execucao no ponto de venda.',
             ),
             const SizedBox(height: 10),
             Row(
@@ -6218,6 +6204,52 @@ class SupplierExecutionEditor extends StatelessWidget {
                 ),
               ],
             ),
+            if (activities.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              const _FlowSectionHeader(
+                step: 'Passo 3',
+                title: 'Atividades do fornecedor',
+                body:
+                    'Execute e registre primeiro as atividades extras previstas para este fornecedor.',
+              ),
+              const SizedBox(height: 10),
+              SupplierGuidanceCard(
+                categories: const [],
+                activities: activities,
+                categoryPhotoCounts: categoryPhotoCounts,
+                activityPhotoCounts: activityPhotoCounts,
+                busy: busy,
+                onCaptureCategory: onCaptureCategory,
+                onCaptureActivity: onCaptureActivity,
+              ),
+            ],
+            if (categories.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              const _FlowSectionHeader(
+                step: 'Passo 4',
+                title: 'Categorias do fornecedor',
+                body:
+                    'Depois das atividades, registre as categorias abastecidas neste fornecedor.',
+              ),
+              const SizedBox(height: 10),
+              SupplierGuidanceCard(
+                categories: categories,
+                activities: const [],
+                categoryPhotoCounts: categoryPhotoCounts,
+                activityPhotoCounts: activityPhotoCounts,
+                busy: busy,
+                onCaptureCategory: onCaptureCategory,
+                onCaptureActivity: onCaptureActivity,
+              ),
+            ],
+            const SizedBox(height: 14),
+            const _FlowSectionHeader(
+              step: 'Passo 5',
+              title: 'Foto depois do fornecedor',
+              body:
+                  'Ao terminar a execucao, capture a foto final para comprovar o resultado.',
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -6231,7 +6263,7 @@ class SupplierExecutionEditor extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             const _FlowSectionHeader(
-              step: 'Passo 4',
+              step: 'Passo 6',
               title: 'Abastecimento e ruptura',
               body:
                   'Responda se os produtos foram abastecidos e se houve ruptura neste fornecedor.',
@@ -6260,7 +6292,7 @@ class SupplierExecutionEditor extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           const _FlowSectionHeader(
-            step: 'Passo 5',
+            step: 'Passo 7',
             title: 'Observacoes e conclusao',
             body:
                 'Registre qualquer motivo relevante antes de concluir o fornecedor.',
@@ -6900,8 +6932,8 @@ int _localEvidenceBucketOrder(LocalPhoto photo) {
   };
   const supplierLevelOrder = <String, int>{
     'supplier_before': 10,
-    'category': 20,
-    'activity': 30,
+    'activity': 20,
+    'category': 30,
     'supplier_after': 40,
   };
 
