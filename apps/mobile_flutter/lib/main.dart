@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.23 (build 26)';
+const appVersionLabel = 'APK Flutter v1.1.24 (build 27)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -1921,6 +1921,34 @@ class _VisitPageState extends State<VisitPage> {
   bool get allSuppliersCompleted =>
       legacyFlowEnabled || incompleteSuppliers.isEmpty;
 
+  String get currentFlowLabel {
+    if (visit == null) {
+      return 'Toque em "Iniciar atendimento" para liberar o fluxo do cliente.';
+    }
+    if (!hasCheckin) {
+      return 'Passo atual: registrar o check-in com foto ao chegar no cliente.';
+    }
+    if (legacyFlowEnabled) {
+      if (!hasBefore || !hasAfter) {
+        return 'Passo atual: registrar as fotos antes e depois da visita.';
+      }
+      if (!hasCheckout) {
+        return 'Passo atual: registrar o check-out para encerrar a visita.';
+      }
+      return 'Visita finalizada localmente. Agora basta sincronizar.';
+    }
+    if (!allSuppliersCompleted) {
+      if (activeSupplier != null) {
+        return 'Passo atual: concluir ${supplierLabel(activeSupplier!)} e seguir para o proximo fornecedor.';
+      }
+      return 'Passo atual: abrir o proximo fornecedor pendente e executar as evidencias.';
+    }
+    if (!hasCheckout) {
+      return 'Todos os fornecedores foram concluidos. Agora registre o check-out.';
+    }
+    return 'Visita finalizada localmente. Agora basta sincronizar.';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2422,6 +2450,43 @@ class _VisitPageState extends State<VisitPage> {
                 ClientHero(
                   item: widget.item,
                   status: visit?.status ?? 'pendente',
+                ),
+                const SizedBox(height: 14),
+                VisitFlowCard(
+                  title: 'Sequencia do atendimento',
+                  subtitle: currentFlowLabel,
+                  steps: [
+                    VisitFlowStepData(
+                      index: 1,
+                      label: 'Check-in',
+                      done: hasCheckin,
+                      active: visit != null && !hasCheckin,
+                    ),
+                    VisitFlowStepData(
+                      index: 2,
+                      label: legacyFlowEnabled
+                          ? 'Fotos da visita'
+                          : 'Fornecedores',
+                      done: legacyFlowEnabled
+                          ? hasBefore && hasAfter
+                          : allSuppliersCompleted,
+                      active: visit != null &&
+                          hasCheckin &&
+                          (legacyFlowEnabled
+                              ? !(hasBefore && hasAfter)
+                              : !allSuppliersCompleted),
+                    ),
+                    VisitFlowStepData(
+                      index: 3,
+                      label: 'Check-out',
+                      done: hasCheckout,
+                      active: visit != null &&
+                          (legacyFlowEnabled
+                              ? hasCheckin && hasBefore && hasAfter
+                              : hasCheckin && allSuppliersCompleted) &&
+                          !hasCheckout,
+                    ),
+                  ],
                 ),
                 if (widget.item.hasCoordinates) ...[
                   const SizedBox(height: 14),
@@ -6091,6 +6156,13 @@ class SupplierExecutionEditor extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          const _FlowSectionHeader(
+            step: 'Passo 1',
+            title: 'Mercadoria recebida',
+            body:
+                'Informe primeiro se houve entrega deste fornecedor no estabelecimento.',
+          ),
+          const SizedBox(height: 10),
           BooleanAnswerField(
             label: 'Recebeu mercadoria hoje?',
             value: deliveryReceived,
@@ -6107,6 +6179,13 @@ class SupplierExecutionEditor extends StatelessWidget {
           ] else if (requiresDeliveryFlow) ...[
             if (categories.isNotEmpty || activities.isNotEmpty) ...[
               const SizedBox(height: 14),
+              const _FlowSectionHeader(
+                step: 'Passo 2',
+                title: 'Categorias e atividades',
+                body:
+                    'Registre as evidencias pedidas em cada categoria e atividade antes de concluir o fornecedor.',
+              ),
+              const SizedBox(height: 10),
               SupplierGuidanceCard(
                 categories: categories,
                 activities: activities,
@@ -6118,6 +6197,13 @@ class SupplierExecutionEditor extends StatelessWidget {
               ),
               const SizedBox(height: 14),
             ],
+            const SizedBox(height: 10),
+            const _FlowSectionHeader(
+              step: 'Passo 3',
+              title: 'Fotos do fornecedor',
+              body:
+                  'Capture as fotos antes e depois para comprovar a execucao no ponto de venda.',
+            ),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -6142,6 +6228,13 @@ class SupplierExecutionEditor extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
+            const _FlowSectionHeader(
+              step: 'Passo 4',
+              title: 'Abastecimento e ruptura',
+              body:
+                  'Responda se os produtos foram abastecidos e se houve ruptura neste fornecedor.',
+            ),
+            const SizedBox(height: 10),
             BooleanAnswerField(
               label: 'Produtos foram abastecidos?',
               value: productsReplenished,
@@ -6164,6 +6257,13 @@ class SupplierExecutionEditor extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
+          const _FlowSectionHeader(
+            step: 'Passo 5',
+            title: 'Observacoes e conclusao',
+            body:
+                'Registre qualquer motivo relevante antes de concluir o fornecedor.',
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: notesController,
             minLines: 2,
@@ -6394,6 +6494,198 @@ class SupplierGuidanceCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class VisitFlowStepData {
+  const VisitFlowStepData({
+    required this.index,
+    required this.label,
+    required this.done,
+    required this.active,
+  });
+
+  final int index;
+  final String label;
+  final bool done;
+  final bool active;
+}
+
+class VisitFlowCard extends StatelessWidget {
+  const VisitFlowCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.steps,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<VisitFlowStepData> steps;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: brandNavy,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: Color(0xFF475569),
+              height: 1.45,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: steps.map((step) => _VisitFlowPill(step: step)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VisitFlowPill extends StatelessWidget {
+  const _VisitFlowPill({required this.step});
+
+  final VisitFlowStepData step;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = step.done
+        ? brandGreen
+        : step.active
+        ? brandBlue
+        : const Color(0xFF94A3B8);
+    final String stateLabel = step.done
+        ? 'Concluido'
+        : step.active
+        ? 'Atual'
+        : 'Pendente';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: color,
+            child: Text(
+              '${step.index}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                step.label,
+                style: const TextStyle(
+                  color: brandNavy,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                stateLabel,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FlowSectionHeader extends StatelessWidget {
+  const _FlowSectionHeader({
+    required this.step,
+    required this.title,
+    required this.body,
+  });
+
+  final String step;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            step,
+            style: const TextStyle(
+              color: brandBlue,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(
+              color: brandNavy,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: const TextStyle(
+              color: Color(0xFF475569),
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+            ),
+          ),
         ],
       ),
     );
