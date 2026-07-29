@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.14 (build 17)';
+const appVersionLabel = 'APK Flutter v1.1.16 (build 19)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
