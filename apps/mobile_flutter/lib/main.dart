@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.18 (build 21)';
+const appVersionLabel = 'APK Flutter v1.1.19 (build 22)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -527,7 +527,7 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 14),
                   MessageBox(message: widget.message),
                   const SizedBox(height: 16),
-                  _HomeSectionSwitch(
+                  _HomeViewModePanel(
                     showMap: showMapTab,
                     onChange: (value) => setState(() => showMapTab = value),
                   ),
@@ -561,8 +561,8 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class _HomeSectionSwitch extends StatelessWidget {
-  const _HomeSectionSwitch({required this.showMap, required this.onChange});
+class _HomeViewModePanel extends StatelessWidget {
+  const _HomeViewModePanel({required this.showMap, required this.onChange});
 
   final bool showMap;
   final ValueChanged<bool> onChange;
@@ -570,29 +570,59 @@ class _HomeSectionSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(6),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: line),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: _HomeSectionButton(
-              label: 'Atendimento',
-              icon: Icons.list_alt,
-              selected: !showMap,
-              onPressed: () => onChange(false),
+          const Text(
+            'Visualizacao do roteiro',
+            style: TextStyle(
+              color: brandNavy,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _HomeSectionButton(
-              label: 'Mapa',
-              icon: Icons.map_outlined,
-              selected: showMap,
-              onPressed: () => onChange(true),
+          const SizedBox(height: 6),
+          const Text(
+            'Use roteiro para trabalhar e mapa apenas para localizar o cliente.',
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: line),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _HomeSectionButton(
+                    label: 'Roteiro',
+                    icon: Icons.list_alt,
+                    selected: !showMap,
+                    onPressed: () => onChange(false),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _HomeSectionButton(
+                    label: 'Mapa',
+                    icon: Icons.map_outlined,
+                    selected: showMap,
+                    onPressed: () => onChange(true),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
