@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.20 (build 23)';
+const appVersionLabel = 'APK Flutter v1.1.21 (build 24)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -2469,15 +2469,6 @@ class _VisitPageState extends State<VisitPage> {
                     ok: hasCheckin,
                     onPressed: busy ? null : () => _capture('checkin'),
                   ),
-                  EvidenceButton(
-                    label: 'Check-out com foto',
-                    ok: hasCheckout,
-                    onPressed: busy
-                        ? null
-                        : allSuppliersCompleted
-                        ? () => _capture('checkout')
-                        : null,
-                  ),
                   if (legacyFlowEnabled) ...[
                     EvidenceButton(
                       label: 'Foto antes',
@@ -2641,6 +2632,19 @@ class _VisitPageState extends State<VisitPage> {
                           body:
                               'Toque em um fornecedor para responder entrega, registrar evidencias e concluir esse atendimento.',
                         ),
+                      const SizedBox(height: 12),
+                      if (!allSuppliersCompleted)
+                        InfoCard(
+                          title: 'Finalize os fornecedores primeiro',
+                          body:
+                              'Ainda existem ${incompleteSuppliers.length} fornecedor(es) pendentes. O check-out so sera liberado depois que todos forem concluidos.',
+                        )
+                      else
+                        EvidenceButton(
+                          label: 'Check-out com foto',
+                          ok: hasCheckout,
+                          onPressed: busy ? null : () => _capture('checkout'),
+                        ),
                     ],
                   ],
                   const SizedBox(height: 12),
@@ -2654,10 +2658,17 @@ class _VisitPageState extends State<VisitPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  PrimaryButton(
-                    label: 'Encerrar visita',
-                    onPressed: busy ? null : _finish,
-                  ),
+                  if (hasCheckout)
+                    PrimaryButton(
+                      label: 'Encerrar visita',
+                      onPressed: busy ? null : _finish,
+                    )
+                  else
+                    const InfoCard(
+                      title: 'Check-out pendente',
+                      body:
+                          'Depois de concluir todos os fornecedores, registre o check-out com foto para liberar o encerramento da visita.',
+                    ),
                 ],
                 const SizedBox(height: 14),
                 MessageBox(message: message),
