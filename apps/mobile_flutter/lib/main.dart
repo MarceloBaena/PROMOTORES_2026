@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.17 (build 20)';
+const appVersionLabel = 'APK Flutter v1.1.18 (build 21)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -495,11 +495,6 @@ class _HomePageState extends State<HomePage> {
                     versionLabel: appVersionLabel,
                   ),
                   const SizedBox(height: 14),
-                  _HomeSectionSwitch(
-                    showMap: showMapTab,
-                    onChange: (value) => setState(() => showMapTab = value),
-                  ),
-                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
@@ -532,6 +527,11 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 14),
                   MessageBox(message: widget.message),
                   const SizedBox(height: 16),
+                  _HomeSectionSwitch(
+                    showMap: showMapTab,
+                    onChange: (value) => setState(() => showMapTab = value),
+                  ),
+                  const SizedBox(height: 14),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
                     child: showMapTab
