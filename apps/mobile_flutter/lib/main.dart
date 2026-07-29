@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.24 (build 27)';
+const appVersionLabel = 'APK Flutter v1.1.25 (build 28)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -2221,31 +2221,33 @@ class _VisitPageState extends State<VisitPage> {
       return;
     }
 
-    final categories = categoriesFromSupplier(supplier);
-    for (final category in categories) {
-      final categoryDone = executionPhotos.any(
-        (photo) => photo.categoryId == category.id,
-      );
-      if (!categoryDone) {
-        setState(
-          () => message =
-              'Capture a foto da categoria ${category.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
+    if (requiresDeliveryFlow) {
+      final categories = categoriesFromSupplier(supplier);
+      for (final category in categories) {
+        final categoryDone = executionPhotos.any(
+          (photo) => photo.categoryId == category.id,
         );
-        return;
+        if (!categoryDone) {
+          setState(
+            () => message =
+                'Capture a foto da categoria ${category.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
+          );
+          return;
+        }
       }
-    }
 
-    final activities = activitiesFromSupplier(supplier);
-    for (final activity in activities) {
-      final activityDone = executionPhotos.any(
-        (photo) => photo.activityId == activity.id,
-      );
-      if (!activityDone) {
-        setState(
-          () => message =
-              'Capture a evidencia da atividade ${activity.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
+      final activities = activitiesFromSupplier(supplier);
+      for (final activity in activities) {
+        final activityDone = executionPhotos.any(
+          (photo) => photo.activityId == activity.id,
         );
-        return;
+        if (!activityDone) {
+          setState(
+            () => message =
+                'Capture a evidencia da atividade ${activity.displayName} antes de concluir o fornecedor ${supplierLabel(supplier)}.',
+          );
+          return;
+        }
       }
     }
 
