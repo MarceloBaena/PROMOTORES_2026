@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.22 (build 25)';
+const appVersionLabel = 'APK Flutter v1.1.23 (build 26)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -2371,6 +2371,12 @@ class _VisitPageState extends State<VisitPage> {
         activityName: activity?.displayName,
       );
       await _load();
+      if (type == 'checkout') {
+        await widget.repository.finishVisit(currentVisit, notesController.text);
+        if (!mounted) return;
+        Navigator.pop(context);
+        return;
+      }
       if (!legacyFlowEnabled && type == 'checkin') {
         final nextSupplier = _nextIncompleteSupplier();
         if (nextSupplier != null) {
@@ -2387,38 +2393,6 @@ class _VisitPageState extends State<VisitPage> {
             ? 'Evidencia da atividade ${activity.displayName} salva para o fornecedor ${supplierLabel(supplier!)} (${activityPhotoCount + 1}/$maxEvidencePhotosPerCategoryOrActivity).'
             : '${photoLabel(type)} do fornecedor ${supplierLabel(supplier!)} salva localmente.',
       );
-    } catch (error) {
-      setState(() => message = normalizedError(error));
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  Future<void> _finish() async {
-    final currentVisit = visit;
-    if (currentVisit == null) return;
-    if (!requiredReady) {
-      setState(
-        () => message = legacyFlowEnabled
-            ? 'Obrigatorio capturar check-in, foto antes, foto depois e check-out antes de encerrar.'
-            : 'Obrigatorio capturar check-in, concluir todos os fornecedores e registrar o check-out antes de encerrar.',
-      );
-      return;
-    }
-
-    if (!legacyFlowEnabled && !allSuppliersCompleted) {
-      setState(
-        () => message =
-            'Ainda existem ${incompleteSuppliers.length} fornecedor(es) sem conclusao. Passe por todos antes de encerrar a visita.',
-      );
-      return;
-    }
-
-    setState(() => busy = true);
-    try {
-      await widget.repository.finishVisit(currentVisit, notesController.text);
-      if (!mounted) return;
-      Navigator.pop(context);
     } catch (error) {
       setState(() => message = normalizedError(error));
     } finally {
@@ -2479,6 +2453,13 @@ class _VisitPageState extends State<VisitPage> {
                       label: 'Foto depois',
                       ok: hasAfter,
                       onPressed: busy ? null : () => _capture('after'),
+                    ),
+                    EvidenceButton(
+                      label: 'Check-out e finalizar atendimento',
+                      ok: hasCheckout,
+                      onPressed: busy || !hasCheckin || !hasBefore || !hasAfter
+                          ? null
+                          : () => _capture('checkout'),
                     ),
                   ],
                   if (!legacyFlowEnabled) ...[
@@ -2641,7 +2622,7 @@ class _VisitPageState extends State<VisitPage> {
                         )
                       else
                         EvidenceButton(
-                          label: 'Check-out com foto',
+                          label: 'Check-out e finalizar atendimento',
                           ok: hasCheckout,
                           onPressed: busy ? null : () => _capture('checkout'),
                         ),
@@ -2658,17 +2639,11 @@ class _VisitPageState extends State<VisitPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (hasCheckout)
-                    PrimaryButton(
-                      label: 'Encerrar visita',
-                      onPressed: busy ? null : _finish,
-                    )
-                  else
-                    const InfoCard(
-                      title: 'Check-out pendente',
-                      body:
-                          'Depois de concluir todos os fornecedores, registre o check-out com foto para liberar o encerramento da visita.',
-                    ),
+                  const InfoCard(
+                    title: 'Finalizacao no check-out',
+                    body:
+                        'O atendimento e encerrado automaticamente assim que o check-out com foto for registrado.',
+                  ),
                 ],
                 const SizedBox(height: 14),
                 MessageBox(message: message),
