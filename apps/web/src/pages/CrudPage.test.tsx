@@ -120,6 +120,50 @@ describe("CrudPage com formulario superior", () => {
     expect(screen.getByRole("textbox", { name: /nome/i })).toHaveValue("Cliente Teste");
     expect(screen.getByRole("textbox", { name: /documento/i })).toHaveValue("123");
   });
+
+  it("mantem campos vazios no payload durante a edicao", async () => {
+    const user = userEvent.setup();
+
+    mockedApiJson
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "client-1",
+            code: "001",
+            name: "Cliente Teste",
+            document: "123",
+            status: "ACTIVE"
+          }
+        ]
+      })
+      .mockResolvedValueOnce({ data: { id: "client-1" } })
+      .mockResolvedValueOnce({
+        data: [{ id: "client-1", code: "001", name: "Cliente Editado", document: "", status: "ACTIVE" }]
+      });
+
+    renderCrudPage();
+
+    await user.click(await screen.findByRole("button", { name: /alterar/i }));
+
+    const nameInput = screen.getByRole("textbox", { name: /nome/i });
+    const documentInput = screen.getByRole("textbox", { name: /documento/i });
+
+    await user.clear(nameInput);
+    await user.type(nameInput, "Cliente Editado");
+    await user.clear(documentInput);
+    await user.click(screen.getByRole("button", { name: /salvar alteracao/i }));
+
+    await waitFor(() => {
+      expect(mockedApiJson).toHaveBeenCalledWith("/clients/client-1", {
+        method: "PUT",
+        body: JSON.stringify({
+          name: "Cliente Editado",
+          document: "",
+          status: "ACTIVE"
+        })
+      });
+    });
+  });
 });
 
 describe("CrudPage com selecao multipla", () => {

@@ -299,6 +299,58 @@ export function CrudPage({
     );
   }
 
+  function buildPayload() {
+    const entries: Array<[string, string | string[]]> = [];
+
+    Object.entries(form).forEach(([key, value]) => {
+        const field = fields.find((entry) => entry.name === key);
+
+        if (!field || field.noSubmit) {
+          return;
+        }
+
+        if (field.type === "password") {
+          if (Array.isArray(value) || value === "") {
+            return;
+          }
+          entries.push([key, value]);
+          return;
+        }
+
+        if (Array.isArray(value)) {
+          if (editingId) {
+            entries.push([key, value]);
+            return;
+          }
+
+          if (value.length > 0) {
+            entries.push([key, value]);
+          }
+          return;
+        }
+
+        const normalizedValue = String(value ?? "");
+
+        if (field.type === "select") {
+          if (normalizedValue !== "") {
+            entries.push([key, normalizedValue]);
+          }
+          return;
+        }
+
+        if (editingId) {
+          entries.push([key, normalizedValue]);
+          return;
+        }
+
+        if (normalizedValue !== "") {
+          entries.push([key, normalizedValue]);
+        }
+      });
+
+    return Object.fromEntries(entries);
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
@@ -311,22 +363,7 @@ export function CrudPage({
     }
 
     setLoading(true);
-
-    const payload = Object.fromEntries(
-      Object.entries(form).filter(([key, value]) => {
-        const field = fields.find((entry) => entry.name === key);
-
-        if (field?.noSubmit) {
-          return false;
-        }
-
-        if (Array.isArray(value)) {
-          return value.length > 0;
-        }
-
-        return value !== "";
-      }),
-    );
+    const payload = buildPayload();
 
     try {
       await apiJson(editingId ? `${endpoint}/${editingId}` : endpoint, {
