@@ -195,6 +195,7 @@ export function RoutingPage() {
     promoterId: "",
   });
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [clientSearch, setClientSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const isPlatformAdmin = user?.role === "ADMIN" && !user.companyId;
@@ -316,6 +317,7 @@ export function RoutingPage() {
         promoterId: "",
       });
       setSelectedClientIds([]);
+      setClientSearch("");
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Rota nao criada.");
@@ -351,10 +353,31 @@ export function RoutingPage() {
   const selectedClients = selectedClientIds
     .map((id) => clients.find((client) => client.id === id))
     .filter((client): client is ClientOption => Boolean(client));
-  const selectedCompany = companies.find((company) => company.id === form.companyId);
-  const selectedPromoter = filteredPromoters.find(
-    (promoter) => promoter.id === form.promoterId,
-  );
+  const routeClientOptions = useMemo(() => {
+    const normalizedSearch = clientSearch.trim().toLowerCase();
+    const availableClients = filteredClients.filter(
+      (client) => !selectedClientIds.includes(client.id),
+    );
+
+    const matches = !normalizedSearch
+      ? availableClients
+      : availableClients.filter((client) => {
+          const haystack = [
+            client.code,
+            client.name,
+            client.tradeName,
+            client.city,
+            client.state,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+
+          return haystack.includes(normalizedSearch);
+        });
+
+    return matches.slice(0, 8);
+  }, [clientSearch, filteredClients, selectedClientIds]);
 
   const publishedCount = useMemo(
     () => routes.filter((route) => route.status === "PUBLISHED").length,
@@ -474,6 +497,7 @@ export function RoutingPage() {
                         promoterId: "",
                       }));
                       setSelectedClientIds([]);
+                      setClientSearch("");
                     }}
                   >
                     <option value="">Selecione a empresa/filial</option>
@@ -573,6 +597,7 @@ export function RoutingPage() {
                               new Set([...current, ...promoterClientIds]),
                             ),
                           );
+                          setClientSearch("");
                         }
                       }
                     }}
@@ -643,9 +668,9 @@ export function RoutingPage() {
               <div className="rounded-[1.35rem] border border-line bg-white p-3">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <span className="field-label">Clientes disponiveis</span>
+                    <span className="field-label">Buscar clientes</span>
                     <div className="mt-1 text-xs font-semibold text-slateText">
-                      Clique para incluir ou remover clientes desta rota.
+                      Use a consulta abaixo para localizar e incluir clientes na rota.
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -664,52 +689,84 @@ export function RoutingPage() {
                   </div>
                 </div>
 
-                <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
-                  {filteredClients.map((client) => {
-                    const selected = selectedClientIds.includes(client.id);
-                    const secondaryLine = clientSecondaryLine(client);
+                <label className="block">
+                  <span className="field-label">Consulta suspensa de clientes</span>
+                  <input
+                    className="input-control"
+                    type="text"
+                    value={clientSearch}
+                    placeholder="Digite codigo, nome fantasia, razao social ou cidade"
+                    onChange={(event) => setClientSearch(event.target.value)}
+                  />
+                </label>
 
-                    return (
+                <div className="mt-3 rounded-2xl border border-line bg-field/60 p-2">
+                  <div className="mb-2 flex items-center justify-between gap-2 px-2">
+                    <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                      Opcoes encontradas
+                    </span>
+                    <span className="text-[11px] font-bold text-slateText">
+                      {routeClientOptions.length} exibido(s)
+                    </span>
+                  </div>
+
+                  <div className="max-h-[21rem] space-y-2 overflow-y-auto pr-1">
+                    {routeClientOptions.map((client) => {
+                      const secondaryLine = clientSecondaryLine(client);
+
+                      return (
+                        <button
+                          key={client.id}
+                          type="button"
+                          className="w-full rounded-2xl border border-line bg-white px-3 py-3 text-left transition hover:bg-muted"
+                          onClick={() => {
+                            toggleClient(client.id);
+                            setClientSearch("");
+                          }}
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                            <div className="min-w-0">
+                              <div className="break-words text-sm font-black leading-6 text-ink">
+                                {clientHeadline(client)}
+                              </div>
+                              {secondaryLine ? (
+                                <div className="mt-1 break-words text-xs font-semibold leading-5 text-slateText">
+                                  {secondaryLine}
+                                </div>
+                              ) : null}
+                            </div>
+                            <span className="self-start rounded-full bg-field px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText sm:shrink-0">
+                              Incluir
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {routeClientOptions.length === 0 ? (
+                      <p className="px-3 py-4 text-center text-sm font-semibold text-stone-500">
+                        {clientSearch.trim()
+                          ? "Nenhum cliente encontrado para a busca informada."
+                          : "Digite para buscar os clientes da rota."}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                {selectedClients.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedClients.map((client) => (
                       <button
                         key={client.id}
                         type="button"
-                        className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
-                          selected
-                            ? "border-moss bg-emerald-50 text-forest"
-                            : "border-line bg-white text-ink hover:bg-muted"
-                        }`}
+                        className="rounded-full border border-line bg-white px-3 py-2 text-xs font-black text-ink transition hover:bg-muted"
                         onClick={() => toggleClient(client.id)}
+                        title="Remover cliente da rota"
                       >
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                          <div className="min-w-0">
-                            <div className="break-words text-sm font-black leading-6 text-current">
-                              {clientHeadline(client)}
-                            </div>
-                            {secondaryLine ? (
-                              <div className="mt-1 break-words text-xs font-semibold leading-5 text-slateText">
-                                {secondaryLine}
-                              </div>
-                            ) : null}
-                          </div>
-                          <span
-                            className={`self-start rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] sm:shrink-0 ${
-                              selected
-                                ? "bg-white/80 text-forest"
-                                : "bg-field text-slateText"
-                            }`}
-                          >
-                            {selected ? "Selecionado" : "Disponivel"}
-                          </span>
-                        </div>
+                        {clientHeadline(client)}
                       </button>
-                    );
-                  })}
-                  {filteredClients.length === 0 ? (
-                    <p className="py-4 text-center text-sm font-semibold text-stone-500">
-                      Nenhum cliente encontrado.
-                    </p>
-                  ) : null}
-                </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -727,6 +784,7 @@ export function RoutingPage() {
                     promoterId: "",
                   });
                   setSelectedClientIds([]);
+                  setClientSearch("");
                   setMessage(null);
                 }}
               >
