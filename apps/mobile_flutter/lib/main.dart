@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.30 (build 33)';
+const appVersionLabel = 'APK Flutter v1.1.31 (build 34)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -937,6 +937,7 @@ class _RouteMapContentState extends State<RouteMapContent> {
   final MapController mapController = MapController();
   RouteItemView? selectedItem;
   bool showOnlyPending = false;
+  String routeFilter = 'all';
   final Distance _distance = const Distance();
 
   List<_RouteGroupView> _buildRouteGroups(List<RouteItemView> items) {
@@ -997,6 +998,18 @@ class _RouteMapContentState extends State<RouteMapContent> {
 
   List<RouteItemView> get itemsWithoutCoordinates =>
       orderedRouteItems.where((item) => !item.hasCoordinates).toList();
+
+  List<RouteItemView> _applyRouteFilter(List<RouteItemView> items) {
+    final routeGroups = _buildRouteGroups(items);
+    if (routeFilter == 'all') {
+      return items;
+    }
+    final allowedRouteIds = routeGroups
+        .where((group) => routeFilter == 'main' ? !group.isExtraRoute : group.isExtraRoute)
+        .map((group) => group.routeId)
+        .toSet();
+    return items.where((item) => allowedRouteIds.contains(item.routeId)).toList();
+  }
 
   RouteItemView? get currentRouteItem {
     for (final item in orderedRouteItems) {
@@ -1208,7 +1221,11 @@ class _RouteMapContentState extends State<RouteMapContent> {
       currentRouteItem,
       nextRouteItemAfterCurrent,
     );
-    final visibleRouteGroups = _buildRouteGroups(visibleRouteItems);
+    final filteredRouteItems = _applyRouteFilter(visibleRouteItems);
+    final filteredItemsWithCoordinates = filteredRouteItems
+        .where((item) => item.hasCoordinates)
+        .toList();
+    final visibleRouteGroups = _buildRouteGroups(filteredRouteItems);
     _RouteGroupView? highlightedRouteGroup;
     if (highlightedItem != null) {
       for (final group in visibleRouteGroups) {
@@ -1278,6 +1295,49 @@ class _RouteMapContentState extends State<RouteMapContent> {
         const SizedBox(height: 12),
         const _MapLegendCard(),
         const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Filtrar rotas no mapa',
+                style: TextStyle(
+                  color: brandNavy,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MapFilterChip(
+                    label: 'Todas',
+                    selected: routeFilter == 'all',
+                    onTap: () => setState(() => routeFilter = 'all'),
+                  ),
+                  _MapFilterChip(
+                    label: 'Principal',
+                    selected: routeFilter == 'main',
+                    onTap: () => setState(() => routeFilter = 'main'),
+                  ),
+                  _MapFilterChip(
+                    label: 'Extra',
+                    selected: routeFilter == 'extra',
+                    onTap: () => setState(() => routeFilter = 'extra'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
@@ -1320,7 +1380,7 @@ class _RouteMapContentState extends State<RouteMapContent> {
               : () => unawaited(_openVisit(currentRouteItem!)),
         ),
         const SizedBox(height: 12),
-        if (visibleItemsWithCoordinates.isEmpty)
+        if (filteredItemsWithCoordinates.isEmpty)
           const EmptyState(
             title: 'Nenhum cliente com coordenadas',
             body:
@@ -1351,11 +1411,11 @@ class _RouteMapContentState extends State<RouteMapContent> {
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'promotorpro_mobile',
                 ),
-                if (visibleItemsWithCoordinates.length > 1)
+                if (filteredItemsWithCoordinates.length > 1)
                   PolylineLayer(
                     polylines: [
                       Polyline(
-                        points: visibleItemsWithCoordinates
+                        points: filteredItemsWithCoordinates
                             .map(
                               (item) => LatLng(
                                 item.clientLatitude!,
@@ -1369,7 +1429,7 @@ class _RouteMapContentState extends State<RouteMapContent> {
                     ],
                   ),
                 MarkerLayer(
-                  markers: visibleItemsWithCoordinates.map((item) {
+                  markers: filteredItemsWithCoordinates.map((item) {
                     final isSelected = selectedItem?.id == item.id;
                     final isCurrent = currentRouteItem?.id == item.id;
                     final isDone = item.isDone;
@@ -1785,6 +1845,9 @@ class _MapNextStopCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activeItem = currentItem ?? nextItem;
+    final activeRouteName = currentItem?.routeName ?? activeItem?.routeName;
+    final activeRoutePeriod =
+        currentItem?.routePeriodLabel ?? activeItem?.routePeriodLabel;
     final percentLabel = '${(progress * 100).round()}%';
 
     return Container(
@@ -1848,6 +1911,32 @@ class _MapNextStopCard extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
+          if (activeItem != null) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _MapStatusChip(
+                  label: currentItem != null ? 'Cliente atual' : 'Proximo cliente',
+                  color: currentItem != null ? warningOrange : brandBlue,
+                ),
+                _MapStatusChip(
+                  label: 'Rota ${activeRouteName ?? '-'}',
+                  color: brandGreen,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              activeRoutePeriod ?? 'Periodo da rota nao informado',
+              style: const TextStyle(
+                color: Color(0xFFCBD5E1),
+                height: 1.3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
           const SizedBox(height: 6),
           Text(
             activeItem == null
@@ -1877,6 +1966,8 @@ class _MapNextStopCard extends StatelessWidget {
               _MapInfoPill(label: 'Pendentes', value: '$pendingCount'),
               _MapInfoPill(label: 'Concluidos', value: '$doneCount'),
               _MapInfoPill(label: 'Proximo salto', value: nextJumpLabel),
+              if (nextItem != null)
+                _MapInfoPill(label: 'Proximo cliente', value: '${nextItem!.sequence}'),
             ],
           ),
           if (activeItem != null) ...[
@@ -6903,6 +6994,44 @@ class VisitFlowCard extends StatelessWidget {
             children: steps.map((step) => _VisitFlowPill(step: step)).toList(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MapFilterChip extends StatelessWidget {
+  const _MapFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? brandBlue : const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: selected ? brandBlue : line),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.white : brandNavy,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
       ),
     );
   }
