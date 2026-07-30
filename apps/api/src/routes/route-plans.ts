@@ -68,7 +68,7 @@ function resolveRoutePeriod(input: z.infer<typeof routeSchema>) {
   };
 }
 
-async function deactivatePreviousPublishedRoutes(
+async function reconcilePublishedRoutesForPromoter(
   tx: Prisma.TransactionClient,
   input: { companyId: string; promoterId?: string | null; exceptRouteId?: string }
 ) {
@@ -92,21 +92,10 @@ async function deactivatePreviousPublishedRoutes(
   const completedRouteIds = publishedRoutes
     .filter(routeIsCompletedByItems)
     .map((route) => route.id);
-  const unfinishedRouteIds = publishedRoutes
-    .filter((route) => !completedRouteIds.includes(route.id))
-    .map((route) => route.id);
-
   if (completedRouteIds.length > 0) {
     await tx.route.updateMany({
       where: { id: { in: completedRouteIds } },
       data: { status: "COMPLETED" }
-    });
-  }
-
-  if (unfinishedRouteIds.length > 0) {
-    await tx.route.updateMany({
-      where: { id: { in: unfinishedRouteIds } },
-      data: { status: "CANCELLED" }
     });
   }
 }
@@ -181,7 +170,7 @@ routePlansRouter.post(
       const status = input.status ?? "DRAFT";
 
       if (status === "PUBLISHED") {
-        await deactivatePreviousPublishedRoutes(tx, { companyId, promoterId: input.promoterId });
+        await reconcilePublishedRoutesForPromoter(tx, { companyId, promoterId: input.promoterId });
       }
 
       return tx.route.create({
@@ -232,7 +221,7 @@ routePlansRouter.put(
     assertSameCompany(req, existing.companyId);
     const route = await prisma.$transaction(async (tx) => {
       if (input.status === "PUBLISHED" && existing.companyId) {
-        await deactivatePreviousPublishedRoutes(tx, {
+        await reconcilePublishedRoutesForPromoter(tx, {
           companyId: existing.companyId,
           promoterId: existing.promoterId,
           exceptRouteId: req.params.id

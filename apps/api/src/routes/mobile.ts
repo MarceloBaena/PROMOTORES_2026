@@ -42,7 +42,7 @@ mobileRouter.get(
 
     const now = new Date();
     const routeWindowWhere = buildRouteWindowWhere(startOfDay(now), endOfDay(now));
-    const latestRoute = await prisma.route.findFirst({
+    const publishedRoutes = await prisma.route.findMany({
       where: {
         companyId: promoter.companyId,
         promoterId: promoter.id,
@@ -53,7 +53,7 @@ mobileRouter.get(
         ],
         ...routeWindowWhere
       },
-      orderBy: [{ startDate: "desc" }, { scheduledDate: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ startDate: "asc" }, { scheduledDate: "asc" }, { createdAt: "asc" }],
       select: {
         id: true,
         name: true,
@@ -130,25 +130,23 @@ mobileRouter.get(
         }
       }
     });
-    const routes = latestRoute && latestRoute.items.length > 0
-      ? [
-          {
-            ...latestRoute,
-            items: latestRoute.items.map((item) => ({
-              ...item,
-              client: {
-                ...item.client,
-                suppliers: item.client.suppliers.map((link) => ({
-                  ...link.supplier,
-                  activities: link.supplier.activities.map((activityLink) => activityLink.activity),
-                  categories: link.supplier.categories.map((categoryLink) => categoryLink.category)
-                })),
-                activities: item.client.activities.map((link) => link.activity)
-              }
-            }))
+    const routes = publishedRoutes
+      .filter((route) => route.items.length > 0)
+      .map((route) => ({
+        ...route,
+        items: route.items.map((item) => ({
+          ...item,
+          client: {
+            ...item.client,
+            suppliers: item.client.suppliers.map((link) => ({
+              ...link.supplier,
+              activities: link.supplier.activities.map((activityLink) => activityLink.activity),
+              categories: link.supplier.categories.map((categoryLink) => categoryLink.category)
+            })),
+            activities: item.client.activities.map((link) => link.activity)
           }
-        ]
-      : [];
+        }))
+      }));
 
     const clientsById = new Map<string, (typeof routes)[number]["items"][number]["client"]>();
 

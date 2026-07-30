@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.27 (build 30)';
+const appVersionLabel = 'APK Flutter v1.1.28 (build 31)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -3776,20 +3776,22 @@ class LocalDatabase {
         clients.latitude AS clientLatitude,
         clients.longitude AS clientLongitude,
         routes.name AS routeName,
+        routes.scheduled_date AS routeScheduledDate,
         visits.status AS visitStatus
       FROM route_items
       INNER JOIN routes ON routes.id = route_items.route_id
       INNER JOIN clients ON clients.id = route_items.client_id
-      LEFT JOIN visits ON visits.route_item_id = route_items.id
-      WHERE route_items.id = (
-        SELECT candidate.id
-        FROM route_items candidate
-        INNER JOIN routes candidate_route ON candidate_route.id = candidate.route_id
-        WHERE candidate.client_id = route_items.client_id
-        ORDER BY candidate.sequence ASC, candidate_route.scheduled_date DESC, candidate.id ASC
+      LEFT JOIN visits ON visits.local_id = (
+        SELECT candidate_visit.local_id
+        FROM visits candidate_visit
+        WHERE candidate_visit.route_item_id = route_items.id
+        ORDER BY candidate_visit.updated_at DESC, candidate_visit.local_id DESC
         LIMIT 1
       )
-      ORDER BY route_items.sequence ASC
+      ORDER BY
+        COALESCE(routes.scheduled_date, '9999-12-31T23:59:59.999Z') ASC,
+        route_items.sequence ASC,
+        route_items.id ASC
     ''');
     return rows.map(RouteItemView.fromDb).toList();
   }
