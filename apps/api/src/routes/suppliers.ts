@@ -38,12 +38,19 @@ const INTERACTIVE_TRANSACTION_TIMEOUT_MS = 30_000;
 const INTERACTIVE_TRANSACTION_MAX_WAIT_MS = 10_000;
 const CLIENT_SUPPLIER_BATCH_SIZE = 500;
 
-async function assertUniqueDocument(companyId: string, document?: string, ignoreSupplierId?: string) {
+type SupplierPrismaReader = Pick<typeof prisma, "supplier" | "productCategory" | "clientActivityType">;
+
+async function assertUniqueDocument(
+  db: SupplierPrismaReader,
+  companyId: string,
+  document?: string,
+  ignoreSupplierId?: string
+) {
   if (!document) {
     return;
   }
 
-  const existing = await prisma.supplier.findFirst({
+  const existing = await db.supplier.findFirst({
     where: {
       companyId,
       document,
@@ -57,14 +64,18 @@ async function assertUniqueDocument(companyId: string, document?: string, ignore
   }
 }
 
-async function validateCategoryIds(companyId: string, categoryIds?: string[]) {
+async function validateCategoryIds(
+  db: SupplierPrismaReader,
+  companyId: string,
+  categoryIds?: string[]
+) {
   const uniqueCategoryIds = Array.from(new Set(categoryIds ?? []));
 
   if (uniqueCategoryIds.length === 0) {
     return [];
   }
 
-  const categories = await prisma.productCategory.findMany({
+  const categories = await db.productCategory.findMany({
     where: {
       id: { in: uniqueCategoryIds },
       companyId
@@ -79,14 +90,18 @@ async function validateCategoryIds(companyId: string, categoryIds?: string[]) {
   return uniqueCategoryIds;
 }
 
-async function validateActivityIds(companyId: string, activityIds?: string[]) {
+async function validateActivityIds(
+  db: SupplierPrismaReader,
+  companyId: string,
+  activityIds?: string[]
+) {
   const uniqueActivityIds = Array.from(new Set(activityIds ?? []));
 
   if (uniqueActivityIds.length === 0) {
     return [];
   }
 
-  const activities = await prisma.clientActivityType.findMany({
+  const activities = await db.clientActivityType.findMany({
     where: {
       id: { in: uniqueActivityIds },
       companyId
@@ -102,12 +117,12 @@ async function validateActivityIds(companyId: string, activityIds?: string[]) {
 }
 
 async function resolveActivityIds(
-  tx: Pick<typeof prisma, "clientActivityType">,
+  tx: SupplierPrismaReader,
   companyId: string,
   activityIds?: string[],
   activityNames?: string[]
 ) {
-  const validActivityIds = await validateActivityIds(companyId, activityIds);
+  const validActivityIds = await validateActivityIds(tx, companyId, activityIds);
   const normalizedNames = Array.from(
     new Set(
       (activityNames ?? [])
@@ -332,8 +347,8 @@ suppliersRouter.post(
     const companyId = requireCompanyId(req, input.companyId);
     const { categoryIds, activityIds, activityNames, ...supplierInput } = input;
 
-    await assertUniqueDocument(companyId, supplierInput.document);
-    const validCategoryIds = await validateCategoryIds(companyId, categoryIds);
+    await assertUniqueDocument(prisma, companyId, supplierInput.document);
+    const validCategoryIds = await validateCategoryIds(prisma, companyId, categoryIds);
 
     const supplier = await prisma.$transaction(async (tx) => {
       const resolvedActivityIds = await resolveActivityIds(tx, companyId, activityIds, activityNames);
@@ -405,8 +420,8 @@ suppliersRouter.put(
       throw new AppError(400, "COMPANY_REQUIRED", "Fornecedor precisa estar vinculado a uma empresa/filial.");
     }
 
-    await assertUniqueDocument(companyId, supplierInput.document, existing.id);
-    const validCategoryIds = categoryIds === undefined ? undefined : await validateCategoryIds(companyId, categoryIds);
+    await assertUniqueDocument(prisma, companyId, supplierInput.document, existing.id);
+    const validCategoryIds = categoryIds === undefined ? undefined : await validateCategoryIds(prisma, companyId, categoryIds);
     const nextCategoryIds = companyChanged ? (validCategoryIds ?? []) : validCategoryIds;
 
     const supplier = await prisma.$transaction(async (tx) => {
