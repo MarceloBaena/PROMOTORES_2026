@@ -22,10 +22,12 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.28 (build 31)';
+const appVersionLabel = 'APK Flutter v1.1.29 (build 32)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
+const successGreen = Color(0xFF10B981);
+const warningOrange = Color(0xFFF59E0B);
 const surface = Color(0xFFF8FAFC);
 const line = Color(0xFFE2E8F0);
 const _keepValue = Object();
@@ -688,6 +690,36 @@ class _HomeRouteListSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final routeGroups = <_RouteGroupView>[];
+    final groupedItems = <String, List<RouteItemView>>{};
+    for (final item in pendingItems) {
+      groupedItems.putIfAbsent(item.routeId, () => <RouteItemView>[]).add(item);
+    }
+    final orderedGroups = groupedItems.values.toList()
+      ..sort((first, second) {
+        final firstDate = first.first.routeSortDate;
+        final secondDate = second.first.routeSortDate;
+        final dateComparison = firstDate.compareTo(secondDate);
+        if (dateComparison != 0) return dateComparison;
+        return first.first.routeName.compareTo(second.first.routeName);
+      });
+
+    for (var index = 0; index < orderedGroups.length; index++) {
+      final items = [...orderedGroups[index]]
+        ..sort((first, second) => first.sequence.compareTo(second.sequence));
+      final firstItem = items.first;
+      routeGroups.add(
+        _RouteGroupView(
+          routeId: firstItem.routeId,
+          routeName: firstItem.routeName,
+          routePeriodLabel: firstItem.routePeriodLabel,
+          priorityLabel: index == 0 ? 'Rota principal' : 'Rota extra',
+          isExtraRoute: index > 0,
+          items: items,
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -705,17 +737,133 @@ class _HomeRouteListSection extends StatelessWidget {
                 'Quando uma rota for publicada para este promotor, os clientes aparecem aqui.',
           )
         else
-          ...pendingItems.map(
-            (item) => RouteItemCard(
-              item: item,
-              onTap: () => unawaited(onOpenVisit(item)),
-              onOpenVisit: () => unawaited(onOpenVisit(item)),
-              onOpenMap: item.hasCoordinates
-                  ? () => unawaited(onOpenMap(item))
-                  : null,
+          ...routeGroups.map(
+            (group) => _RouteGroupCard(
+              group: group,
+              onOpenVisit: (item) => unawaited(onOpenVisit(item)),
+              onOpenMap: (item) => unawaited(onOpenMap(item)),
             ),
           ),
       ],
+    );
+  }
+}
+
+class _RouteGroupView {
+  const _RouteGroupView({
+    required this.routeId,
+    required this.routeName,
+    required this.routePeriodLabel,
+    required this.priorityLabel,
+    required this.isExtraRoute,
+    required this.items,
+  });
+
+  final String routeId;
+  final String routeName;
+  final String routePeriodLabel;
+  final String priorityLabel;
+  final bool isExtraRoute;
+  final List<RouteItemView> items;
+}
+
+class _RouteGroupCard extends StatelessWidget {
+  const _RouteGroupCard({
+    required this.group,
+    required this.onOpenVisit,
+    required this.onOpenMap,
+  });
+
+  final _RouteGroupView group;
+  final ValueChanged<RouteItemView> onOpenVisit;
+  final ValueChanged<RouteItemView> onOpenMap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: line),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  group.routeName,
+                  style: const TextStyle(
+                    color: brandNavy,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                _RouteBadge(
+                  label: group.priorityLabel,
+                  color: group.isExtraRoute ? warningOrange : successGreen,
+                ),
+                _RouteBadge(
+                  label: '${group.items.length} cliente(s)',
+                  color: brandBlue,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              group.routePeriodLabel,
+              style: const TextStyle(
+                color: Color(0xFF475569),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
+            ...group.items.map(
+              (item) => RouteItemCard(
+                item: item,
+                compact: true,
+                routePriorityLabel: group.priorityLabel,
+                onTap: () => onOpenVisit(item),
+                onOpenVisit: () => onOpenVisit(item),
+                onOpenMap: item.hasCoordinates ? () => onOpenMap(item) : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteBadge extends StatelessWidget {
+  const _RouteBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 }
@@ -792,8 +940,15 @@ class _RouteMapContentState extends State<RouteMapContent> {
   final Distance _distance = const Distance();
 
   List<RouteItemView> get orderedRouteItems =>
-      [...widget.routeItems]
-        ..sort((first, second) => first.sequence.compareTo(second.sequence));
+      [...widget.routeItems]..sort((first, second) {
+        final routeComparison = first.routeSortDate.compareTo(
+          second.routeSortDate,
+        );
+        if (routeComparison != 0) return routeComparison;
+        final routeNameComparison = first.routeName.compareTo(second.routeName);
+        if (routeNameComparison != 0) return routeNameComparison;
+        return first.sequence.compareTo(second.sequence);
+      });
 
   List<RouteItemView> get itemsWithCoordinates =>
       orderedRouteItems.where((item) => item.hasCoordinates).toList();
@@ -3777,6 +3932,8 @@ class LocalDatabase {
         clients.longitude AS clientLongitude,
         routes.name AS routeName,
         routes.scheduled_date AS routeScheduledDate,
+        json_extract(routes.payload_json, '\$.startDate') AS routeStartDate,
+        json_extract(routes.payload_json, '\$.endDate') AS routeEndDate,
         visits.status AS visitStatus
       FROM route_items
       INNER JOIN routes ON routes.id = route_items.route_id
@@ -3789,7 +3946,11 @@ class LocalDatabase {
         LIMIT 1
       )
       ORDER BY
-        COALESCE(routes.scheduled_date, '9999-12-31T23:59:59.999Z') ASC,
+        COALESCE(
+          json_extract(routes.payload_json, '\$.startDate'),
+          routes.scheduled_date,
+          '9999-12-31T23:59:59.999Z'
+        ) ASC,
         route_items.sequence ASC,
         route_items.id ASC
     ''');
@@ -4455,6 +4616,9 @@ class RouteItemView {
     this.clientLatitude,
     this.clientLongitude,
     required this.routeName,
+    this.routeScheduledDate,
+    this.routeStartDate,
+    this.routeEndDate,
     this.visitStatus,
   });
 
@@ -4468,11 +4632,29 @@ class RouteItemView {
   final double? clientLatitude;
   final double? clientLongitude;
   final String routeName;
+  final String? routeScheduledDate;
+  final String? routeStartDate;
+  final String? routeEndDate;
   final String? visitStatus;
 
   bool get isDone =>
       status.toUpperCase() == 'COMPLETED' || visitStatus == 'completed';
   bool get hasCoordinates => clientLatitude != null && clientLongitude != null;
+  DateTime get routeSortDate =>
+      _tryParseDate(routeStartDate) ??
+      _tryParseDate(routeScheduledDate) ??
+      DateTime.fromMillisecondsSinceEpoch(0);
+  String get routePeriodLabel {
+    final start = formatRouteDateTime(routeStartDate ?? routeScheduledDate);
+    final end = formatRouteDateTime(routeEndDate);
+    if (start != null && end != null) {
+      return 'Periodo: $start ate $end';
+    }
+    if (start != null) {
+      return 'Inicio previsto: $start';
+    }
+    return 'Periodo da rota nao informado';
+  }
 
   factory RouteItemView.fromDb(Map<String, Object?> row) => RouteItemView(
     id: row['id'] as String,
@@ -4485,6 +4667,9 @@ class RouteItemView {
     clientLatitude: asDouble(row['clientLatitude']),
     clientLongitude: asDouble(row['clientLongitude']),
     routeName: row['routeName'] as String,
+    routeScheduledDate: row['routeScheduledDate'] as String?,
+    routeStartDate: row['routeStartDate'] as String?,
+    routeEndDate: row['routeEndDate'] as String?,
     visitStatus: row['visitStatus'] as String?,
   );
 }
@@ -5159,6 +5344,17 @@ String formatDate(String? value) {
   return DateFormat('dd/MM/yyyy HH:mm').format(date.toLocal());
 }
 
+DateTime? _tryParseDate(String? value) {
+  if (value == null || value.trim().isEmpty) return null;
+  return DateTime.tryParse(value);
+}
+
+String? formatRouteDateTime(String? value) {
+  final date = _tryParseDate(value);
+  if (date == null) return null;
+  return DateFormat('dd/MM HH:mm').format(date.toLocal());
+}
+
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.child});
 
@@ -5566,18 +5762,22 @@ class RouteItemCard extends StatelessWidget {
     required this.item,
     required this.onTap,
     required this.onOpenVisit,
+    this.compact = false,
+    this.routePriorityLabel,
     this.onOpenMap,
   });
 
   final RouteItemView item;
   final VoidCallback onTap;
   final VoidCallback onOpenVisit;
+  final bool compact;
+  final String? routePriorityLabel;
   final VoidCallback? onOpenMap;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: compact ? 10 : 12),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
@@ -5626,8 +5826,30 @@ class RouteItemCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'Rota ${item.routeName}',
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (routePriorityLabel != null)
+                              _RouteBadge(
+                                label: routePriorityLabel!,
+                                color: routePriorityLabel == 'Rota extra'
+                                    ? warningOrange
+                                    : successGreen,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
                         Text(
-                          item.routeName,
+                          item.routePeriodLabel,
                           style: const TextStyle(
                             color: Color(0xFF64748B),
                             fontWeight: FontWeight.w700,
