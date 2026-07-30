@@ -196,6 +196,7 @@ export function RoutingPage() {
   });
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [clientSearch, setClientSearch] = useState("");
+  const [clientOptionId, setClientOptionId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const isPlatformAdmin = user?.role === "ADMIN" && !user.companyId;
@@ -318,6 +319,7 @@ export function RoutingPage() {
       });
       setSelectedClientIds([]);
       setClientSearch("");
+      setClientOptionId("");
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Rota nao criada.");
@@ -378,6 +380,19 @@ export function RoutingPage() {
 
     return matches.slice(0, 8);
   }, [clientSearch, filteredClients, selectedClientIds]);
+
+  useEffect(() => {
+    if (routeClientOptions.length === 0) {
+      setClientOptionId("");
+      return;
+    }
+
+    setClientOptionId((current) =>
+      current && routeClientOptions.some((client) => client.id === current)
+        ? current
+        : routeClientOptions[0]?.id ?? "",
+    );
+  }, [routeClientOptions]);
 
   const publishedCount = useMemo(
     () => routes.filter((route) => route.status === "PUBLISHED").length,
@@ -498,6 +513,7 @@ export function RoutingPage() {
                       }));
                       setSelectedClientIds([]);
                       setClientSearch("");
+                      setClientOptionId("");
                     }}
                   >
                     <option value="">Selecione a empresa/filial</option>
@@ -598,6 +614,7 @@ export function RoutingPage() {
                             ),
                           );
                           setClientSearch("");
+                          setClientOptionId("");
                         }
                       }
                     }}
@@ -690,7 +707,7 @@ export function RoutingPage() {
                 </div>
 
                 <label className="block">
-                  <span className="field-label">Consulta suspensa de clientes</span>
+                  <span className="field-label">Buscar cliente</span>
                   <input
                     className="input-control"
                     type="text"
@@ -700,55 +717,57 @@ export function RoutingPage() {
                   />
                 </label>
 
-                <div className="mt-3 rounded-2xl border border-line bg-field/60 p-2">
-                  <div className="mb-2 flex items-center justify-between gap-2 px-2">
+                <div className="mt-3 rounded-2xl border border-line bg-field/60 p-3">
+                  <div className="mb-3 flex items-center justify-between gap-2">
                     <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
-                      Opcoes encontradas
+                      Lista suspensa
                     </span>
                     <span className="text-[11px] font-bold text-slateText">
-                      {routeClientOptions.length} exibido(s)
+                      {routeClientOptions.length} opcao(oes)
                     </span>
                   </div>
 
-                  <div className="max-h-[21rem] space-y-2 overflow-y-auto pr-1">
-                    {routeClientOptions.map((client) => {
-                      const secondaryLine = clientSecondaryLine(client);
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+                    <label className="block">
+                      <span className="field-label">Cliente encontrado</span>
+                      <select
+                        className="input-control"
+                        value={clientOptionId}
+                        onChange={(event) => setClientOptionId(event.target.value)}
+                        disabled={routeClientOptions.length === 0}
+                      >
+                        {routeClientOptions.length === 0 ? (
+                          <option value="">
+                            {clientSearch.trim()
+                              ? "Nenhum cliente encontrado"
+                              : "Digite para buscar clientes"}
+                          </option>
+                        ) : null}
+                        {routeClientOptions.map((client) => (
+                          <option key={client.id} value={client.id}>
+                            {clientLabel(client)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
 
-                      return (
-                        <button
-                          key={client.id}
-                          type="button"
-                          className="w-full rounded-2xl border border-line bg-white px-3 py-3 text-left transition hover:bg-muted"
-                          onClick={() => {
-                            toggleClient(client.id);
-                            setClientSearch("");
-                          }}
-                        >
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                            <div className="min-w-0">
-                              <div className="break-words text-sm font-black leading-6 text-ink">
-                                {clientHeadline(client)}
-                              </div>
-                              {secondaryLine ? (
-                                <div className="mt-1 break-words text-xs font-semibold leading-5 text-slateText">
-                                  {secondaryLine}
-                                </div>
-                              ) : null}
-                            </div>
-                            <span className="self-start rounded-full bg-field px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText sm:shrink-0">
-                              Incluir
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                    {routeClientOptions.length === 0 ? (
-                      <p className="px-3 py-4 text-center text-sm font-semibold text-stone-500">
-                        {clientSearch.trim()
-                          ? "Nenhum cliente encontrado para a busca informada."
-                          : "Digite para buscar os clientes da rota."}
-                      </p>
-                    ) : null}
+                    <button
+                      type="button"
+                      className="primary-button self-end"
+                      disabled={!clientOptionId}
+                      onClick={() => {
+                        if (!clientOptionId) {
+                          return;
+                        }
+
+                        toggleClient(clientOptionId);
+                        setClientSearch("");
+                        setClientOptionId("");
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Incluir cliente
+                    </button>
                   </div>
                 </div>
 
@@ -785,6 +804,7 @@ export function RoutingPage() {
                   });
                   setSelectedClientIds([]);
                   setClientSearch("");
+                  setClientOptionId("");
                   setMessage(null);
                 }}
               >
