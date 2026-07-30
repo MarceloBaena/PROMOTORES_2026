@@ -439,35 +439,6 @@ export function RoutingPage() {
           </div>
 
           <div className="space-y-4 p-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-2xl border border-line bg-field px-3 py-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
-                  Empresa
-                </div>
-                <div className="mt-1 text-sm font-black leading-6 text-ink">
-                  {selectedCompany ? companyLabel(selectedCompany) : "Nao selecionada"}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-line bg-field px-3 py-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
-                  Equipe
-                </div>
-                <div className="mt-1 text-sm font-black leading-6 text-ink">
-                  {selectedPromoter
-                    ? optionLabel(selectedPromoter, "PRO")
-                    : "Promotor nao definido"}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-line bg-field px-3 py-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
-                  Clientes
-                </div>
-                <div className="mt-1 text-sm font-black text-ink">
-                  {selectedClientIds.length} selecionado(s)
-                </div>
-              </div>
-            </div>
-
             <div className="rounded-[1.35rem] border border-line bg-white p-4">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
