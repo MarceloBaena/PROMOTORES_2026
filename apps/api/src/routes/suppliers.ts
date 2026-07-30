@@ -34,6 +34,10 @@ const statusSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE"])
 });
 
+const INTERACTIVE_TRANSACTION_TIMEOUT_MS = 30_000;
+const INTERACTIVE_TRANSACTION_MAX_WAIT_MS = 10_000;
+const CLIENT_SUPPLIER_BATCH_SIZE = 500;
+
 async function assertUniqueDocument(companyId: string, document?: string, ignoreSupplierId?: string) {
   if (!document) {
     return;
@@ -158,6 +162,58 @@ async function resolveActivityIds(
     ...existingActivities.map((activity) => activity.id),
     ...createdActivities.map((activity) => activity.id)
   ]));
+}
+
+async function listCompanyClientIds(companyId: string) {
+  const clients = await prisma.client.findMany({
+    where: { companyId },
+    select: { id: true },
+    orderBy: { id: "asc" }
+  });
+
+  return clients.map((client) => client.id);
+}
+
+async function createClientSupplierLinksInBatches(supplierId: string, clientIds: string[]) {
+  if (clientIds.length === 0) {
+    return;
+  }
+
+  for (let start = 0; start < clientIds.length; start += CLIENT_SUPPLIER_BATCH_SIZE) {
+    const batch = clientIds.slice(start, start + CLIENT_SUPPLIER_BATCH_SIZE);
+    await prisma.clientSupplier.createMany({
+      data: batch.map((clientId) => ({
+        clientId,
+        supplierId
+      })),
+      skipDuplicates: true
+    });
+  }
+}
+
+async function syncSupplierClientCoverage(supplierId: string, companyId: string, status: "ACTIVE" | "INACTIVE") {
+  await prisma.clientSupplier.deleteMany({
+    where: { supplierId }
+  });
+
+  if (status !== "ACTIVE") {
+    return;
+  }
+
+  const clientIds = await listCompanyClientIds(companyId);
+  await createClientSupplierLinksInBatches(supplierId, clientIds);
+}
+
+function assertSupplierCompanyId(companyId: string | null, supplierId: string) {
+  if (!companyId) {
+    throw new AppError(
+      400,
+      "SUPPLIER_COMPANY_REQUIRED",
+      `Fornecedor ${supplierId} esta sem empresa/filial vinculada.`
+    );
+  }
+
+  return companyId;
 }
 
 function supplierInclude() {
@@ -303,30 +359,20 @@ suppliersRouter.post(
         });
       }
 
-      if (createdSupplier.status === "ACTIVE") {
-        const clients = await tx.client.findMany({
-          where: { companyId },
-          select: { id: true }
-        });
-
-        if (clients.length > 0) {
-          await tx.clientSupplier.createMany({
-            data: clients.map((client) => ({
-              clientId: client.id,
-              supplierId: createdSupplier.id
-            })),
-            skipDuplicates: true
-          });
-        }
-      }
-
-      return tx.supplier.findUniqueOrThrow({
-        where: { id: createdSupplier.id },
-        include: supplierInclude()
-      });
+      return createdSupplier;
+    }, {
+      timeout: INTERACTIVE_TRANSACTION_TIMEOUT_MS,
+      maxWait: INTERACTIVE_TRANSACTION_MAX_WAIT_MS
     });
 
-    res.status(201).json({ data: normalizeSupplier(supplier as unknown as Record<string, unknown>) });
+    await syncSupplierClientCoverage(supplier.id, companyId, supplier.status);
+
+    const hydratedSupplier = await prisma.supplier.findUniqueOrThrow({
+      where: { id: supplier.id },
+      include: supplierInclude()
+    });
+
+    res.status(201).json({ data: normalizeSupplier(hydratedSupplier as unknown as Record<string, unknown>) });
   })
 );
 
@@ -401,39 +447,27 @@ suppliersRouter.put(
         }
       }
 
-      await tx.clientSupplier.deleteMany({
-        where: { supplierId: existing.id }
-      });
-
-      const updatedSupplier = await tx.supplier.findUniqueOrThrow({
-        where: { id: existing.id },
-        include: supplierInclude()
-      });
-
-      if (updatedSupplier.companyId && updatedSupplier.status === "ACTIVE") {
-        const clients = await tx.client.findMany({
-          where: { companyId: updatedSupplier.companyId },
-          select: { id: true }
-        });
-
-        if (clients.length > 0) {
-          await tx.clientSupplier.createMany({
-            data: clients.map((client) => ({
-              clientId: client.id,
-              supplierId: updatedSupplier.id
-            })),
-            skipDuplicates: true
-          });
-        }
-      }
-
       return tx.supplier.findUniqueOrThrow({
         where: { id: existing.id },
         include: supplierInclude()
       });
+    }, {
+      timeout: INTERACTIVE_TRANSACTION_TIMEOUT_MS,
+      maxWait: INTERACTIVE_TRANSACTION_MAX_WAIT_MS
     });
 
-    res.json({ data: normalizeSupplier(supplier as unknown as Record<string, unknown>) });
+    await syncSupplierClientCoverage(
+      supplier.id,
+      assertSupplierCompanyId(supplier.companyId, supplier.id),
+      supplier.status
+    );
+
+    const hydratedSupplier = await prisma.supplier.findUniqueOrThrow({
+      where: { id: existing.id },
+      include: supplierInclude()
+    });
+
+    res.json({ data: normalizeSupplier(hydratedSupplier as unknown as Record<string, unknown>) });
   })
 );
 
@@ -459,34 +493,24 @@ suppliersRouter.patch(
         include: supplierInclude()
       });
 
-      await tx.clientSupplier.deleteMany({
-        where: { supplierId: existing.id }
-      });
-
-      if (updatedSupplier.companyId && updatedSupplier.status === "ACTIVE") {
-        const clients = await tx.client.findMany({
-          where: { companyId: updatedSupplier.companyId },
-          select: { id: true }
-        });
-
-        if (clients.length > 0) {
-          await tx.clientSupplier.createMany({
-            data: clients.map((client) => ({
-              clientId: client.id,
-              supplierId: updatedSupplier.id
-            })),
-            skipDuplicates: true
-          });
-        }
-      }
-
-      return tx.supplier.findUniqueOrThrow({
-        where: { id: existing.id },
-        include: supplierInclude()
-      });
+      return updatedSupplier;
+    }, {
+      timeout: INTERACTIVE_TRANSACTION_TIMEOUT_MS,
+      maxWait: INTERACTIVE_TRANSACTION_MAX_WAIT_MS
     });
 
-    res.json({ data: normalizeSupplier(supplier as unknown as Record<string, unknown>) });
+    await syncSupplierClientCoverage(
+      supplier.id,
+      assertSupplierCompanyId(supplier.companyId, supplier.id),
+      supplier.status
+    );
+
+    const hydratedSupplier = await prisma.supplier.findUniqueOrThrow({
+      where: { id: existing.id },
+      include: supplierInclude()
+    });
+
+    res.json({ data: normalizeSupplier(hydratedSupplier as unknown as Record<string, unknown>) });
   })
 );
 
