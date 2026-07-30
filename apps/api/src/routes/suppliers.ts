@@ -216,6 +216,13 @@ function assertSupplierCompanyId(companyId: string | null, supplierId: string) {
   return companyId;
 }
 
+function shouldResyncSupplierCoverageOnUpdate(
+  previous: { companyId: string | null; status?: "ACTIVE" | "INACTIVE" | null },
+  next: { companyId: string | null; status?: "ACTIVE" | "INACTIVE" | null }
+) {
+  return previous.companyId !== next.companyId || previous.status !== next.status;
+}
+
 function supplierInclude() {
   return {
     company: true,
@@ -383,7 +390,7 @@ suppliersRouter.put(
     const { categoryIds, activityIds, activityNames, ...supplierInput } = input;
     const existing = await prisma.supplier.findUnique({
       where: { id: req.params.id },
-      select: { id: true, companyId: true }
+      select: { id: true, companyId: true, status: true }
     });
 
     if (!existing) {
@@ -456,11 +463,18 @@ suppliersRouter.put(
       maxWait: INTERACTIVE_TRANSACTION_MAX_WAIT_MS
     });
 
-    await syncSupplierClientCoverage(
-      supplier.id,
-      assertSupplierCompanyId(supplier.companyId, supplier.id),
-      supplier.status
-    );
+    if (
+      shouldResyncSupplierCoverageOnUpdate(
+        { companyId: existing.companyId, status: existing.status },
+        { companyId: supplier.companyId, status: supplier.status }
+      )
+    ) {
+      await syncSupplierClientCoverage(
+        supplier.id,
+        assertSupplierCompanyId(supplier.companyId, supplier.id),
+        supplier.status
+      );
+    }
 
     const hydratedSupplier = await prisma.supplier.findUniqueOrThrow({
       where: { id: existing.id },
