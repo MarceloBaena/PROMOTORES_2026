@@ -125,7 +125,7 @@ export function Dashboard() {
     <section>
       <PageHeader
         title="Painel executivo de campo"
-        subtitle="Visao do dia com foco no que foi liberado, no que ja foi atendido e no que realmente precisa de acompanhamento."
+        subtitle="Resumo operacional do dia."
         action={
           <Link to="/mapa" className="primary-button">
             <MapPinned className="h-4 w-4" />
@@ -171,15 +171,12 @@ export function Dashboard() {
                 <h2 className="mt-4 font-display text-2xl font-black leading-tight tracking-tight sm:text-3xl">
                   Operacao do dia sem excesso de leitura
                 </h2>
-                <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-white/68">
-                  A tela principal agora resume somente o que ajuda a decidir rapido: equipe ativa, clientes liberados, clientes atendidos e pendencias reais.
-                </p>
 
                 <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <CommandStat label="Promotores na jornada" value={fieldWork.activePromoters} helper="Equipe apta para atendimento" />
-                  <CommandStat label="Rotas do periodo" value={routeDay.total} helper="Rotas publicadas no intervalo atual" />
-                  <CommandStat label="Clientes liberados" value={fieldWork.releasedClientsToday} helper="Pontos disponibilizados para visita" />
-                  <CommandStat label="Clientes atendidos" value={fieldWork.attendedClientsToday} helper="Visitas concluidas no aplicativo" />
+                  <CommandStat label="Promotores na jornada" value={fieldWork.activePromoters} />
+                  <CommandStat label="Rotas do periodo" value={routeDay.total} />
+                  <CommandStat label="Clientes liberados" value={fieldWork.releasedClientsToday} />
+                  <CommandStat label="Clientes atendidos" value={fieldWork.attendedClientsToday} />
                 </div>
 
                 <div className="mt-4 rounded-lg border border-white/10 bg-white/10 p-4">
@@ -193,9 +190,6 @@ export function Dashboard() {
                       style={{ width: `${Math.min(100, Math.max(0, fieldWork.executionRate))}%` }}
                     />
                   </div>
-                  <p className="mt-3 text-xs font-semibold leading-5 text-white/55">
-                    Clientes pendentes so entram em atencao quando passam de {fieldWork.staleRuleHours} horas sem conclusao.
-                  </p>
                 </div>
               </div>
 
@@ -226,9 +220,6 @@ export function Dashboard() {
             </div>
             <AlertTriangle className={`h-6 w-6 ${realAttentionCount > 0 ? "text-danger" : "text-execution"}`} />
           </div>
-          <p className="mt-3 text-sm font-semibold leading-6 text-slateText">
-            O painel nao trata cliente pendente como erro antes do prazo operacional. A regra atual considera sem atendimento somente apos 48 horas.
-          </p>
           <div className="mt-5 space-y-3">
             <PriorityRow label="Sem atendimento 48h+" value={fieldWork.noServiceOver48} tone={fieldWork.noServiceOver48 > 0 ? "danger" : "neutral"} />
             <PriorityRow label="Auditorias abertas" value={summary?.auditFlags ?? 0} tone={(summary?.auditFlags ?? 0) > 0 ? "warning" : "neutral"} />
@@ -242,7 +233,6 @@ export function Dashboard() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Indicadores complementares</h2>
-              <p className="panel-subtitle">Somente o apoio operacional que nao apareceu no bloco principal.</p>
             </div>
           </div>
           <div className="grid gap-3 p-5 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
@@ -257,7 +247,6 @@ export function Dashboard() {
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Acesso rapido</h2>
-              <p className="panel-subtitle">Atalhos diretos para supervisao do dia sem poluir a tela inicial.</p>
             </div>
           </div>
           <div className="grid gap-3 p-5 sm:grid-cols-2">
