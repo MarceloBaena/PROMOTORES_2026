@@ -6,7 +6,6 @@ import {
   ClipboardCheck,
   MapPinned,
   Navigation,
-  RadioTower,
   Route,
   Users
 } from "lucide-react";
@@ -104,13 +103,6 @@ export function Dashboard() {
         tone: "text-emerald-700 bg-emerald-50"
       },
       {
-        label: "Em atendimento",
-        value: fieldWork.inServiceNow,
-        helper: "Visitas abertas neste momento",
-        icon: Clock3,
-        tone: "text-blue-700 bg-blue-50"
-      },
-      {
         label: "Pendencias reais",
         value: realAttentionCount,
         helper: `Auditorias abertas + clientes sem atendimento apos ${fieldWork.staleRuleHours}h`,
@@ -125,7 +117,7 @@ export function Dashboard() {
     <section>
       <PageHeader
         title="Painel executivo de campo"
-        subtitle="Resumo operacional do dia."
+        subtitle="Resumo direto da operacao do dia."
         action={
           <Link to="/mapa" className="primary-button">
             <MapPinned className="h-4 w-4" />
@@ -135,7 +127,7 @@ export function Dashboard() {
       />
       {error ? <div className="notice notice-error">{error}</div> : null}
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((item) => {
           const Icon = item.icon;
           return (
@@ -169,14 +161,16 @@ export function Dashboard() {
                   </span>
                 </div>
                 <h2 className="mt-4 font-display text-2xl font-black leading-tight tracking-tight sm:text-3xl">
-                  Operacao do dia sem excesso de leitura
+                  Quem esta em campo, o que foi liberado e o que ja foi concluido.
                 </h2>
+                <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-white/72">
+                  O painel considera pendencia real somente quando passa o prazo operacional ou quando existe auditoria aberta.
+                </p>
 
-                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <CommandStat label="Promotores na jornada" value={fieldWork.activePromoters} />
-                  <CommandStat label="Rotas do periodo" value={routeDay.total} />
-                  <CommandStat label="Clientes liberados" value={fieldWork.releasedClientsToday} />
-                  <CommandStat label="Clientes atendidos" value={fieldWork.attendedClientsToday} />
+                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                  <CommandStat label="Rotas do dia" value={routeDay.total} helper="Publicadas para a equipe" />
+                  <CommandStat label="Em atendimento agora" value={fieldWork.inServiceNow} helper="Visitas abertas no aplicativo" />
+                  <CommandStat label="Dentro do prazo" value={fieldWork.openUnder48} helper="Sem acao imediata da supervisao" />
                 </div>
 
                 <div className="mt-4 rounded-lg border border-white/10 bg-white/10 p-4">
@@ -228,28 +222,15 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <div className="panel overflow-hidden">
-          <div className="panel-header">
-            <div>
-              <h2 className="panel-title">Indicadores complementares</h2>
-            </div>
-          </div>
-          <div className="grid gap-3 p-5 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
-            <OperationalTile icon={Route} label="Rotas na base" value={summary?.routes ?? 0} description="Historico geral de roteirizacoes cadastradas" />
-            <OperationalTile icon={CheckCircle2} label="Check-ins hoje" value={summary?.checkinsToday ?? 0} description="Chegadas registradas pelo aplicativo" />
-            <OperationalTile icon={Clock3} label="Dentro do prazo" value={fieldWork.openUnder48} description="Clientes ainda no tempo operacional" />
-            <OperationalTile icon={AlertTriangle} label="Auditorias abertas" value={summary?.auditFlags ?? 0} description="Ocorrencias aguardando validacao da supervisao" danger={(summary?.auditFlags ?? 0) > 0} />
-          </div>
-        </div>
-
+      <div className="mt-4">
         <div className="panel overflow-hidden">
           <div className="panel-header">
             <div>
               <h2 className="panel-title">Acesso rapido</h2>
+              <p className="panel-subtitle">Entradas diretas para as areas mais usadas da operacao.</p>
             </div>
           </div>
-          <div className="grid gap-3 p-5 sm:grid-cols-2">
+          <div className="grid gap-3 p-5 lg:grid-cols-2 xl:grid-cols-4">
             <QuickLinkCard
               title="Acompanhamento do dia"
               body="Abra o painel de jornada para ver posicoes, linha do tempo e ultimas evidencias."
@@ -327,35 +308,6 @@ function PriorityRow({ label, value, tone }: { label: string; value: number; ton
     <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-line bg-white px-4 py-3">
       <span className="min-w-0 break-words text-sm font-black text-graphite">{label}</span>
       <span className={`rounded-full px-3 py-1 font-display text-lg font-black ${toneClass}`}>{value}</span>
-    </div>
-  );
-}
-
-function OperationalTile({
-  icon: Icon,
-  label,
-  value,
-  description,
-  danger = false
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: number;
-  description: string;
-  danger?: boolean;
-}) {
-  return (
-    <div className="min-w-0 rounded-lg border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="break-words text-[10px] font-black uppercase leading-4 tracking-[0.1em] text-slateText sm:text-[11px]">{label}</p>
-          <p className="mt-2 font-display text-2xl font-black text-ink">{value}</p>
-        </div>
-        <span className={`grid h-10 w-10 place-items-center rounded-2xl ${danger ? "bg-red-50 text-danger" : "bg-brandSoft text-brand"}`}>
-          <Icon className="h-5 w-5" />
-        </span>
-      </div>
-      <p className="mt-3 text-xs font-bold leading-5 text-slateText">{description}</p>
     </div>
   );
 }
