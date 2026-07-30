@@ -22,7 +22,7 @@ const apiBaseUrl = String.fromEnvironment(
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.29 (build 32)';
+const appVersionLabel = 'APK Flutter v1.1.30 (build 33)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -939,6 +939,41 @@ class _RouteMapContentState extends State<RouteMapContent> {
   bool showOnlyPending = false;
   final Distance _distance = const Distance();
 
+  List<_RouteGroupView> _buildRouteGroups(List<RouteItemView> items) {
+    final routeGroups = <_RouteGroupView>[];
+    final groupedItems = <String, List<RouteItemView>>{};
+    for (final item in items) {
+      groupedItems.putIfAbsent(item.routeId, () => <RouteItemView>[]).add(item);
+    }
+
+    final orderedGroups = groupedItems.values.toList()
+      ..sort((first, second) {
+        final firstDate = first.first.routeSortDate;
+        final secondDate = second.first.routeSortDate;
+        final dateComparison = firstDate.compareTo(secondDate);
+        if (dateComparison != 0) return dateComparison;
+        return first.first.routeName.compareTo(second.first.routeName);
+      });
+
+    for (var index = 0; index < orderedGroups.length; index++) {
+      final groupItems = [...orderedGroups[index]]
+        ..sort((first, second) => first.sequence.compareTo(second.sequence));
+      final firstItem = groupItems.first;
+      routeGroups.add(
+        _RouteGroupView(
+          routeId: firstItem.routeId,
+          routeName: firstItem.routeName,
+          routePeriodLabel: firstItem.routePeriodLabel,
+          priorityLabel: index == 0 ? 'Rota principal' : 'Rota extra',
+          isExtraRoute: index > 0,
+          items: groupItems,
+        ),
+      );
+    }
+
+    return routeGroups;
+  }
+
   List<RouteItemView> get orderedRouteItems =>
       [...widget.routeItems]..sort((first, second) {
         final routeComparison = first.routeSortDate.compareTo(
@@ -1173,6 +1208,16 @@ class _RouteMapContentState extends State<RouteMapContent> {
       currentRouteItem,
       nextRouteItemAfterCurrent,
     );
+    final visibleRouteGroups = _buildRouteGroups(visibleRouteItems);
+    _RouteGroupView? highlightedRouteGroup;
+    if (highlightedItem != null) {
+      for (final group in visibleRouteGroups) {
+        if (group.routeId == highlightedItem.routeId) {
+          highlightedRouteGroup = group;
+          break;
+        }
+      }
+    }
 
     return ListView(
       padding: EdgeInsets.fromLTRB(16, widget.embedded ? 0 : 16, 16, 16),
@@ -1380,6 +1425,7 @@ class _RouteMapContentState extends State<RouteMapContent> {
             _MapRouteItemCard(
               item: highlightedItem,
               isCurrent: currentRouteItem?.id == highlightedItem.id,
+              routePriorityLabel: highlightedRouteGroup?.priorityLabel,
               distanceFromCurrent: highlightedItem.id == currentRouteItem?.id
                   ? null
                   : _distanceLabel(currentRouteItem, highlightedItem),
@@ -1397,16 +1443,14 @@ class _RouteMapContentState extends State<RouteMapContent> {
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 10),
-        ...visibleRouteItems.map(
-          (item) => _RouteMapListTile(
-            item: item,
-            isCurrent: currentRouteItem?.id == item.id,
-            selected: selectedItem?.id == item.id,
-            onTap: item.hasCoordinates ? () => _focusOnItem(item) : null,
-            onOpenVisit: () => unawaited(_openVisit(item)),
-            onOpenNavigation: item.hasCoordinates
-                ? () => _openExternalNavigation(item)
-                : null,
+        ...visibleRouteGroups.map(
+          (group) => _RouteMapGroupSection(
+            group: group,
+            currentRouteItemId: currentRouteItem?.id,
+            selectedItemId: selectedItem?.id,
+            onFocusItem: (item) => _focusOnItem(item),
+            onOpenVisit: (item) => unawaited(_openVisit(item)),
+            onOpenNavigation: (item) => _openExternalNavigation(item),
           ),
         ),
         if (itemsWithoutCoordinates.isNotEmpty) ...[
@@ -1426,6 +1470,7 @@ class _MapRouteItemCard extends StatelessWidget {
   const _MapRouteItemCard({
     required this.item,
     required this.isCurrent,
+    this.routePriorityLabel,
     required this.distanceFromCurrent,
     required this.onOpenVisit,
     required this.onOpenNavigation,
@@ -1433,6 +1478,7 @@ class _MapRouteItemCard extends StatelessWidget {
 
   final RouteItemView item;
   final bool isCurrent;
+  final String? routePriorityLabel;
   final String? distanceFromCurrent;
   final VoidCallback onOpenVisit;
   final VoidCallback? onOpenNavigation;
@@ -1475,6 +1521,13 @@ class _MapRouteItemCard extends StatelessWidget {
                     : brandBlue,
               ),
               _MapStatusChip(label: 'Ordem ${item.sequence}', color: brandNavy),
+              if (routePriorityLabel != null)
+                _MapStatusChip(
+                  label: routePriorityLabel!,
+                  color: routePriorityLabel == 'Rota extra'
+                      ? warningOrange
+                      : successGreen,
+                ),
               if (distanceFromCurrent != null)
                 _MapStatusChip(label: distanceFromCurrent!, color: brandBlue),
             ],
@@ -1524,6 +1577,15 @@ class _MapRouteItemCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            item.routePeriodLabel,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           if (item.hasCoordinates) ...[
             const SizedBox(height: 8),
             Text(
@@ -1564,6 +1626,7 @@ class _RouteMapListTile extends StatelessWidget {
     required this.item,
     required this.isCurrent,
     required this.selected,
+    this.routePriorityLabel,
     required this.onTap,
     required this.onOpenVisit,
     required this.onOpenNavigation,
@@ -1572,6 +1635,7 @@ class _RouteMapListTile extends StatelessWidget {
   final RouteItemView item;
   final bool isCurrent;
   final bool selected;
+  final String? routePriorityLabel;
   final VoidCallback? onTap;
   final VoidCallback onOpenVisit;
   final VoidCallback? onOpenNavigation;
@@ -1647,6 +1711,24 @@ class _RouteMapListTile extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(height: 2),
+              Text(
+                item.routePeriodLabel,
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (routePriorityLabel != null) ...[
+                const SizedBox(height: 6),
+                _RouteBadge(
+                  label: routePriorityLabel!,
+                  color: routePriorityLabel == 'Rota extra'
+                      ? warningOrange
+                      : successGreen,
+                ),
+              ],
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -6819,6 +6901,87 @@ class VisitFlowCard extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: steps.map((step) => _VisitFlowPill(step: step)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteMapGroupSection extends StatelessWidget {
+  const _RouteMapGroupSection({
+    required this.group,
+    required this.currentRouteItemId,
+    required this.selectedItemId,
+    required this.onFocusItem,
+    required this.onOpenVisit,
+    required this.onOpenNavigation,
+  });
+
+  final _RouteGroupView group;
+  final String? currentRouteItemId;
+  final String? selectedItemId;
+  final ValueChanged<RouteItemView> onFocusItem;
+  final ValueChanged<RouteItemView> onOpenVisit;
+  final ValueChanged<RouteItemView> onOpenNavigation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                group.routeName,
+                style: const TextStyle(
+                  color: brandNavy,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+              ),
+              _RouteBadge(
+                label: group.priorityLabel,
+                color: group.isExtraRoute ? warningOrange : successGreen,
+              ),
+              _RouteBadge(
+                label: '${group.items.length} cliente(s)',
+                color: brandBlue,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            group.routePeriodLabel,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...group.items.map(
+            (item) => _RouteMapListTile(
+              item: item,
+              isCurrent: currentRouteItemId == item.id,
+              selected: selectedItemId == item.id,
+              routePriorityLabel: group.priorityLabel,
+              onTap: item.hasCoordinates ? () => onFocusItem(item) : null,
+              onOpenVisit: () => onOpenVisit(item),
+              onOpenNavigation: item.hasCoordinates
+                  ? () => onOpenNavigation(item)
+                  : null,
+            ),
           ),
         ],
       ),
