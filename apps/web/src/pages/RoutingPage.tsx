@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Plus, RefreshCw, Route, Send, Users, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusPill } from "../components/StatusPill";
 import { useAuth } from "../context/AuthContext";
@@ -423,10 +424,10 @@ export function RoutingPage() {
         />
       </div>
 
-      <div className="grid gap-4 2xl:grid-cols-[430px_minmax(0,1fr)]">
+      <div className="space-y-4">
         <form
           onSubmit={createRoute}
-          className="panel overflow-hidden 2xl:sticky 2xl:top-20 2xl:self-start"
+          className="panel overflow-hidden"
         >
           <div className="panel-header">
             <div>
@@ -437,8 +438,8 @@ export function RoutingPage() {
             </div>
           </div>
 
-          <div className="space-y-3 p-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-1">
+          <div className="space-y-4 p-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-2xl border border-line bg-field px-3 py-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
                   Empresa
@@ -487,8 +488,8 @@ export function RoutingPage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="block md:col-span-2">
+              <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                <label className="block xl:col-span-2">
                   <span className="field-label">Empresa/Filial</span>
                   <select
                     className="input-control"
@@ -513,7 +514,7 @@ export function RoutingPage() {
                   </select>
                 </label>
 
-                <label className="block md:col-span-2">
+                <label className="block xl:col-span-2">
                   <span className="field-label">Nome da rota</span>
                   <input
                     className="input-control"
@@ -616,45 +617,26 @@ export function RoutingPage() {
               </div>
             </div>
 
-            <div className="rounded-[1.35rem] border border-line bg-white p-3">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <span className="field-label">Clientes do roteiro</span>
-                  <div className="mt-1 text-xs font-semibold text-slateText">
-                    Marque os clientes que farao parte da jornada desta rota.
+            <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+              <div className="rounded-[1.35rem] border border-line bg-white p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="field-label">Clientes selecionados</span>
+                    <div className="mt-1 text-xs font-semibold text-slateText">
+                      Ordem que sera usada no atendimento do promotor.
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
-                    {filteredClients.length} disponivel(is)
-                  </span>
-                  {selectedClients.length > 0 ? (
-                    <button
-                      type="button"
-                      className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText transition hover:bg-muted"
-                      onClick={() => setSelectedClientIds([])}
-                    >
-                      Limpar selecao
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="mb-3 rounded-2xl border border-line bg-field/70 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
-                    Selecionados
-                  </span>
-                  <span className="text-xs font-bold text-slateText">
                     {selectedClients.length} cliente(s)
                   </span>
                 </div>
+
                 {selectedClients.length === 0 ? (
-                  <div className="mt-2 text-sm font-semibold text-stone-500">
+                  <div className="rounded-2xl border border-dashed border-line bg-field/60 px-4 py-6 text-center text-sm font-semibold text-stone-500">
                     Nenhum cliente selecionado.
                   </div>
                 ) : (
-                  <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
+                  <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
                     {selectedClients.map((client, index) => {
                       const secondaryLine = clientSecondaryLine(client);
 
@@ -687,62 +669,107 @@ export function RoutingPage() {
                 )}
               </div>
 
-              <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                {filteredClients.map((client) => {
-                  const selected = selectedClientIds.includes(client.id);
-                  const secondaryLine = clientSecondaryLine(client);
+              <div className="rounded-[1.35rem] border border-line bg-white p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="field-label">Clientes disponiveis</span>
+                    <div className="mt-1 text-xs font-semibold text-slateText">
+                      Clique para incluir ou remover clientes desta rota.
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
+                      {filteredClients.length} disponivel(is)
+                    </span>
+                    {selectedClients.length > 0 ? (
+                      <button
+                        type="button"
+                        className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText transition hover:bg-muted"
+                        onClick={() => setSelectedClientIds([])}
+                      >
+                        Limpar selecao
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
 
-                  return (
-                    <button
-                      key={client.id}
-                      type="button"
-                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
-                        selected
-                          ? "border-moss bg-emerald-50 text-forest"
-                          : "border-line bg-white text-ink hover:bg-muted"
-                      }`}
-                      onClick={() => toggleClient(client.id)}
-                    >
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-black leading-6 text-current break-words">
-                            {clientHeadline(client)}
-                          </div>
-                          {secondaryLine ? (
-                            <div className="mt-1 text-xs font-semibold leading-5 text-slateText break-words">
-                              {secondaryLine}
+                <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+                  {filteredClients.map((client) => {
+                    const selected = selectedClientIds.includes(client.id);
+                    const secondaryLine = clientSecondaryLine(client);
+
+                    return (
+                      <button
+                        key={client.id}
+                        type="button"
+                        className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
+                          selected
+                            ? "border-moss bg-emerald-50 text-forest"
+                            : "border-line bg-white text-ink hover:bg-muted"
+                        }`}
+                        onClick={() => toggleClient(client.id)}
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                          <div className="min-w-0">
+                            <div className="break-words text-sm font-black leading-6 text-current">
+                              {clientHeadline(client)}
                             </div>
-                          ) : null}
+                            {secondaryLine ? (
+                              <div className="mt-1 break-words text-xs font-semibold leading-5 text-slateText">
+                                {secondaryLine}
+                              </div>
+                            ) : null}
+                          </div>
+                          <span
+                            className={`self-start rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] sm:shrink-0 ${
+                              selected
+                                ? "bg-white/80 text-forest"
+                                : "bg-field text-slateText"
+                            }`}
+                          >
+                            {selected ? "Selecionado" : "Disponivel"}
+                          </span>
                         </div>
-                        <span
-                          className={`self-start rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] sm:shrink-0 ${
-                            selected
-                              ? "bg-white/80 text-forest"
-                              : "bg-field text-slateText"
-                          }`}
-                        >
-                          {selected ? "Selecionado" : "Disponivel"}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-                {filteredClients.length === 0 ? (
-                  <p className="py-4 text-center text-sm font-semibold text-stone-500">
-                    Nenhum cliente encontrado.
-                  </p>
-                ) : null}
+                      </button>
+                    );
+                  })}
+                  {filteredClients.length === 0 ? (
+                    <p className="py-4 text-center text-sm font-semibold text-stone-500">
+                      Nenhum cliente encontrado.
+                    </p>
+                  ) : null}
+                </div>
               </div>
             </div>
 
-            <button
-              className="primary-button w-full"
-              type="submit"
-              title="Criar rota"
-            >
-              <Plus className="h-4 w-4" />
-              Criar rota com {selectedClientIds.length} cliente(s)
-            </button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setForm({
+                    name: "",
+                    startDate: "",
+                    endDate: "",
+                    companyId: user?.companyId ?? "",
+                    supervisorId: "",
+                    promoterId: "",
+                  });
+                  setSelectedClientIds([]);
+                  setMessage(null);
+                }}
+              >
+                Limpar formulario
+              </button>
+              <button
+                className="primary-button sm:min-w-[18rem]"
+                type="submit"
+                title="Criar rota"
+              >
+                <Plus className="h-4 w-4" />
+                Criar rota com {selectedClientIds.length} cliente(s)
+              </button>
+            </div>
           </div>
         </form>
 
@@ -816,7 +843,7 @@ export function RoutingPage() {
                   </div>
 
                   {route.items.length > 0 ? (
-                    <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                    <div className="mt-3 grid gap-2 xl:grid-cols-2">
                       {route.items.map((item) => {
                         const primaryName = routeClientPrimaryName(item.client);
                         const secondaryName = routeClientSecondaryName(
@@ -845,14 +872,7 @@ export function RoutingPage() {
                                   <div className="mt-1 text-xs font-semibold leading-5 text-slateText break-words">
                                     Razao social: {secondaryName}
                                   </div>
-                                ) : (
-                                  <div className="mt-1 text-xs font-semibold leading-5 text-slateText break-words">
-                                    Cliente exibido pela razao social cadastrada.
-                                  </div>
-                                )}
-                                <div className="mt-2 rounded-xl bg-field px-3 py-2 text-[11px] font-bold leading-5 text-slateText">
-                                  Ordem operacional da visita dentro desta rota.
-                                </div>
+                                ) : null}
                               </div>
                             </div>
                           </div>
@@ -889,7 +909,7 @@ function RouteMetric({
   label: string;
   value: number;
   helper: string;
-  icon: typeof Route;
+  icon: LucideIcon;
 }) {
   return (
     <div className="metric-card">
