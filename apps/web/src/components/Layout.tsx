@@ -81,12 +81,6 @@ export function Layout() {
                 Conectado
               </span>
             </div>
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Painel unificado</div>
-              <div className="mt-1 text-sm font-bold leading-6 text-white/80">
-                Operacao, auditoria e acompanhamento da equipe em campo.
-              </div>
-            </div>
           </div>
         </div>
 
