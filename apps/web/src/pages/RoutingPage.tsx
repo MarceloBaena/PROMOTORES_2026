@@ -697,13 +697,7 @@ export function RoutingPage() {
               </div>
 
               <div className="rounded-[1.35rem] border border-line bg-white p-3">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <span className="field-label">Buscar clientes</span>
-                    <div className="mt-1 text-xs font-semibold text-slateText">
-                      Use a consulta abaixo para localizar e incluir clientes na rota.
-                    </div>
-                  </div>
+                <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-field px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
                       {filteredClients.length} disponivel(is)
