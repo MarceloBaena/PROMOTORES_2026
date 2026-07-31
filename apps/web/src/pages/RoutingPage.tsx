@@ -926,17 +926,13 @@ export function RoutingPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-2 md:grid-cols-2 2xl:grid-cols-4">
-                  <RouteInfo label="Periodo" value={formatRoutePeriod(route)} />
-                  <RouteInfo label="Duracao" value={formatRouteDuration(route)} />
-                  <RouteInfo
-                    label="Promotor"
-                    value={personLabel(route.promoter, "PRO")}
-                  />
-                  <RouteInfo
-                    label="Supervisor"
-                    value={personLabel(route.supervisor, "SUP")}
-                  />
+                <div className="mt-4 rounded-2xl border border-line bg-field/70 px-4 py-3">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <RouteInlineStat label="Periodo" value={formatRoutePeriod(route)} />
+                    <RouteInlineStat label="Duracao" value={formatRouteDuration(route)} />
+                    <RouteInlineStat label="Promotor" value={personLabel(route.promoter, "PRO")} />
+                    <RouteInlineStat label="Supervisor" value={personLabel(route.supervisor, "SUP")} />
+                  </div>
                 </div>
 
                 <div className="mt-3 rounded-2xl border border-line bg-field p-3">
@@ -967,7 +963,7 @@ export function RoutingPage() {
                                 {item.sequence}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div className="break-words text-sm font-black leading-6 text-ink">
                                     {primaryName}
                                   </div>
@@ -1040,13 +1036,13 @@ function RouteMetric({
   );
 }
 
-function RouteInfo({ label, value }: { label: string; value: string }) {
+function RouteInlineStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-field px-3 py-3">
+    <div className="min-w-0">
       <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
         {label}
       </div>
-      <div className="mt-1 text-xs font-bold leading-5 text-ink">{value}</div>
+      <div className="mt-1 break-words text-xs font-bold leading-5 text-ink">{value}</div>
     </div>
   );
 }
