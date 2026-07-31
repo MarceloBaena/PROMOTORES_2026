@@ -529,7 +529,7 @@ export function LiveMapPage() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-px bg-line sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
+          <div className="grid gap-3 bg-field/40 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
             {items.map((item) => (
               <PromoterOperationCard
                 key={item.promoter.id}
