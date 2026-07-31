@@ -443,7 +443,7 @@ export function LiveMapPage() {
     <section>
       <PageHeader
         title="Acompanhamento do dia"
-        subtitle="Leitura operacional da jornada dos promotores, com status do dia, linha do tempo e ultimo ponto recebido."
+        subtitle="Status do dia, linha do tempo e ultimo ponto recebido da equipe em campo."
         action={
           <button
             type="button"
@@ -459,7 +459,7 @@ export function LiveMapPage() {
 
       {message ? <div className="notice notice-warning">{message}</div> : null}
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Promotores conectados"
           value={onlineCount}
@@ -490,14 +490,14 @@ export function LiveMapPage() {
         />
       </div>
 
-      <div className="mb-5 overflow-hidden rounded-lg border border-line bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
-        <div className="flex flex-col gap-3 border-b border-line bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
+        <div className="flex flex-col gap-3 border-b border-line bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-black text-ink">
+            <h2 className="text-base font-black text-ink">
               Monitoramento da operacao
             </h2>
-            <p className="mt-1 text-sm font-semibold text-slateText">
-              Visao diaria por promotor com status, roteiro e eventos mais recentes.
+            <p className="mt-0.5 text-xs font-semibold text-slateText">
+              Visao resumida por promotor.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -506,9 +506,6 @@ export function LiveMapPage() {
             </span>
             <span className="rounded-full bg-blue-50 px-3 py-2 text-xs font-black text-brand ring-1 ring-blue-100">
               {activeCount} em atendimento
-            </span>
-            <span className="rounded-full bg-field px-3 py-2 text-xs font-black text-slateText ring-1 ring-line">
-              Atualiza a cada {LIVE_STATUS_REFRESH_INTERVAL_MS / 1000}s
             </span>
             <span className="rounded-full bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 ring-1 ring-amber-200">
               {lastRefresh
@@ -545,7 +542,7 @@ export function LiveMapPage() {
         )}
       </div>
 
-      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="surface-card">
           <div className="panel-header -mx-5 -mt-5 mb-5 rounded-t-[1.35rem]">
             <div>
@@ -556,7 +553,7 @@ export function LiveMapPage() {
                   : "Selecione um promotor para abrir a linha do tempo."}
               </p>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200">
+            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-200">
               <Wifi className="h-4 w-4" />
               Atualizacao automatica
             </span>
@@ -587,17 +584,17 @@ export function LiveMapPage() {
                 />
               </div>
 
-              <div className="rounded-[28px] border border-line bg-field/70 p-5">
+              <div className="rounded-[24px] border border-line bg-field/70 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slateText">
                       Ocorrencias do dia
                     </div>
-                    <h3 className="mt-2 text-xl font-black text-ink">
+                    <h3 className="mt-1.5 text-lg font-black text-ink">
                       Eventos operacionais
                     </h3>
                   </div>
-                  <div className="rounded-2xl border border-line bg-white px-3 py-2 text-right text-xs font-semibold text-slateText">
+                  <div className="rounded-2xl border border-line bg-white px-3 py-2 text-right text-[11px] font-semibold text-slateText">
                     <div>
                       Primeiro sinal:{" "}
                       {formatClock(selectedPromoter.today.firstSignalAt)}
@@ -610,7 +607,7 @@ export function LiveMapPage() {
                 </div>
 
                 {selectedPromoter.timeline.length > 0 ? (
-                  <div className="mt-5 space-y-4">
+                  <div className="mt-4 space-y-3">
                     {selectedPromoter.timeline.map((event, index) => (
                       <TimelineEntry
                         key={event.id}
@@ -650,22 +647,22 @@ export function LiveMapPage() {
 
             {selectedPromoter ? (
               <div className="space-y-4">
-                <div className="rounded-3xl bg-navy p-5 text-white">
+                <div className="rounded-3xl bg-navy p-4 text-white">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-[11px] font-black uppercase tracking-[0.16em] text-white/55">
                         Promotor
                       </div>
-                      <div className="mt-2 text-2xl font-black">
+                      <div className="mt-1.5 text-xl font-black">
                         {selectedPromoter.promoter.name}
                       </div>
-                      <div className="mt-1 text-sm font-semibold text-white/70">
+                      <div className="mt-1 text-xs font-semibold text-white/70">
                         {selectedPromoter.promoter.email}
                       </div>
                     </div>
                     <UserRound className="h-6 w-6 text-blue-200" />
                   </div>
-                  <div className="mt-4 inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-white">
+                  <div className="mt-3 inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-white">
                     {statusLabels[selectedPromoter.status]}
                   </div>
                 </div>
@@ -1049,12 +1046,12 @@ function SummaryCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-3xl border border-line bg-white p-4 shadow-sm shadow-slate-900/5">
+    <div className="rounded-2xl border border-line bg-white px-4 py-3 shadow-sm shadow-slate-900/5">
       <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
         {label}
       </div>
-      <div className="mt-2 text-2xl font-black text-ink">{value}</div>
-      <div className="mt-2 text-xs font-semibold leading-5 text-slateText">
+      <div className="mt-1.5 text-xl font-black text-ink">{value}</div>
+      <div className="mt-1 text-[11px] font-semibold leading-5 text-slateText">
         {detail}
       </div>
     </div>
@@ -1063,11 +1060,11 @@ function SummaryCard({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-white px-4 py-3">
+    <div className="rounded-2xl border border-line bg-white px-4 py-2.5">
       <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slateText">
         {label}
       </div>
-      <div className="mt-1 text-sm font-black text-ink">{value}</div>
+      <div className="mt-1 text-[13px] font-black text-ink">{value}</div>
     </div>
   );
 }
