@@ -529,7 +529,7 @@ export function LiveMapPage() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-px bg-line sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <div className="grid gap-px bg-line sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
             {items.map((item) => (
               <PromoterOperationCard
                 key={item.promoter.id}
@@ -871,7 +871,7 @@ function PromoterOperationCard({
 
   return (
     <article
-      className={`bg-white px-3 py-2.5 transition ${selected ? "relative z-[1] ring-2 ring-brand" : "hover:bg-field/70"}`}
+      className={`bg-white px-2.5 py-2 transition ${selected ? "relative z-[1] ring-2 ring-brand" : "hover:bg-field/70"}`}
     >
       <div
         role="button"
@@ -886,9 +886,9 @@ function PromoterOperationCard({
         }}
       >
         <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <div className="relative h-10 w-10 shrink-0">
-              <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-slate-200 to-blue-100 text-[11px] font-black text-navy ring-1 ring-line">
+          <div className="flex min-w-0 items-start gap-2">
+            <div className="relative h-9 w-9 shrink-0">
+              <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-slate-200 to-blue-100 text-[10px] font-black text-navy ring-1 ring-line">
                 {promoterInitials(item.promoter.name)}
               </div>
               <span
@@ -902,10 +902,10 @@ function PromoterOperationCard({
               />
             </div>
             <div className="min-w-0">
-              <div className="truncate text-[12px] font-black uppercase tracking-tight text-ink">
+              <div className="truncate text-[11px] font-black uppercase tracking-tight text-ink">
                 {item.promoter.name}
               </div>
-              <div className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-slateText">
+              <div className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-slateText">
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
                     item.status === "online"
@@ -917,32 +917,32 @@ function PromoterOperationCard({
                 />
                 {statusLabels[item.status]}
               </div>
-              <div className="mt-1 truncate text-[10px] font-black uppercase text-brand">
+              <div className="mt-0.5 truncate text-[9px] font-black uppercase text-brand">
                 {item.promoter.supervisorName ?? "Sem supervisor"}
               </div>
             </div>
           </div>
 
-          <MoreVertical className="h-4 w-4 shrink-0 text-stone-400" />
+          <MoreVertical className="h-3.5 w-3.5 shrink-0 text-stone-400" />
         </div>
 
-        <div className="mt-2.5 space-y-1">
-          <div className="truncate text-[12px] font-black uppercase text-brand">
+        <div className="mt-2 space-y-1">
+          <div className="truncate text-[11px] font-black uppercase text-brand">
             {latestPlace}
           </div>
-          <div className="text-[11px] font-semibold text-slateText">
+          <div className="text-[10px] font-semibold text-slateText">
             {promoterCode(item.promoter.code)} - Ponto
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-slateText">
+          <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-bold text-slateText">
             <span className="inline-flex items-center gap-1">
               <BatteryMedium
-                className={`h-3 w-3 ${item.status === "online" ? "text-execution" : "text-stone-400"}`}
+                className={`h-2.5 w-2.5 ${item.status === "online" ? "text-execution" : "text-stone-400"}`}
               />
               {item.status === "online" ? `${batteryEstimate}%` : "Off"}
             </span>
             <span className="inline-flex items-center gap-1">
               <RefreshCcw
-                className={`h-3.5 w-3.5 ${item.status === "online" ? "text-execution" : "text-red-500"}`}
+                className={`h-2.5 w-2.5 ${item.status === "online" ? "text-execution" : "text-red-500"}`}
               />
               {item.status === "online"
                 ? formatClock(item.today.lastSignalAt)
@@ -950,7 +950,7 @@ function PromoterOperationCard({
             </span>
             <span className="inline-flex items-center gap-1">
               <Flag
-                className={`h-3.5 w-3.5 ${hasRoute ? "text-execution" : "text-stone-400"}`}
+                className={`h-2.5 w-2.5 ${hasRoute ? "text-execution" : "text-stone-400"}`}
               />
               {hasRoute ? "Roteiro" : "Sem rota"}
             </span>
@@ -960,18 +960,18 @@ function PromoterOperationCard({
         {!hasRoute ? (
           <Link
             to="/roteirizacao"
-            className="mt-2.5 inline-flex h-8 items-center justify-center rounded-xl border border-brand/40 bg-white px-3 text-[11px] font-black text-brand no-underline transition hover:bg-blue-50"
+            className="mt-2 inline-flex h-7 items-center justify-center rounded-lg border border-brand/40 bg-white px-2.5 text-[10px] font-black text-brand no-underline transition hover:bg-blue-50"
             onClick={(event) => event.stopPropagation()}
           >
             Adicionar roteiro
           </Link>
         ) : (
-          <div className="mt-2.5 rounded-xl bg-field px-3 py-2">
-            <div className="flex items-center justify-between gap-3 text-[10px] font-black text-slateText">
+          <div className="mt-2 rounded-lg bg-field px-2.5 py-1.5">
+            <div className="flex items-center justify-between gap-2 text-[9px] font-black text-slateText">
               <span>Roteiro</span>
               <span>{progress}%</span>
             </div>
-            <div className="mt-1.5 h-1.5 rounded-full bg-line">
+            <div className="mt-1 h-1.5 rounded-full bg-line">
               <div
                 className="h-1.5 rounded-full bg-gradient-to-r from-brand to-execution"
                 style={{ width: `${progress}%` }}
@@ -980,7 +980,7 @@ function PromoterOperationCard({
           </div>
         )}
 
-        <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-line/70 pt-2.5">
+        <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-line/70 pt-2">
           <MiniStat label="Roteiro" value={`${progress}%`} />
           <MiniStat label="Visitas" value={`${visitsDone}/${visitsTotal}`} />
           <MiniStat label="Evidencias" value={`${tasksDone}/${tasksTotal}`} />
@@ -992,11 +992,11 @@ function PromoterOperationCard({
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-field px-2.5 py-2 text-center">
-      <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slateText">
+    <div className="rounded-lg bg-field px-2 py-1.5 text-center">
+      <div className="text-[8px] font-black uppercase tracking-[0.1em] text-slateText">
         {label}
       </div>
-      <div className="mt-1 text-[12px] font-black text-ink">{value}</div>
+      <div className="mt-0.5 text-[11px] font-black text-ink">{value}</div>
     </div>
   );
 }
