@@ -194,8 +194,6 @@ export function RoutingPage() {
     supervisorId: "",
     promoterId: "",
   });
-  const [supervisorSearch, setSupervisorSearch] = useState("");
-  const [promoterSearch, setPromoterSearch] = useState("");
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [clientSearch, setClientSearch] = useState("");
   const [clientOptionId, setClientOptionId] = useState("");
@@ -319,8 +317,6 @@ export function RoutingPage() {
         supervisorId: "",
         promoterId: "",
       });
-      setSupervisorSearch("");
-      setPromoterSearch("");
       setSelectedClientIds([]);
       setClientSearch("");
       setClientOptionId("");
@@ -353,26 +349,8 @@ export function RoutingPage() {
   const filteredPromoters = promoters.filter(
     (promoter) => !form.companyId || promoter.companyId === form.companyId,
   );
-  const supervisorOptions = useMemo(() => {
-    const normalizedSearch = supervisorSearch.trim().toLowerCase();
-    const matches = !normalizedSearch
-      ? filteredSupervisors
-      : filteredSupervisors.filter((supervisor) =>
-          optionLabel(supervisor, "SUP").toLowerCase().includes(normalizedSearch),
-        );
-
-    return matches.slice(0, 12);
-  }, [filteredSupervisors, supervisorSearch]);
-  const promoterOptions = useMemo(() => {
-    const normalizedSearch = promoterSearch.trim().toLowerCase();
-    const matches = !normalizedSearch
-      ? filteredPromoters
-      : filteredPromoters.filter((promoter) =>
-          optionLabel(promoter, "PRO").toLowerCase().includes(normalizedSearch),
-        );
-
-    return matches.slice(0, 12);
-  }, [filteredPromoters, promoterSearch]);
+  const supervisorOptions = filteredSupervisors.slice(0, 200);
+  const promoterOptions = filteredPromoters.slice(0, 200);
   const filteredClients = clients.filter(
     (client) => !form.companyId || client.companyId === form.companyId,
   );
@@ -535,8 +513,6 @@ export function RoutingPage() {
                         supervisorId: "",
                         promoterId: "",
                       }));
-                      setSupervisorSearch("");
-                      setPromoterSearch("");
                       setSelectedClientIds([]);
                       setClientSearch("");
                       setClientOptionId("");
@@ -598,16 +574,6 @@ export function RoutingPage() {
 
                 <div className="space-y-2">
                   <label className="block">
-                    <span className="field-label">Buscar supervisor</span>
-                    <input
-                      className="input-control"
-                      type="text"
-                      value={supervisorSearch}
-                      placeholder="Digite codigo ou nome do supervisor"
-                      onChange={(event) => setSupervisorSearch(event.target.value)}
-                    />
-                  </label>
-                  <label className="block">
                     <span className="field-label">Supervisor</span>
                     <select
                       className="input-control"
@@ -634,16 +600,6 @@ export function RoutingPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block">
-                    <span className="field-label">Buscar promotor</span>
-                    <input
-                      className="input-control"
-                      type="text"
-                      value={promoterSearch}
-                      placeholder="Digite codigo, nome ou e-mail do promotor"
-                      onChange={(event) => setPromoterSearch(event.target.value)}
-                    />
-                  </label>
                   <label className="block">
                     <span className="field-label">Promotor de vendas</span>
                     <select
