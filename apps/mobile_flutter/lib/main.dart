@@ -6,7 +6,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path/path.dart' as p;
@@ -16,13 +15,15 @@ import 'package:sqflite/sqflite.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
+import 'services/camera_capture_service.dart';
+
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'https://promotores-2026-api.vercel.app',
 );
 
 const maxEvidencePhotosPerCategoryOrActivity = 5;
-const appVersionLabel = 'APK Flutter v1.1.31 (build 34)';
+const appVersionLabel = 'APK Flutter v1.1.32 (build 35)';
 const brandBlue = Color(0xFF2563EB);
 const brandNavy = Color(0xFF0F172A);
 const brandGreen = Color(0xFF10B981);
@@ -2724,9 +2725,28 @@ class _VisitPageState extends State<VisitPage> {
 
     setState(() => busy = true);
     try {
+      await widget.repository.addSyncLog(
+        'pending',
+        '[CAMERA] Preparando captura para ${photoLabel(type)}.',
+      );
+      if (!mounted) return;
+      final capturedFile = await CameraCaptureService.capture(
+        context,
+        debugLabel: photoLabel(type),
+      );
+      if (capturedFile == null) {
+        if (!mounted) return;
+        setState(() => message = 'Captura cancelada pelo usuario.');
+        await widget.repository.addSyncLog(
+          'failed',
+          '[CAMERA] Captura cancelada pelo usuario em ${photoLabel(type)}.',
+        );
+        return;
+      }
       await widget.repository.capturePhoto(
         currentVisit,
         type,
+        sourcePath: capturedFile.path,
         supplierExecutionLocalId: execution?.localId,
         supplierId: supplier?.id,
         categoryId: category?.id,
@@ -2758,6 +2778,10 @@ class _VisitPageState extends State<VisitPage> {
             : '${photoLabel(type)} do fornecedor ${supplierLabel(supplier!)} salva localmente.',
       );
     } catch (error) {
+      await widget.repository.addSyncLog(
+        'failed',
+        '[CAMERA] ${normalizedError(error)}',
+      );
       setState(() => message = normalizedError(error));
     } finally {
       if (mounted) setState(() => busy = false);
@@ -3379,6 +3403,7 @@ class AppRepository {
   Future<void> capturePhoto(
     LocalVisit visit,
     String type, {
+    required String sourcePath,
     String? supplierExecutionLocalId,
     String? supplierId,
     String? categoryId,
@@ -3386,16 +3411,6 @@ class AppRepository {
     String? activityId,
     String? activityName,
   }) async {
-    final picker = ImagePicker();
-    final result = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 72,
-      maxWidth: 1600,
-    );
-    if (result == null) {
-      throw Exception('Captura cancelada.');
-    }
-
     final gps = await getGpsOrNull();
     final directory = await getApplicationDocumentsDirectory();
     final photosDir = Directory(p.join(directory.path, 'promotorpro_photos'));
@@ -3405,7 +3420,13 @@ class AppRepository {
 
     final localId = const Uuid().v4();
     final targetPath = p.join(photosDir.path, '$localId.jpg');
-    await File(result.path).copy(targetPath);
+    final sourceFile = File(sourcePath);
+    if (!await sourceFile.exists()) {
+      throw Exception(
+        'A camera nao retornou um arquivo valido para a foto capturada.',
+      );
+    }
+    await sourceFile.copy(targetPath);
     final photo = LocalPhoto(
       localId: localId,
       visitLocalId: visit.localId,
@@ -3427,12 +3448,12 @@ class AppRepository {
     await db.addSyncLog(
       gps == null ? 'failed' : 'pending',
       gps == null
-          ? 'Foto salva sem GPS disponivel.'
+          ? '[CAMERA] ${photoLabel(type)} salva sem GPS disponivel.'
           : categoryName != null
-          ? 'Foto da categoria $categoryName salva com GPS.'
+          ? '[CAMERA] Foto da categoria $categoryName salva com GPS.'
           : activityName != null
-          ? 'Evidencia da atividade $activityName salva com GPS.'
-          : '${photoLabel(type)} salva com GPS.',
+          ? '[CAMERA] Evidencia da atividade $activityName salva com GPS.'
+          : '[CAMERA] ${photoLabel(type)} salva com GPS.',
     );
   }
 

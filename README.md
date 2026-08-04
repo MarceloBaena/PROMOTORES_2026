@@ -142,6 +142,13 @@ Ele usa os mesmos contratos da API existente:
 - `POST /visits/:id/photos/base64`
 - `POST /locations/heartbeat`
 
+Captura de camera no Flutter:
+
+- A captura foi migrada para camera interna do proprio app.
+- O fluxo nao depende mais da abertura do aplicativo externo de camera do Android.
+- Em aparelhos gerenciados por MDM, isso reduz falhas de `Intent` ao abrir check-in, categoria, atividade, foto antes, foto depois e check-out.
+- O app valida permissao da camera, trata bloqueio permanente e orienta abrir as configuracoes do Android quando necessario.
+
 Comandos principais:
 
 ```bash

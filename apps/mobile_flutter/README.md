@@ -13,12 +13,22 @@ Aplicativo Flutter offline-first para operacao de campo dos promotores.
 - Fluxo por fornecedor dentro do cliente.
 - Resposta obrigatoria se houve entrega para cada fornecedor.
 - Foto antes e foto depois por fornecedor quando houve entrega.
+- Captura interna de camera no proprio app, sem depender da camera externa do Android.
 - Liberacao de conclusao sem fotos do fornecedor quando nao houve entrega.
 - Registro de data/hora e GPS quando disponivel.
 - Encerramento bloqueado sem todas as evidencias minimas do cliente e dos fornecedores.
 - Fila local persistente de sincronizacao.
 - Upload idempotente de visita, execucao por fornecedor e fotos usando `clientGeneratedId`.
 - Heartbeat de localizacao para o mapa ao vivo enquanto houver roteiro aberto.
+
+## Diagnostico de camera em aparelho corporativo
+
+Se a camera nao abrir:
+
+- confirme se a permissao de camera foi concedida ao PromotorPro;
+- valide se o MDM nao bloqueia o uso de camera para o app;
+- como o fluxo agora usa camera interna, nao e mais necessario liberar a abertura do aplicativo externo de camera;
+- se a permissao tiver sido bloqueada permanentemente, o app mostra o aviso e permite abrir as configuracoes do Android.
 
 ## Comandos
 
@@ -59,5 +69,5 @@ artifacts\android\promotorpro-flutter-release.apk
 Versao atual desta entrega:
 
 ```text
-1.1.0+3
+1.1.32+35
 ```
