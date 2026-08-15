@@ -52,8 +52,8 @@ npm run mobile:typecheck
 
 O backend suporta dois modos explicitos de banco:
 
+- `DATABASE_URL_MODE=standard` para PostgreSQL comum, inclusive em Docker/VPS. Este agora e o modo padrao quando a variavel nao for definida.
 - `DATABASE_URL_MODE=supabase_pooler` para Supabase Session Pooler na porta `5432`.
-- `DATABASE_URL_MODE=standard` para PostgreSQL comum, inclusive em Docker/VPS.
 
 Regras da validacao:
 

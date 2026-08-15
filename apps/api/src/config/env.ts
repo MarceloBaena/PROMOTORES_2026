@@ -14,7 +14,7 @@ const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().optional(),
-  DATABASE_URL_MODE: z.enum(["supabase_pooler", "standard"]).default("supabase_pooler"),
+  DATABASE_URL_MODE: z.enum(["supabase_pooler", "standard"]).default("standard"),
   JWT_ACCESS_SECRET: z.string().min(17, "JWT_ACCESS_SECRET must have more than 16 characters."),
   JWT_REFRESH_SECRET: z.string().min(17, "JWT_REFRESH_SECRET must have more than 16 characters."),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),

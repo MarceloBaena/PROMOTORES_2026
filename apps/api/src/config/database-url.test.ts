@@ -20,6 +20,12 @@ test("aceita URL valida de PostgreSQL no VPS com hostname", () => {
   assert.equal(result.ok, true);
 });
 
+test("aceita URL PostgreSQL local de Docker no modo padrao standard", () => {
+  const result = validateDatabaseUrl("postgresql://promotor:segredo-forte@db:5432/promotorpro");
+
+  assert.equal(result.ok, true);
+});
+
 test("aceita URL valida de PostgreSQL no VPS com IP privado", () => {
   const result = validateDatabaseUrl("postgresql://promotor:segredo-forte@10.15.30.20:5432/promotorpro", {
     mode: "standard"
@@ -84,6 +90,15 @@ test("rejeita URL sem usuario, senha ou banco", () => {
 
   assert.equal(result.ok, false);
   assert.match(result.message ?? "", /user, password, host and database name/i);
+});
+
+test("modo Supabase falha quando a URL nao termina em pooler.supabase.com", () => {
+  const result = validateDatabaseUrl("postgresql://promotor:segredo-forte@db.interno.vps.local:5432/promotorpro", {
+    mode: "supabase_pooler"
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.message ?? "", /pooler\.supabase\.com/i);
 });
 
 test("nunca expõe a senha na mensagem de erro", () => {

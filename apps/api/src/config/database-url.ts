@@ -13,7 +13,7 @@ export function validateDatabaseUrl(
   raw: string | undefined,
   options: DatabaseUrlValidationOptions = {}
 ): DatabaseUrlValidation {
-  const mode = options.mode ?? "supabase_pooler";
+  const mode = options.mode ?? "standard";
   const allowLoopback = options.allowLoopback ?? false;
 
   if (!raw) {
