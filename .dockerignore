@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.vercel
+dist
+build
+coverage
+apps/mobile/node_modules
+apps/mobile/.expo
+apps/mobile_flutter/.dart_tool
+apps/mobile_flutter/build
+apps/mobile_flutter/.flutter-plugins
+apps/mobile_flutter/.flutter-plugins-dependencies
+uploads
+*.local

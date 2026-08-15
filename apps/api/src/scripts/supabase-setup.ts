@@ -9,7 +9,7 @@ async function main() {
   const { config, issues } = loadConfig({ requireDatabase: true });
 
   if (!config || issues.length > 0) {
-    throw new Error(`Supabase configuration invalid: ${issues.join(" ")}`);
+    throw new Error(`Database configuration invalid: ${issues.join(" ")}`);
   }
 
   const command = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -24,8 +24,9 @@ async function main() {
     includeMultiCompanyDemo: config.BOOTSTRAP_MULTI_COMPANY_DEMO
   });
 
+  const label = config.DATABASE_URL_MODE === "supabase_pooler" ? "Supabase setup" : "PostgreSQL setup";
   console.log(
-    `Supabase setup completed: ${result.users.join(", ")} | Empresas: ${result.companies.join(", ")} | Demo multiempresa: ${
+    `${label} completed: ${result.users.join(", ")} | Empresas: ${result.companies.join(", ")} | Demo multiempresa: ${
       result.includeMultiCompanyDemo ? "ativo" : "desligado"
     }`
   );

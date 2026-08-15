@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: promotorpro-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-promotorpro}
+      POSTGRES_USER: ${POSTGRES_USER:-promotorpro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: >
+      postgres
+      -c max_connections=120
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c maintenance_work_mem=128MB
+      -c wal_buffers=16MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-promotorpro} -d ${POSTGRES_DB:-promotorpro}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - promotorpro-internal
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: promotorpro-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.api.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - uploads_data:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health | grep -q 'ok'"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - promotorpro-internal
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: promotorpro-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - promotorpro-internal
+
+volumes:
+  postgres_data:
+  uploads_data:
+
+networks:
+  promotorpro-internal:
+    driver: bridge

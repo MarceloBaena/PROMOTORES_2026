@@ -58,7 +58,9 @@ export function startDatabaseSetupIfEnabled() {
 
   Promise.resolve()
     .then(() => {
-      const validation = validateDatabaseUrl(process.env.DATABASE_URL);
+      const validation = validateDatabaseUrl(process.env.DATABASE_URL, {
+        mode: config.DATABASE_URL_MODE
+      });
 
       if (!validation.ok) {
         throw new Error(validation.message ?? "Invalid DATABASE_URL.");

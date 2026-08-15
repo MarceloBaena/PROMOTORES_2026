@@ -3,14 +3,15 @@ import { loadConfig } from "../config/env";
 import { prisma } from "../lib/prisma";
 
 async function main() {
-  const { issues } = loadConfig({ requireDatabase: true });
+  const { config, issues } = loadConfig({ requireDatabase: true });
 
   if (issues.length > 0) {
-    throw new Error(`Supabase configuration invalid: ${issues.join(" ")}`);
+    throw new Error(`Database configuration invalid: ${issues.join(" ")}`);
   }
 
   const result = await prisma.$queryRaw<Array<{ ok: number }>>`select 1 as ok`;
-  console.log(`Supabase Session Pooler OK: ${result[0]?.ok === 1 ? "connected" : "unknown response"}`);
+  const label = config?.DATABASE_URL_MODE === "supabase_pooler" ? "Supabase Session Pooler" : "PostgreSQL VPS/host";
+  console.log(`${label} OK: ${result[0]?.ok === 1 ? "connected" : "unknown response"}`);
 }
 
 main()

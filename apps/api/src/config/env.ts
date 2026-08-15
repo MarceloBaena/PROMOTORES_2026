@@ -14,6 +14,7 @@ const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().optional(),
+  DATABASE_URL_MODE: z.enum(["supabase_pooler", "standard"]).default("supabase_pooler"),
   JWT_ACCESS_SECRET: z.string().min(17, "JWT_ACCESS_SECRET must have more than 16 characters."),
   JWT_REFRESH_SECRET: z.string().min(17, "JWT_REFRESH_SECRET must have more than 16 characters."),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
@@ -39,7 +40,9 @@ export function loadConfig(options: { requireDatabase?: boolean } = {}) {
   const config = parsed.success ? parsed.data : undefined;
 
   if (config?.DATABASE_URL || options.requireDatabase) {
-    const database = validateDatabaseUrl(config?.DATABASE_URL);
+    const database = validateDatabaseUrl(config?.DATABASE_URL, {
+      mode: config?.DATABASE_URL_MODE
+    });
 
     if (!database.ok) {
       issues.push(database.message ?? "Invalid DATABASE_URL.");

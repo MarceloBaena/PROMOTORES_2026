@@ -13,6 +13,7 @@
     "start": "node dist/server.js",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
+    "test:database-url": "node --import tsx --test src/config/database-url.test.ts",
     "seed:access": "tsx src/scripts/bootstrap.ts",
     "check:tenant": "tsx src/scripts/tenant-scope-check.ts",
     "supabase:check": "tsx src/scripts/supabase-check.ts",

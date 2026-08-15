@@ -50,13 +50,35 @@ npm run build:web
 npm run mobile:typecheck
 ```
 
-Configure `DATABASE_URL` com o Session Pooler do Supabase na porta `5432`. Nunca use `localhost`, `https://...supabase.co` ou o host direto `db.PROJECT_REF.supabase.co` como `DATABASE_URL`.
+O backend suporta dois modos explicitos de banco:
+
+- `DATABASE_URL_MODE=supabase_pooler` para Supabase Session Pooler na porta `5432`.
+- `DATABASE_URL_MODE=standard` para PostgreSQL comum, inclusive em Docker/VPS.
+
+Regras da validacao:
+
+- aceita Supabase Pooler e PostgreSQL comum de VPS
+- rejeita `http://` e `https://`
+- rejeita `localhost`, `127.0.0.1` e loopback por padrao para evitar erro de container separado do banco
+- rejeita placeholders como `PROJECT_REF`, `SENHA`, `PASSWORD`, `USUARIO`, `HOST-POOLER-SUPABASE` e `REGION`
+- exige usuario, senha, host e nome do banco
+- nunca imprime a senha nas mensagens de erro
+
+Se usar Supabase, nunca use `localhost`, `https://...supabase.co` ou o host direto `db.PROJECT_REF.supabase.co` como `DATABASE_URL`.
+
+Se usar PostgreSQL em Docker Compose, use o nome do servico, por exemplo `postgres`. Se a API estiver em container e o banco em outro container, nao use `localhost`.
 
 Web e mobile devem apontar para a mesma API:
 
 ```bash
 VITE_API_BASE_URL=https://promotores-2026-api.vercel.app
 EXPO_PUBLIC_API_BASE_URL=https://promotores-2026-api.vercel.app
+```
+
+Para VPS com Nginx fazendo proxy do painel para a API, o web pode usar:
+
+```bash
+VITE_API_BASE_URL=/api
 ```
 
 ## Deploy Vercel
@@ -173,3 +195,70 @@ Regras de seguranca:
 - Nao existe rastreamento fora da jornada ativa.
 
 O app mobile envia heartbeat em primeiro plano quando ha atendimento ativo: app aberto, promotor logado, GPS permitido e jornada operacional autorizada.
+
+## Deploy em VPS Hostinger KVM 4
+
+O repositorio agora possui uma base de deploy para VPS com Docker:
+
+- `.env.compose.example`
+- `Dockerfile.api`
+- `Dockerfile.web`
+- `docker-compose.prod.yml`
+- `.env.api.production.example`
+- `.env.web.production.example`
+- `deploy/nginx/promotorpro.vps.conf`
+
+Arquitetura recomendada:
+
+- `web` em container Nginx interno na porta `127.0.0.1:8080`
+- `api` em container Node na porta `127.0.0.1:3000`
+- `postgres` em rede Docker privada, sem exposicao publica
+- `nginx` no host como reverse proxy para `app.seudominio.com` e `api.seudominio.com`
+
+Passo a passo resumido:
+
+```bash
+cp .env.compose.example .env
+cp .env.api.production.example .env.api.production
+cp .env.web.production.example .env.web.production
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d postgres
+docker compose -f docker-compose.prod.yml run --rm api npx prisma migrate deploy
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Depois disso:
+
+1. Ajuste o DNS do dominio para o IP do VPS.
+2. Instale Nginx no host.
+3. Copie `deploy/nginx/promotorpro.vps.conf` para `/etc/nginx/sites-available/promotorpro.conf`.
+4. Ajuste os dominios reais.
+5. Gere HTTPS com Certbot.
+
+Exemplo de build do APK Flutter apontando para a API do VPS:
+
+```bash
+cd apps/mobile_flutter
+flutter build apk --release --dart-define=API_BASE_URL=https://api.seudominio.com
+```
+
+Scripts operacionais:
+
+- `deploy/scripts/deploy.sh`
+- `deploy/scripts/rollback.sh`
+- `deploy/scripts/backup-postgres.sh`
+- `deploy/scripts/restore-postgres.sh`
+
+Guia completo do VPS:
+
+- `docs/vps-hostinger-kvm4.md`
+- `docs/hostinger-comandos-copiar-colar.md`
+
+Script para instalar o site do Nginx ja com os dominios:
+
+- `deploy/scripts/install-nginx-site.sh`
+
+Observacao sobre scripts:
+
+- `npm run api:migrate` funciona com Supabase ou PostgreSQL VPS, desde que `DATABASE_URL` e `DATABASE_URL_MODE` estejam corretos.
+- `npm run supabase:check` e `npm run supabase:setup` foram mantidos por compatibilidade de nome, mas agora validam a conexao configurada no ambiente atual, seja Supabase ou PostgreSQL VPS.

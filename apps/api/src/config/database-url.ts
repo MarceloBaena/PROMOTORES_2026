@@ -4,7 +4,18 @@ export interface DatabaseUrlValidation {
   warnings: string[];
 }
 
-export function validateDatabaseUrl(raw: string | undefined): DatabaseUrlValidation {
+export interface DatabaseUrlValidationOptions {
+  mode?: "supabase_pooler" | "standard";
+  allowLoopback?: boolean;
+}
+
+export function validateDatabaseUrl(
+  raw: string | undefined,
+  options: DatabaseUrlValidationOptions = {}
+): DatabaseUrlValidation {
+  const mode = options.mode ?? "supabase_pooler";
+  const allowLoopback = options.allowLoopback ?? false;
+
   if (!raw) {
     return {
       ok: false,
@@ -21,18 +32,28 @@ export function validateDatabaseUrl(raw: string | undefined): DatabaseUrlValidat
     };
   }
 
-  if (/localhost|127\.0\.0\.1|\[::1\]|::1/i.test(raw)) {
+  if (!allowLoopback && /localhost|127\.0\.0\.1|\[::1\]|::1/i.test(raw)) {
     return {
       ok: false,
-      message: "DATABASE_URL must use Supabase Session Pooler, not localhost.",
+      message:
+        mode === "supabase_pooler"
+          ? "DATABASE_URL must use Supabase Session Pooler, not localhost or loopback."
+          : "DATABASE_URL must use a reachable PostgreSQL host or Docker service name, not localhost or loopback.",
       warnings: []
     };
   }
 
-  if (/PROJECT_REF|SENHA|PASSWORD|REGION/i.test(raw)) {
+  if (
+    /PROJECT_REF|SENHA|PASSWORD|USUARIO|HOST-POOLER-SUPABASE|REGION|<DB_PASSWORD>|<DB_HOST>|<DB_USER>|<DB_NAME>/i.test(
+      raw
+    )
+  ) {
     return {
       ok: false,
-      message: "DATABASE_URL still contains placeholders. Copy the real Supabase Session Pooler connection string from the Supabase dashboard.",
+      message:
+        mode === "supabase_pooler"
+          ? "DATABASE_URL still contains placeholders. Copy the real Supabase Session Pooler connection string from the Supabase dashboard."
+          : "DATABASE_URL still contains placeholders. Replace the example values with the real PostgreSQL connection string.",
       warnings: []
     };
   }
@@ -57,6 +78,31 @@ export function validateDatabaseUrl(raw: string | undefined): DatabaseUrlValidat
     };
   }
 
+  const warnings: string[] = [];
+  const hasUsername = url.username.trim().length > 0;
+  const hasPassword = url.password.trim().length > 0;
+  const hasHost = url.hostname.trim().length > 0;
+  const hasDatabase = url.pathname.trim().length > 1;
+
+  if (!hasUsername || !hasPassword || !hasHost || !hasDatabase) {
+    return {
+      ok: false,
+      message: "DATABASE_URL must include user, password, host and database name.",
+      warnings: []
+    };
+  }
+
+  if (mode === "standard") {
+    if (!url.port) {
+      warnings.push("DATABASE_URL does not declare a port. PostgreSQL usually uses 5432.");
+    }
+
+    return {
+      ok: true,
+      warnings
+    };
+  }
+
   if (url.hostname.endsWith(".supabase.co")) {
     return {
       ok: false,
@@ -72,8 +118,6 @@ export function validateDatabaseUrl(raw: string | undefined): DatabaseUrlValidat
       warnings: []
     };
   }
-
-  const warnings: string[] = [];
 
   if (url.port !== "5432") {
     warnings.push("Supabase Session Pooler must use port 5432 for this project.");
